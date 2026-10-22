@@ -62,6 +62,8 @@ public partial class App : System.Windows.Application
             services.AddTransient<SettingsViewModel>();
             services.AddTransient<LogPage>();
             services.AddTransient<LogViewModel>();
+            services.AddTransient<WeaponsPage>();
+            services.AddTransient<WeaponsViewModel>();
 
             // Application layer
             services.AddApplicationServices();

@@ -36,6 +36,8 @@ public sealed class ModScanner : IModScanner
             var validationResult = ModProfileValidator.Validate(profile);
             if (validationResult.IsFailure)
                 return Result<List<ScannedFile>>.Failure(validationResult.Error);
+            if (!string.IsNullOrWhiteSpace(profile.PluginSourcePath) && !File.Exists(profile.PluginSourcePath.Trim()))
+                return Result<List<ScannedFile>>.Failure($"Workspace plugin not found: '{profile.PluginSourcePath}'");
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -88,6 +90,20 @@ public sealed class ModScanner : IModScanner
         List<string> keywords,
         Dictionary<string, ScannedFile> results)
     {
+        if (!string.IsNullOrWhiteSpace(profile.PluginSourcePath))
+        {
+            var sourcePath = Path.GetFullPath(profile.PluginSourcePath.Trim());
+            var fileName = Path.GetFileName(sourcePath);
+            results[fileName] = new ScannedFile
+            {
+                AbsolutePath = sourcePath,
+                RelativePath = fileName,
+                SizeBytes = new FileInfo(sourcePath).Length,
+                Category = FileCategory.Plugin,
+                IsSelected = true
+            };
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(profile.PluginFileName))
         {
             var pluginName = profile.PluginFileName.Trim();

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
+using SkyrimModPacker.Core.Common;
 
 namespace SkyrimModPacker.Application.Steps;
 
@@ -43,6 +44,8 @@ public sealed class ValidateStep : IPackStep
 
         try
         {
+            if (context.Profile.EnableEsl)
+                PluginWriteGuard.EnsureOutsideGame(outputDir, context.Settings.SkyrimDataPath);
             if (!Directory.Exists(outputDir))
             {
                 Directory.CreateDirectory(outputDir);

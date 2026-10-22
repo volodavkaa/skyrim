@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Application.Services;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
+using SkyrimModPacker.Core.Models.Esl;
+using Microsoft.Win32;
 
 namespace SkyrimModPacker.UI.ViewModels;
 
@@ -21,6 +23,16 @@ public sealed partial class BuildViewModel : ViewModelBase
     private readonly IModScanner _modScanner;
     private readonly PackingPipeline _pipeline;
     private readonly ILogger<BuildViewModel>? _logger;
+    private readonly IEslService? _eslService;
+
+    [ObservableProperty]
+    private EslAnalysisResult? _eslAnalysis;
+
+    [ObservableProperty]
+    private string? _analyzedPluginPath;
+
+    [ObservableProperty]
+    private string? _eslAnalysisError;
 
     private CancellationTokenSource? _operationCts;
 
@@ -65,13 +77,15 @@ public sealed partial class BuildViewModel : ViewModelBase
         ISettingsRepository settingsRepository,
         IModScanner modScanner,
         PackingPipeline pipeline,
-        ILogger<BuildViewModel>? logger = null)
+        ILogger<BuildViewModel>? logger = null,
+        IEslService? eslService = null)
     {
         _profileRepository = profileRepository;
         _settingsRepository = settingsRepository;
         _modScanner = modScanner;
         _pipeline = pipeline;
         _logger = logger;
+        _eslService = eslService;
         PageTitle = "Build";
 
         // Load profiles on initialization
@@ -85,10 +99,7 @@ public sealed partial class BuildViewModel : ViewModelBase
             var list = await _profileRepository.LoadAllAsync();
             Profiles = new ObservableCollection<ModProfile>(list);
 
-            if (SelectedProfile == null || !Profiles.Any(p => p.Id == SelectedProfile.Id))
-            {
-                SelectedProfile = Profiles.FirstOrDefault();
-            }
+            SelectedProfile = Profiles.FirstOrDefault(p => p.Id == SelectedProfile?.Id) ?? Profiles.FirstOrDefault();
         }
         catch (Exception ex)
         {
@@ -254,6 +265,56 @@ public sealed partial class BuildViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task AnalyzeEslAsync(string? pluginPath)
+    {
+        if (IsLoading || _eslService == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(pluginPath))
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Analyze ESL compatibility",
+                Filter = "Skyrim plugins (*.esp;*.esm;*.esl)|*.esp;*.esm;*.esl",
+                Multiselect = false
+            };
+            if (dialog.ShowDialog() != true)
+                return;
+            pluginPath = dialog.FileName;
+        }
+
+        EslAnalysis = null;
+        EslAnalysisError = null;
+        AnalyzedPluginPath = pluginPath;
+        IsLoading = true;
+        IsIndeterminate = true;
+        _operationCts?.Cancel();
+        _operationCts = new CancellationTokenSource();
+        try
+        {
+            var result = await _eslService.AnalyzeAsync(pluginPath, _operationCts.Token);
+            if (result.IsSuccess)
+                EslAnalysis = result.Value;
+            else
+                EslAnalysisError = result.Error;
+        }
+        catch (OperationCanceledException)
+        {
+            AnalyzedPluginPath = null;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "ESL analysis failed");
+            EslAnalysisError = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+            IsIndeterminate = false;
+        }
+    }
+
+    [RelayCommand]
     private void CancelOperation()
     {
         _operationCts?.Cancel();
@@ -359,6 +420,7 @@ public sealed partial class BuildViewModel : ViewModelBase
                     if (SelectedProfile != null)
                     {
                         SelectedProfile.PluginFileName = fileName;
+                        SelectedProfile.PluginSourcePath = Path.GetFullPath(path);
                         await _profileRepository.SaveAsync(SelectedProfile);
                         StatusMessage = $"Plugin set to '{fileName}' from dropped file. Scanning...";
                         await ScanAsync();

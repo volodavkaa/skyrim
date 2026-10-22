@@ -21,6 +21,8 @@ public static class DependencyInjection
         services.AddSingleton<IModScanner, FileSystem.ModScanner>();
         services.AddSingleton<ISkyrimLocator, Services.SkyrimLocator>();
         services.AddSingleton<IArchiver, Archivers.ZipArchiver>();
+        services.AddSingleton<IEslService, Esl.EslService>();
+        services.AddSingleton<IPluginBuilderService, PluginBuilder.PluginBuilderService>();
 
         var logSink = inMemoryLogSink ?? new InMemoryLogSink();
         services.AddSingleton<ILogEventService>(logSink);

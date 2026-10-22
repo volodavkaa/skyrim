@@ -150,6 +150,13 @@
                         </StackPanel>
 
                         <!-- Keywords / Folders -->
+                        <CheckBox IsChecked="{Binding EnableEsl, Mode=TwoWay}" Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_EnableEsl}" TextWrapping="Wrap" />
+                        </CheckBox>
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_PluginSourcePath}" TextWrapping="Wrap" FontWeight="Medium" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding PluginSourcePath, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
                         <StackPanel Margin="0,0,0,14">
                             <TextBlock Text="{DynamicResource Profiles_KeywordsTitle}" FontWeight="Medium" Margin="0,0,0,4" />
                             <TextBlock Text="{DynamicResource Profiles_KeywordsDesc}"

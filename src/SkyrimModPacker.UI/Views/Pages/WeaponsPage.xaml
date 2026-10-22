@@ -1,0 +1,192 @@
+<Page
+    x:Class="SkyrimModPacker.UI.Views.Pages.WeaponsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="{DynamicResource Nav_Weapons}" Loaded="OnPageLoaded">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24">
+            <TextBlock Text="{DynamicResource Nav_Weapons}" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="{DynamicResource Weapons_Subtitle}" TextWrapping="Wrap" Margin="0,4,0,16"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,0,0,12"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="0,0,0,12"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
+            <Grid Margin="0,0,0,12" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <ProgressBar IsIndeterminate="True" Height="4" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <ui:Button Grid.Column="1" Content="{DynamicResource Build_Cancel}" Command="{Binding CancelOperationCommand}" />
+            </Grid>
+            <StackPanel IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}">
+                <ui:Card Padding="16" Margin="0,0,0,16">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Text="{DynamicResource Weapons_ActivePlugin}" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <ui:TextBox Text="{Binding PluginPath, Mode=OneWay}" IsReadOnly="True" />
+                            </StackPanel>
+                            <ui:Button Grid.Column="1" Content="{DynamicResource Weapons_Open}" Command="{Binding OpenPluginCommand}" VerticalAlignment="Bottom" />
+                        </Grid>
+                        <Expander Header="{DynamicResource Weapons_CreatePlugin}" IsExpanded="{Binding ShowCreationPanel, Mode=TwoWay}">
+                            <StackPanel Margin="0,12,0,0">
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,12,0">
+                                        <TextBlock Text="{DynamicResource Weapons_PluginName}" Margin="0,0,0,6" />
+                                        <ui:TextBox Text="{Binding PluginName, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{DynamicResource Weapons_PluginType}" Margin="0,0,0,6" />
+                                        <ComboBox ItemsSource="{Binding PluginExtensions}" SelectedItem="{Binding PluginExtension, Mode=TwoWay}" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{DynamicResource Weapons_Workspace}" Margin="0,0,0,6" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <ui:TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+                                    <ui:Button Grid.Column="1" Content="{DynamicResource Weapons_Browse}" Command="{Binding BrowseOutputDirectoryCommand}" />
+                                </Grid>
+                                <TextBlock Text="{DynamicResource Weapons_Masters}" Margin="0,0,0,6" TextWrapping="Wrap" />
+                                <ui:TextBox Text="{Binding MastersText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                                <ui:Button Content="{DynamicResource Weapons_CreatePlugin}" Command="{Binding CreatePluginCommand}" Appearance="Primary" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Padding="16" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="3*" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock Text="{DynamicResource Weapons_SwordEditor}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <WrapPanel Margin="0,0,0,6">
+                                <TextBlock Text="{DynamicResource Weapons_Template}" VerticalAlignment="Center" Margin="0,0,12,4" />
+                                <ui:Button Content="{DynamicResource Weapons_LoadTemplates}" Command="{Binding LoadTemplatesCommand}" Margin="0,0,0,4" />
+                            </WrapPanel>
+                            <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}" Margin="0,0,0,12">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding EditorId}" TextTrimming="CharacterEllipsis" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="EditorID" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding EditorId, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_Name}" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding WeaponName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,8,0">
+                                    <TextBlock Text="{DynamicResource Weapons_Damage}" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding Damage, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <TextBlock Text="{DynamicResource Weapons_Weight}" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding Weight, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{DynamicResource Weapons_Value}" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+                            <Expander Header="{DynamicResource Weapons_Advanced}" Margin="0,0,0,12">
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Text="{DynamicResource Weapons_Description}" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="65" Margin="0,0,0,12" />
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,8,0"><TextBlock Text="{DynamicResource Weapons_Speed}" Margin="0,0,0,6" /><ui:TextBox Text="{Binding Speed, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+                                        <StackPanel Grid.Column="1"><TextBlock Text="{DynamicResource Weapons_Reach}" Margin="0,0,0,6" /><ui:TextBox Text="{Binding Reach, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="{DynamicResource Weapons_Model}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding ModelPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                                    <TextBlock Text="{DynamicResource Weapons_Keywords}" Margin="0,0,0,6" />
+                                    <ComboBox ItemsSource="{Binding Options.Keywords}" DisplayMemberPath="DisplayName" SelectedItem="{Binding KeywordToAdd, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
+                                    <WrapPanel Margin="0,0,0,6"><ui:Button Content="{DynamicResource Weapons_Add}" Command="{Binding AddKeywordCommand}" Margin="0,0,8,0" /><ui:Button Content="{DynamicResource Weapons_Remove}" Command="{Binding RemoveKeywordCommand}" /></WrapPanel>
+                                    <ListBox ItemsSource="{Binding WeaponKeywords}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedKeyword, Mode=TwoWay}" Height="90" Margin="0,0,0,12" />
+                                    <TextBlock Text="{DynamicResource Weapons_Sound}" Margin="0,0,0,6" />
+                                    <ComboBox ItemsSource="{Binding SoundChoices}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedSound, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
+                                    <ui:Button Content="{DynamicResource Weapons_Clear}" Command="{Binding ClearSoundCommand}" Margin="0,0,0,12" />
+                                    <TextBlock Text="{DynamicResource Weapons_Enchantment}" Margin="0,0,0,6" />
+                                    <ComboBox ItemsSource="{Binding EnchantmentChoices}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedEnchantment, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
+                                    <ui:Button Content="{DynamicResource Weapons_Clear}" Command="{Binding ClearEnchantmentCommand}" Margin="0,0,0,12" />
+                                    <TextBlock Text="{DynamicResource Weapons_Charge}" Margin="0,0,0,6" />
+                                    <ui:TextBox Text="{Binding EnchantmentCharge, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                                    <ui:Button Content="{DynamicResource Weapons_LoadOptions}" Command="{Binding LoadOptionsCommand}" />
+                                </StackPanel>
+                            </Expander>
+                            <WrapPanel>
+                                <ui:Button Content="{DynamicResource Weapons_Clone}" Command="{Binding CloneSwordCommand}" Appearance="Primary" Margin="0,0,8,8" />
+                                <ui:Button Content="{DynamicResource Weapons_Save}" Command="{Binding SaveSwordCommand}" Margin="0,0,8,8" />
+                                <ui:Button Content="{DynamicResource Weapons_NewSword}" Command="{Binding NewSwordCommand}" Margin="0,0,0,8" />
+                            </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="{DynamicResource Weapons_InPlugin}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" TextWrapping="Wrap" />
+                            <DataGrid ItemsSource="{Binding Weapons}" SelectedItem="{Binding SelectedWeapon, Mode=TwoWay}"
+                                      IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                      SelectionMode="Single" SelectionUnit="FullRow" Height="265" Margin="0,0,0,12">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="FormID" Binding="{Binding FormId, StringFormat={}{0:X6}}" Width="75" />
+                                    <DataGridTextColumn Header="EditorID" Binding="{Binding EditorId}" Width="*" MinWidth="90" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <ui:Button Content="{DynamicResource Weapons_Delete}" Command="{Binding DeleteSwordCommand}" Appearance="Danger" />
+                            <TextBlock Text="{DynamicResource Weapons_BackupHint}" TextWrapping="Wrap" Margin="0,12,0,0"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </ui:Card>
+                <ui:Card Padding="16" Margin="0,0,0,16">
+                    <Expander Header="{DynamicResource Weapons_Crafting}">
+                        <StackPanel Margin="0,12,0,0">
+                            <WrapPanel Margin="0,0,0,8"><ui:Button Content="{DynamicResource Weapons_LoadRecipes}" Command="{Binding LoadRecipesCommand}" Margin="0,0,8,0" /><ui:Button Content="{DynamicResource Weapons_NewRecipe}" Command="{Binding NewRecipeCommand}" /></WrapPanel>
+                            <ComboBox ItemsSource="{Binding Recipes}" DisplayMemberPath="EditorId" SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_RecipeId}" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding RecipeEditorId, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_Workbench}" Margin="0,0,0,6" />
+                            <ComboBox ItemsSource="{Binding WorkbenchChoices}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedWorkbench, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_OutputCount}" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding RecipeOutputCount, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_Ingredients}" Margin="0,0,0,6" />
+                            <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="85" /></Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding Options.Ingredients}" DisplayMemberPath="DisplayName" SelectedItem="{Binding IngredientToAdd, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,8,0" />
+                                <ui:TextBox Grid.Column="1" Text="{Binding IngredientCount, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                            <WrapPanel Margin="0,0,0,8"><ui:Button Content="{DynamicResource Weapons_Add}" Command="{Binding AddIngredientCommand}" Margin="0,0,8,0" /><ui:Button Content="{DynamicResource Weapons_Remove}" Command="{Binding RemoveIngredientCommand}" /></WrapPanel>
+                            <ListBox ItemsSource="{Binding RecipeIngredients}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedIngredient, Mode=TwoWay}" Height="90" Margin="0,0,0,12" />
+                            <TextBlock Text="{DynamicResource Weapons_Perk}" Margin="0,0,0,6" />
+                            <ComboBox ItemsSource="{Binding PerkChoices}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedPerk, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
+                            <ui:Button Content="{DynamicResource Weapons_Clear}" Command="{Binding ClearPerkCommand}" Margin="0,0,0,12" />
+                            <WrapPanel><ui:Button Content="{DynamicResource Weapons_SaveRecipe}" Command="{Binding SaveRecipeCommand}" Appearance="Primary" Margin="0,0,8,8" /><ui:Button Content="{DynamicResource Weapons_DeleteRecipe}" Command="{Binding DeleteRecipeCommand}" Appearance="Danger" Margin="0,0,0,8" /></WrapPanel>
+                        </StackPanel>
+                    </Expander>
+                </ui:Card>
+                <ui:Card Padding="16" Margin="0,0,0,16">
+                    <Expander Header="{DynamicResource Weapons_LeveledLists}">
+                        <StackPanel Margin="0,12,0,0">
+                            <TextBlock Text="{DynamicResource Weapons_ListHint}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                            <ComboBox ItemsSource="{Binding Options.LeveledLists}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedLeveledList, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,12" />
+                            <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,8,0"><TextBlock Text="{DynamicResource Weapons_Level}" Margin="0,0,0,6" /><ui:TextBox Text="{Binding ListLevel, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+                                <StackPanel Grid.Column="1"><TextBlock Text="{DynamicResource Weapons_Count}" Margin="0,0,0,6" /><ui:TextBox Text="{Binding ListCount, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+                            </Grid>
+                            <WrapPanel><ui:Button Content="{DynamicResource Weapons_AddToList}" Command="{Binding AddToListCommand}" Margin="0,0,8,8" /><ui:Button Content="{DynamicResource Weapons_RemoveFromList}" Command="{Binding RemoveFromListCommand}" Margin="0,0,0,8" /></WrapPanel>
+                        </StackPanel>
+                    </Expander>
+                </ui:Card>
+                <ui:Card Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Weapons_Packing}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <ComboBox ItemsSource="{Binding PackingProfiles}" DisplayMemberPath="Name"
+                                  SelectedItem="{Binding SelectedPackingProfile, Mode=TwoWay}" Margin="0,0,0,12" />
+                        <WrapPanel>
+                            <ui:Button Content="{DynamicResource Weapons_CreateProfile}" Command="{Binding CreatePackingProfileCommand}" Margin="0,0,8,8" />
+                            <ui:Button Content="{DynamicResource Weapons_LinkProfile}" Command="{Binding LinkPackingProfileCommand}" Margin="0,0,0,8" />
+                        </WrapPanel>
+                    </StackPanel>
+                </ui:Card>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -15,6 +15,12 @@ public partial class BuildPage : Page
         InitializeComponent();
     }
 
+    private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is BuildViewModel viewModel && !viewModel.IsLoading)
+            await viewModel.LoadProfilesAsync();
+    }
+
     private void OnPageDragOver(object sender, DragEventArgs e)
     {
         if (e.Data.GetDataPresent(DataFormats.FileDrop))

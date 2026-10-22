@@ -10,6 +10,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Title="Build"
+    Loaded="OnPageLoaded"
     AllowDrop="True"
     Drop="OnPageDrop"
     DragOver="OnPageDragOver"
@@ -73,6 +74,33 @@
 
         <!-- Notification & Progress Area -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <ui:Button Content="{DynamicResource Esl_Analyze}"
+                       Command="{Binding AnalyzeEslCommand}"
+                       Margin="0,0,0,8"
+                       IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}" />
+            <TextBlock Text="{Binding AnalyzedPluginPath}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding EslAnalysisError}" TextWrapping="Wrap"
+                       Visibility="{Binding EslAnalysisError, Converter={StaticResource NotNullToVisibilityConverter}}" />
+            <StackPanel Margin="0,0,0,8"
+                        Visibility="{Binding EslAnalysis, Converter={StaticResource NotNullToVisibilityConverter}}">
+                <TextBlock Text="{DynamicResource Esl_Compatible}"
+                           Visibility="{Binding EslAnalysis.IsCompatible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock Text="{DynamicResource Esl_Incompatible}"
+                           Visibility="{Binding EslAnalysis.IsCompatible, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                <WrapPanel>
+                    <TextBlock Text="{DynamicResource Esl_OwnRecords}" Margin="0,0,4,0" />
+                    <TextBlock Text="{Binding EslAnalysis.OwnRecordCount}" Margin="0,0,16,0" />
+                    <TextBlock Text="{DynamicResource Esl_Problems}" Margin="0,0,4,0" />
+                    <TextBlock Text="{Binding EslAnalysis.ProblematicRecordCount}" />
+                </WrapPanel>
+                <ItemsControl ItemsSource="{Binding EslAnalysis.Reasons}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
             <!-- Progress Bar -->
             <ProgressBar Height="4"
                          Margin="0,0,0,8"

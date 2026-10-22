@@ -24,7 +24,7 @@ public sealed class CopyStep : IPackStep
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!context.Settings.UseTempDirectory)
+        if (!context.Settings.UseTempDirectory && !context.Profile.EnableEsl)
         {
             _logger?.LogInformation("Direct packing mode selected. Staging directory skipped.");
             context.StagingDirectory = null;
@@ -51,6 +51,8 @@ public sealed class CopyStep : IPackStep
 
                 var file = context.SelectedFiles[i];
                 var destinationPath = Path.Combine(stagingDir, file.RelativePath);
+                if (context.Profile.EnableEsl && !Path.GetFullPath(destinationPath).StartsWith(stagingDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("A staged file path must stay inside the staging directory.");
                 var destDirectory = Path.GetDirectoryName(destinationPath);
 
                 if (!string.IsNullOrEmpty(destDirectory) && !Directory.Exists(destDirectory))
@@ -68,6 +70,12 @@ public sealed class CopyStep : IPackStep
 
             _logger?.LogInformation("All files successfully staged.");
             return true;
+        }
+        catch (OperationCanceledException) when (context.Profile.EnableEsl)
+        {
+            try { Directory.Delete(stagingDir, recursive: true); }
+            catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean cancelled ESL staging directory"); }
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

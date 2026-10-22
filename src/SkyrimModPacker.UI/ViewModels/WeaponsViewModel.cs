@@ -1,0 +1,319 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.IO;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
+using SkyrimModPacker.Core.Common;
+using SkyrimModPacker.Core.Interfaces;
+using SkyrimModPacker.Core.Models;
+using SkyrimModPacker.Core.Models.PluginBuilder;
+using SkyrimModPacker.UI.Services;
+
+namespace SkyrimModPacker.UI.ViewModels;
+
+/// <summary>Workspace plugin creation and editing of cloned vanilla one-handed swords.</summary>
+public sealed partial class WeaponsViewModel : ViewModelBase
+{
+    private readonly IPluginBuilderService _builder;
+    private readonly ISettingsRepository _settings;
+    private readonly IProfileRepository _profiles;
+    private readonly ILocalizationService? _localization;
+    private readonly ILogger<WeaponsViewModel>? _logger;
+    private CancellationTokenSource? _operationCts;
+    private string _templateGameDataPath = string.Empty;
+
+    public IReadOnlyList<string> PluginExtensions { get; } = [".esp", ".esl"];
+
+    [ObservableProperty] private string _pluginName = "MySwords";
+    [ObservableProperty] private string _pluginExtension = ".esp";
+    [ObservableProperty] private string _outputDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyrimModPacker", "Plugins");
+    [ObservableProperty] private string _mastersText = "Skyrim.esm";
+    [ObservableProperty] private string _pluginPath = string.Empty;
+    [ObservableProperty] private bool _showCreationPanel = true;
+    [ObservableProperty] private string _gameDataPath = string.Empty;
+    [ObservableProperty] private ObservableCollection<SwordTemplate> _templates = [];
+    [ObservableProperty] private SwordTemplate? _selectedTemplate;
+    [ObservableProperty] private ObservableCollection<WeaponRecord> _weapons = [];
+    [ObservableProperty] private WeaponRecord? _selectedWeapon;
+    [ObservableProperty] private string _editorId = string.Empty;
+    [ObservableProperty] private string _weaponName = string.Empty;
+    [ObservableProperty] private string _damage = "0";
+    [ObservableProperty] private string _weight = "0";
+    [ObservableProperty] private string _value = "0";
+    [ObservableProperty] private string? _statusMessage;
+    [ObservableProperty] private string? _errorMessage;
+    [ObservableProperty] private ObservableCollection<ModProfile> _packingProfiles = [];
+    [ObservableProperty] private ModProfile? _selectedPackingProfile;
+
+    public WeaponsViewModel(IPluginBuilderService pluginBuilderService, ISettingsRepository settingsRepository,
+        IProfileRepository profileRepository, ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null)
+    {
+        _builder = pluginBuilderService;
+        _settings = settingsRepository;
+        _profiles = profileRepository;
+        _localization = localizationService;
+        _logger = logger;
+        PageTitle = "Weapons";
+    }
+
+    [RelayCommand]
+    private Task InitializeAsync() => RunOperationAsync(async token =>
+    {
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        if (!string.Equals(GameDataPath, _templateGameDataPath, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedTemplate = null;
+            Templates.Clear();
+        }
+        var selectedId = SelectedPackingProfile?.Id;
+        PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
+        SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == selectedId);
+    });
+
+    [RelayCommand]
+    private void BrowseOutputDirectory()
+    {
+        if (IsLoading) return;
+        var dialog = new OpenFolderDialog { Title = Text("Weapons_Workspace", "Plugin workspace") };
+        if (dialog.ShowDialog() == true) OutputDirectory = dialog.FolderName;
+    }
+
+    [RelayCommand]
+    private Task LoadTemplatesAsync() => RunOperationAsync(async token =>
+    {
+        var settings = await _settings.LoadAsync(token);
+        GameDataPath = settings.SkyrimDataPath;
+        // Clear choices from a previous game installation even when this load fails.
+        SelectedTemplate = null;
+        Templates.Clear();
+        var result = await _builder.GetSwordTemplatesAsync(GameDataPath, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        Templates = new ObservableCollection<SwordTemplate>(result.Value);
+        _templateGameDataPath = GameDataPath;
+        await LoadOptionsCoreAsync(token);
+        SelectedTemplate = Templates.FirstOrDefault();
+        StatusMessage = Text("Weapons_TemplatesLoaded", "Sword templates loaded.");
+    });
+
+    [RelayCommand]
+    private Task CreatePluginAsync() => RunOperationAsync(async token =>
+    {
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        var result = await _builder.CreateAsync(new CreatePluginRequest
+        {
+            PluginFileName = PluginName.Trim() + PluginExtension,
+            OutputDirectory = OutputDirectory.Trim(),
+            GameDataPath = GameDataPath,
+            Masters = MastersText.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        }, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        PluginPath = result.Value;
+        ShowCreationPanel = false;
+        await RefreshWeaponsAsync(null, token);
+        StatusMessage = Text("Weapons_PluginCreated", "Plugin created.");
+    });
+
+    [RelayCommand]
+    private async Task OpenPluginAsync(string? path)
+    {
+        if (IsLoading) return;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            var dialog = new OpenFileDialog { Title = Text("Weapons_Open", "Open plugin"), Filter = "Skyrim plugins (*.esp;*.esl)|*.esp;*.esl" };
+            if (dialog.ShowDialog() != true) return;
+            path = dialog.FileName;
+        }
+        await RunOperationAsync(async token =>
+        {
+            var selectedPath = Path.GetFullPath(path);
+            GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+            PluginWriteGuard.EnsureOutsideGame(selectedPath, GameDataPath);
+            var result = await _builder.GetWeaponsAsync(selectedPath, token);
+            if (result.IsFailure) throw new InvalidOperationException(result.Error);
+            await LoadOptionsCoreAsync(token);
+            PluginPath = selectedPath;
+            ShowCreationPanel = false;
+            Weapons = new ObservableCollection<WeaponRecord>(result.Value);
+            SelectedWeapon = Weapons.FirstOrDefault();
+            if (SelectedWeapon == null) ResetDraft();
+            StatusMessage = Text("Weapons_PluginOpened", "Plugin opened.");
+        });
+    }
+
+    partial void OnSelectedTemplateChanged(SwordTemplate? value)
+    {
+        if (value == null) return;
+        SelectedWeapon = null;
+        FillEditor(value.EditorId + "Custom", value.Name, value.Damage, value.Weight, value.Value);
+        FillDetails(value.Details);
+        ResetRecipeEditor();
+    }
+
+    partial void OnSelectedWeaponChanged(WeaponRecord? value)
+    {
+        if (value != null)
+        {
+            FillEditor(value.EditorId, value.Name, value.Damage, value.Weight, value.Value);
+            FillDetails(value.Details);
+        }
+        Recipes.Clear();
+        SelectedRecipe = null;
+        ResetRecipeEditor();
+    }
+
+    private void FillEditor(string editorId, string name, ushort damage, float weight, uint value)
+    {
+        EditorId = editorId;
+        WeaponName = name;
+        Damage = damage.ToString(CultureInfo.CurrentCulture);
+        Weight = weight.ToString(CultureInfo.CurrentCulture);
+        Value = value.ToString(CultureInfo.CurrentCulture);
+    }
+
+    [RelayCommand]
+    private void NewSword()
+    {
+        if (IsLoading || SelectedTemplate == null) return;
+        OnSelectedTemplateChanged(SelectedTemplate);
+    }
+
+    [RelayCommand]
+    private Task CloneSwordAsync() => RunOperationAsync(async token =>
+    {
+        RequirePlugin();
+        if (SelectedTemplate == null) throw new InvalidOperationException(Text("Weapons_SelectTemplate", "Select a vanilla sword template first."));
+        var stats = ParseStatistics();
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        if (!string.Equals(GameDataPath, _templateGameDataPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(Text("Weapons_SelectTemplate", "Reload the vanilla sword templates first."));
+        var result = await _builder.CloneSwordAsync(new CloneSwordRequest
+        {
+            PluginPath = PluginPath, GameDataPath = GameDataPath, TemplateFormId = SelectedTemplate.FormId,
+            EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
+            Details = ParseDetails()
+        }, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        await RefreshWeaponsAsync(result.Value.FormId, token);
+        StatusMessage = Text("Weapons_Cloned", "Sword cloned. A .bak copy was saved.");
+    });
+
+    [RelayCommand]
+    private Task SaveSwordAsync() => RunOperationAsync(async token =>
+    {
+        RequirePlugin();
+        if (SelectedWeapon == null) throw new InvalidOperationException(Text("Weapons_SelectRecord", "Select a sword in the plugin first."));
+        var stats = ParseStatistics();
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        var result = await _builder.UpdateSwordAsync(new UpdateSwordRequest
+        {
+            PluginPath = PluginPath, GameDataPath = GameDataPath, FormId = SelectedWeapon.FormId,
+            EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
+            Details = ParseDetails()
+        }, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        await RefreshWeaponsAsync(result.Value.FormId, token);
+        StatusMessage = Text("Weapons_Saved", "Changes saved. A .bak copy was saved.");
+    });
+
+    [RelayCommand]
+    private Task DeleteSwordAsync() => RunOperationAsync(async token =>
+    {
+        RequirePlugin();
+        if (SelectedWeapon == null) throw new InvalidOperationException(Text("Weapons_SelectRecord", "Select a sword in the plugin first."));
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        var result = await _builder.DeleteSwordAsync(PluginPath, GameDataPath, SelectedWeapon.FormId, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        await RefreshWeaponsAsync(null, token);
+        StatusMessage = Text("Weapons_Deleted", "Sword deleted. A .bak copy was saved.");
+    });
+
+    private async Task RefreshWeaponsAsync(uint? selectedId, CancellationToken token)
+    {
+        var result = await _builder.GetWeaponsAsync(PluginPath, token);
+        if (result.IsFailure) throw new InvalidOperationException(result.Error);
+        Weapons = new ObservableCollection<WeaponRecord>(result.Value);
+        SelectedWeapon = Weapons.FirstOrDefault(w => w.FormId == selectedId);
+        if (SelectedWeapon == null) ResetDraft();
+    }
+
+    private void ResetDraft()
+    {
+        if (SelectedTemplate != null) OnSelectedTemplateChanged(SelectedTemplate);
+        else
+        {
+            FillEditor(string.Empty, string.Empty, 0, 0, 0);
+            FillDetails(new WeaponDetails());
+        }
+    }
+
+    [RelayCommand]
+    private Task CreatePackingProfileAsync() => SavePackingProfileAsync(createNew: true);
+
+    [RelayCommand]
+    private Task LinkPackingProfileAsync() => SavePackingProfileAsync(createNew: false);
+
+    private Task SavePackingProfileAsync(bool createNew) => RunOperationAsync(async token =>
+    {
+        RequirePlugin();
+        var savedProfiles = await _profiles.LoadAllAsync(token);
+        var existing = createNew ? null : savedProfiles.FirstOrDefault(p => p.Id == SelectedPackingProfile?.Id);
+        if (!createNew && existing == null) throw new InvalidOperationException(Text("Weapons_SelectProfile", "Select a packing profile first."));
+        var profile = new ModProfile
+        {
+            Id = existing?.Id ?? Guid.NewGuid(), Name = existing?.Name ?? Path.GetFileNameWithoutExtension(PluginPath),
+            Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = existing?.EnableEsl ?? false,
+            CreatedAt = existing?.CreatedAt ?? DateTime.UtcNow, ModifiedAt = DateTime.UtcNow,
+            PluginFileName = Path.GetFileName(PluginPath), PluginSourcePath = PluginPath
+        };
+        var validation = ModProfileValidator.Validate(profile);
+        if (validation.IsFailure) throw new InvalidOperationException(validation.Error);
+        await _profiles.SaveAsync(profile, token);
+        PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
+        SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == profile.Id);
+        StatusMessage = Text("Weapons_ProfileSaved", "Packing profile saved. Open Build, select the profile and scan.");
+    });
+
+    private (ushort Damage, float Weight, uint Value) ParseStatistics()
+    {
+        if (!ushort.TryParse(Damage, out var damage) || !uint.TryParse(Value, out var value) ||
+            !(float.TryParse(Weight, NumberStyles.Float, CultureInfo.CurrentCulture, out var weight) ||
+              float.TryParse(Weight, NumberStyles.Float, CultureInfo.InvariantCulture, out weight)) || !float.IsFinite(weight) || weight < 0)
+            throw new InvalidOperationException(Text("Weapons_InvalidStats", "Enter valid damage (0–65535), weight (0 or higher) and value (0–4294967295)."));
+        return (damage, weight, value);
+    }
+
+    private void RequirePlugin()
+    {
+        if (string.IsNullOrWhiteSpace(PluginPath) || !File.Exists(PluginPath))
+            throw new InvalidOperationException(Text("Weapons_SelectPlugin", "Create or open a workspace plugin first."));
+    }
+
+    [RelayCommand]
+    private void CancelOperation() => _operationCts?.Cancel();
+
+    private async Task RunOperationAsync(Func<CancellationToken, Task> action)
+    {
+        if (IsLoading) return;
+        IsLoading = true;
+        ErrorMessage = null;
+        StatusMessage = null;
+        _operationCts?.Dispose();
+        _operationCts = new CancellationTokenSource();
+        try { await action(_operationCts.Token); }
+        catch (OperationCanceledException) { StatusMessage = Text("Weapons_Cancelled", "Operation cancelled."); }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            _logger?.LogError(ex, "Weapons editor operation failed");
+        }
+        finally { IsLoading = false; }
+    }
+
+    private string Text(string key, string fallback)
+    {
+        var value = _localization?.GetString(key);
+        return string.IsNullOrEmpty(value) || value == key ? fallback : value;
+    }
+}

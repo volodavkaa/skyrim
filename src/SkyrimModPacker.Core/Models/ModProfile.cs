@@ -22,6 +22,12 @@ public sealed class ModProfile
     /// <summary>Plugin filename with extension (.esp, .esl, .esm).</summary>
     public string PluginFileName { get; set; } = string.Empty;
 
+    /// <summary>Optional absolute path to a workspace plugin outside Data; archived by filename at the ZIP root.</summary>
+    public string PluginSourcePath { get; set; } = string.Empty;
+
+    /// <summary>Apply ESL to compatible staged plugins before archiving; disabled for existing profiles.</summary>
+    public bool EnableEsl { get; set; }
+
     /// <summary>Timestamp when the profile was created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

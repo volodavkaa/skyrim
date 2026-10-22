@@ -15,6 +15,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private readonly NavigationViewItem _buildItem = new("Build", SymbolRegular.BuildingFactory24, typeof(BuildPage));
     private readonly NavigationViewItem _profilesItem = new("Profiles", SymbolRegular.PersonBoard24, typeof(ProfilesPage));
+    private readonly NavigationViewItem _weaponsItem = new("Weapons", SymbolRegular.Document24, typeof(WeaponsPage));
     private readonly NavigationViewItem _settingsItem = new("Settings", SymbolRegular.Settings24, typeof(SettingsPage));
     private readonly NavigationViewItem _logItem = new("Log", SymbolRegular.ClipboardTextLtr24, typeof(LogPage));
 
@@ -29,7 +30,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _localizationService = localizationService;
         PageTitle = "Skyrim Mod Packer";
 
-        _menuItems = [_buildItem, _profilesItem];
+        _menuItems = [_buildItem, _profilesItem, _weaponsItem];
         _footerMenuItems = [_settingsItem, _logItem];
 
         UpdateLocalizedNavigation();
@@ -47,6 +48,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         _buildItem.Content = _localizationService.GetString("Nav_Build");
         _profilesItem.Content = _localizationService.GetString("Nav_Profiles");
+        _weaponsItem.Content = _localizationService.GetString("Nav_Weapons");
         _settingsItem.Content = _localizationService.GetString("Nav_Settings");
         _logItem.Content = _localizationService.GetString("Nav_Log");
     }

@@ -3,6 +3,7 @@ using SkyrimModPacker.Application.Services;
 using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
+using SkyrimModPacker.Core.Models.Esl;
 using SkyrimModPacker.UI.ViewModels;
 using Xunit;
 
@@ -10,6 +11,40 @@ namespace SkyrimModPacker.Tests;
 
 public class ViewModelTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BuildViewModel_AnalyzeEsl_ShowsResultAndClearsItOnFailure(bool compatible)
+    {
+        var profiles = Substitute.For<IProfileRepository>();
+        profiles.LoadAllAsync().Returns(new List<ModProfile>());
+        var esl = Substitute.For<IEslService>();
+        var analysis = new EslAnalysisResult
+        {
+            IsCompatible = compatible,
+            OwnRecordCount = 2,
+            ProblematicRecordCount = compatible ? 0 : 1,
+            Reasons = compatible ? [] : ["Out of range"]
+        };
+        esl.AnalyzeAsync("Sword.esp", Arg.Any<CancellationToken>())
+            .Returns(Result<EslAnalysisResult>.Success(analysis));
+        esl.AnalyzeAsync("Broken.esp", Arg.Any<CancellationToken>())
+            .Returns(Result<EslAnalysisResult>.Failure("Invalid plugin"));
+        var vm = new BuildViewModel(profiles, Substitute.For<ISettingsRepository>(), Substitute.For<IModScanner>(),
+            new PackingPipeline([], Microsoft.Extensions.Logging.Abstractions.NullLogger<PackingPipeline>.Instance), eslService: esl);
+
+        await vm.AnalyzeEslCommand.ExecuteAsync("Sword.esp");
+        Assert.Same(analysis, vm.EslAnalysis);
+        Assert.Equal("Sword.esp", vm.AnalyzedPluginPath);
+        Assert.Null(vm.EslAnalysisError);
+        Assert.False(vm.IsLoading);
+
+        await vm.AnalyzeEslCommand.ExecuteAsync("Broken.esp");
+        Assert.Null(vm.EslAnalysis);
+        Assert.Equal("Invalid plugin", vm.EslAnalysisError);
+        Assert.False(vm.IsLoading);
+    }
+
     [Fact]
     public async Task ProfilesViewModel_AddAndRemoveKeyword_UpdatesCollection()
     {

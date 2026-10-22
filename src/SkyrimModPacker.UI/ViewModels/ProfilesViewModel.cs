@@ -31,6 +31,12 @@ public sealed partial class ProfilesViewModel : ViewModelBase
     private string _pluginFileName = string.Empty;
 
     [ObservableProperty]
+    private string _pluginSourcePath = string.Empty;
+
+    [ObservableProperty]
+    private bool _enableEsl;
+
+    [ObservableProperty]
     private ObservableCollection<string> _keywords = [];
 
     [ObservableProperty]
@@ -94,6 +100,8 @@ public sealed partial class ProfilesViewModel : ViewModelBase
         Name = value.Name;
         Version = value.Version;
         PluginFileName = value.PluginFileName;
+        PluginSourcePath = value.PluginSourcePath;
+        EnableEsl = value.EnableEsl;
         Keywords = new ObservableCollection<string>(value.Keywords);
         NewKeyword = string.Empty;
         SelectedKeyword = null;
@@ -154,6 +162,8 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             Name = Name.Trim(),
             Version = Version.Trim(),
             PluginFileName = PluginFileName.Trim(),
+            PluginSourcePath = PluginSourcePath.Trim(),
+            EnableEsl = EnableEsl,
             Keywords = Keywords.ToList(),
             CreatedAt = SelectedProfile.CreatedAt,
             ModifiedAt = DateTime.UtcNow
@@ -220,6 +230,8 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             Name = $"{SelectedProfile.Name} - Copy",
             Version = SelectedProfile.Version,
             PluginFileName = SelectedProfile.PluginFileName,
+            PluginSourcePath = SelectedProfile.PluginSourcePath,
+            EnableEsl = SelectedProfile.EnableEsl,
             Keywords = new List<string>(SelectedProfile.Keywords)
         };
 

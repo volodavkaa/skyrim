@@ -1,211 +1,107 @@
 # Skyrim Mod Packer
 
-[![.NET 8](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
-[![WPF-UI Fluent](https://img.shields.io/badge/UI-WPF--UI%20Fluent-blue.svg)](https://wpfui.lepo.co/)
-[![Tests](https://img.shields.io/badge/Tests-62%20Passed-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-lightgrey.svg)]()
+Десктопна програма для Windows x64: пакування модів у ZIP, перевірка ESL та створення плагінів одноручних мечів для Skyrim SE/AE.
 
-> **Skyrim Mod Packer** — професійна десктопна утиліта на C# 12 / .NET 8 / WPF для авторів модів The Elder Scrolls V: Skyrim (Special Edition, Anniversary Edition, VR). Автоматизує пошук, фільтрацію та пакування асетів зброї/броні/предметів безпосередньо з робочої теки `Data\` у готові до завантаження на Nexus Mods архіви.
+Стек: C# 12, .NET 8, WPF, WPF-UI 3, CommunityToolkit.Mvvm, Microsoft.Extensions.Hosting/DI, Serilog. Робота з плагінами — Mutagen.Bethesda.Skyrim 0.53.1. Нові модулі використовують формат Skyrim SE; сумісність редактора з Skyrim VR не перевірялася.
 
----
+## Пакування
 
-## 🇬🇧 English Quick Summary
+1. У **Налаштуваннях** вкажіть папку `Data` гри або натисніть автоматичний пошук. Вкажіть вихідну папку поза грою (типово — робочий стіл), збережіть налаштування. Доступні українська й англійська мови, світла й темна теми.
+2. У **Профілях** створіть профіль: назва, версія, ключові слова, ім’я плагіна. Для створеного редактором плагіна можна вказати зовнішній шлях до файлу.
+3. У **Збірці** виберіть профіль → **Сканувати** → перевірте знайдені файли → запустіть пакування.
+4. ZIP містить плагін у корені та відносні шляхи ресурсів (`meshes/`, `textures/`, `sound/`, `SKSE/`). Результат і помилки відображаються у журналі.
 
-**Skyrim Mod Packer** automates creating Nexus-ready `.zip` mod archives for Skyrim:
-- **Zero-touch scanning**: Scans `Data/meshes` and `Data/textures` matching keywords and discovers `.esp`/`.esm`/`.esl` plugins.
-- **Nexus-Compliant Archive Structure**: The archive root directly contains `meshes/`, `textures/`, and the plugin file (ready for Mod Organizer 2, Vortex, and manual install).
-- **Interactive File Tree Preview**: 3-state checkboxes, instant file size calculation, individual exclusion of unwanted meshes or textures.
-- **Pipeline Architecture**: Extensible pipeline (`IPackStep`): Scan ➔ Filter ➔ Validate ➔ Copy ➔ Archive.
-- **Safe & Non-Destructive**: Read-only operations on Skyrim `Data/`; game assets are never modified or removed.
-- **Modern Fluent UI**: Dark/Light theme, English & Ukrainian localization, Drag-and-Drop support, live Serilog event console.
+Сканер шукає ресурси за входженням ключових слів у шляхи. Зовнішній плагін пакується з указаного шляху; якщо файл відсутній, збірка завершується помилкою. Для власної моделі додайте до профілю ключові слова, що знаходять її ресурси.
 
----
+**Відоме обмеження наявного сценарію:** дерево дозволяє змінювати вибір файлів, але команда пакування повторно сканує джерело й не передає ці виключення в конвеєр. Перевіряйте вміст ZIP; для відбору використовуйте ключові слова профілю. Це місце не рефакторилось у межах додавання модулів.
 
-## 🇺🇦 Основні можливості
+## ESL
 
-| Можливість | Опис |
+- **Аналіз ESL** на екрані збірки читає плагін і показує версію заголовка, кількість власних і проблемних записів та причини несумісності. Перевизначення записів майстрів не рахуються як власні.
+- Перевіряється ліміт 4096 власних записів і діапазон локальних FormID: `0x800–0xFFF` для заголовка до 1.71, `0x001–0xFFF` для 1.71 і новіших. Нульовий ID недопустимий. Через розмір діапазонів фактична місткість становить 2048 і 4095 різних ID відповідно.
+- Увімкніть ESL у профілі, щоб додати прапорець **Small master (ESL)** під час пакування. Типово опцію вимкнено, зокрема для старих профілів.
+- Крок працює зі staging-копією навіть за вимкненого звичайного тимчасового копіювання. Несумісність перериває збірку; початковий плагін залишається незмінним. Уже встановлений прапорець повторного запису не потребує.
+- Перед зміною зберігається резервна копія: `<шлях-архіву>.backups/<ідентифікатор-збірки>/<плагін>.bak`. Вона залишається поза ZIP. Результати записуються в журнал.
+
+Компактування FormID не реалізовано: етап 7 пропущено. Увімкнення ESL не перенумеровує записи.
+
+## Редактор «Зброя»
+
+1. Налаштуйте шлях до `Data` з `Skyrim.esm`. На вкладці **Зброя** створіть `.esp` або `.esl` у робочій папці поза грою. Типова папка: `%LocalAppData%\SkyrimModPacker\Plugins`. Майстри вводяться через кому, у порядку залежностей; для ванільного шаблону потрібен `Skyrim.esm`.
+2. Завантажте шаблони, виберіть ванільний одноручний меч, задайте унікальний EditorID, назву, урон, вагу й вартість, клонуйте його. Створюється власний запис із новим FormID.
+3. У додаткових полях доступні опис, швидкість, досяг, шлях до `.nif`, ключові слова, звук атаки, чари та заряд. Шлях моделі задається відносно `meshes`, без абсолютного шляху або `..`. Інші властивості успадковуються від шаблону.
+4. Вибирайте меч у списку для редагування або видалення. Видалення блокується, якщо на меч посилаються записи цього плагіна.
+5. Для крафту створіть рецепт COBJ: робоче місце, матеріали з кількостями, кількість результату й необов’язковий перк. Підтримуються створення, редагування й видалення рецептів; невідомі складні умови не переписуються.
+6. Для leveled list виберіть ванільний список, рівень і кількість та додайте меч. Можна прибрати його зі списку. Створюється override списку зі збереженням вихідних записів і властивостей; це потребує врахування порядку завантаження інших модів і не є злиттям усіх активних плагінів.
+7. Створіть або прив’яжіть профіль пакування на цьому екрані, перейдіть у **Збірку**, виконайте сканування й пакування.
+
+Редактор зараз працює лише з одноручними мечами. Списки ванільних шаблонів і варіантів посилань читаються зі `Skyrim.esm`. Нові власні записи отримують послідовні ID `0x800–0xFFF`, заголовок 1.70; після видалення ID не перевикористовуються. За вичерпання діапазону запис відхиляється.
+
+Перед перезаписом плагіна редактор зберігає попередню версію поруч як `<плагін>.bak`; ця копія оновлюється при наступному успішному записі. Для довшої історії зберігайте окремі копії. Запис виконується через тимчасовий файл. Файли в папці гри редактор і ESL-сервіс лише читають; запис усередину гри та через символічні посилання/ junction заборонений.
+
+## Дані та журнал
+
+У `%LocalAppData%\SkyrimModPacker` зберігаються `settings.json`, `profiles.json`, `build_history.json`, а в підпапці `logs` — щоденні файли журналу `log-*.txt` (до 7 файлів). У вікні журналу зберігаються останні 1000 подій. Профілі містять версію, ключові слова, ім’я та необов’язковий зовнішній шлях плагіна, опцію ESL. Вихідна папка є загальним налаштуванням.
+
+Автоматичне підвищення версії та обчислення SHA-256 архіву в поточному сценарії не реалізовані. JSON-збереження не має транзакційної синхронізації; очищення загального staging при скасуванні між кроками залишається обмеженням наявного конвеєра.
+
+## Архітектура
+
+| Проєкт | Призначення |
 |---|---|
-| **Автодетекція Skyrim** | Автоматичний пошук шляху до гри через Windows Registry, `libraryfolders.vdf` Steam та стандартні шляхи встановлення. |
-| **Профілі модів** | Збереження налаштувань для кожного моду (назва, версія, автор, ключові слова, плагін, цільова папка). |
-| **Автоінкремент версій** | Підтримка семантичного версіонування (SemVer) з автоматичним підвищенням (Patch / Minor / Major) при кожній збірці. |
-| **Інтерактивне дерево файлів** | Попередній перегляд знайдених файлів у вигляді ієрархічного дерева з 3-позиційними чекбоксами (вибрано, частково, знято) та підрахунком розміру. |
-| **Nexus Mods сумісність** | Архіви формуються з кореневими теками `meshes/`, `textures/` та плагіном у корені, нормалізованими прямими слешами (`/`) для сумісності з MO2 та Vortex. |
-| **Контрольні суми (SHA-256)** | Автоматичний розрахунок хешу кожного сформованого архіву та збереження в історії збірок. |
-| **Drag-and-Drop** | Перетягування у вікно програми теки `Data\`, теки моду (додає ключове слово) або файлу плагіна. |
-| **Локалізація UA / EN** | Миттєве динамічне перемикання між українською та англійською мовами без перезапуску. |
-| **Теми оформлення** | Fluent Design із підтримкою темної, світлої та системної тем (WPF-UI v3). |
-| **Безпека даних** | Суворо недеструктивний режим: оригінальні файли гри лише читаються та ні за яких умов не видаляються. |
+| `src/SkyrimModPacker.Core` | Моделі, `Result`, інтерфейси `IPackStep`, `IEslService`, `IPluginBuilderService`, захист шляхів запису |
+| `src/SkyrimModPacker.Application` | `Services/PackingPipeline`, кроки в `Steps`, їх реєстрація в DI |
+| `src/SkyrimModPacker.Infrastructure` | `FileSystem/ModScanner`, `Services/SkyrimLocator`, `Archivers/ZipArchiver`, JSON-репозиторії, `Esl`, `PluginBuilder`, логування |
+| `src/SkyrimModPacker.UI` | WPF MVVM, навігація, `ViewModels`, `Views/Pages`, ресурси української й англійської мов; DI у `App.xaml.cs` |
+| `tests/SkyrimModPacker.Tests` | xUnit, NSubstitute, синтетичні плагіни, інтеграційні сценарії та WPF-перевірки |
 
----
+Кроки виконуються за `Order`: **Scan (100) → Filter (200) → Validate (300) → Copy (400) → ESL (450, необов’язковий) → Archive (500)**. Нові кроки реалізують `IPackStep` і реєструються в `Application/DependencyInjection.cs`; нові сервіси — в `Infrastructure/DependencyInjection.cs`.
 
-## 🏛 Архітектура рішення
-
-Проєкт побудований за принципами **Clean Architecture** та **SOLID**:
-
-```
-SkyrimModPacker/
-├── src/
-│   ├── SkyrimModPacker.Core/             # Чисті доменні моделі, інтерфейси та валідатори
-│   │   ├── Models/                      # ModProfile, ScannedFile, AppSettings, BuildRecord
-│   │   ├── Interfaces/                  # IPackStep, IArchiver, IModScanner, ISkyrimLocator...
-│   │   ├── Common/                      # Result<T>, FileTreeNode, FileTreeBuilder
-│   │   └── Validation/                  # ModProfileValidator
-│   │
-│   ├── SkyrimModPacker.Application/      # Конвеєр та кроки обробки (Use Cases)
-│   │   ├── Pipeline/                    # PackingPipeline (оркестрація кроків за Order)
-│   │   ├── Steps/                       # ScanStep(100), FilterStep(200), ValidateStep(300),
-│   │   │                                # CopyStep(400), ArchiveStep(500)
-│   │   └── Services/                    # VersionIncrementService
-│   │
-│   ├── SkyrimModPacker.Infrastructure/   # Реалізація доступу до даних, ОС та утиліт
-│   │   ├── Scanning/                    # ModScanner (паралельний пошук файлів з точними масками)
-│   │   ├── Detection/                   # SkyrimLocator (Registry + Steam VDF + Standard paths)
-│   │   ├── Archiving/                   # ZipArchiver (System.IO.Compression, normalized entry paths)
-│   │   ├── Persistence/                 # JsonProfileRepository, JsonSettingsRepository, JsonBuildHistoryRepository
-│   │   └── Logging/                     # InMemoryLogSink (Serilog sink + UI streaming service)
-│   │
-│   └── SkyrimModPacker.UI/              # Презентаційний шар (WPF + MVVM + WPF-UI v3)
-│       ├── ViewModels/                  # BuildViewModel, ProfilesViewModel, SettingsViewModel, LogViewModel
-│       ├── Views/Pages/                 # BuildPage, ProfilesPage, SettingsPage, LogPage
-│       ├── Services/                    # LocalizationService, NavigationService
-│       ├── Resources/                   # Strings.uk.xaml, Strings.en.xaml
-│       └── App.xaml / MainWindow.xaml    # DI Container (Host), Global Exception Handlers
-│
-└── tests/
-    └── SkyrimModPacker.Tests/           # 62 модульних та інтеграційних тести (xUnit, NSubstitute)
-```
-
----
-
-## 🚀 Конвеєр збірки (Packing Pipeline)
-
-Процес формування моду розбитий на ізольовані кроки (`IPackStep`), зареєстровані в DI-контейнері:
-
-```mermaid
-graph LR
-    A[100: ScanStep] --> B[200: FilterStep]
-    B --> C[300: ValidateStep]
-    C --> D[400: CopyStep]
-    D --> E[500: ArchiveStep]
-```
-
-1. **ScanStep (Order 100)**: Виконує сканування теки `Data\meshes` та `Data\textures` за ключовими словами, шукає файл плагіна.
-2. **FilterStep (Order 200)**: Застосовує вибір користувача з дерева файлів (`FileTreeNode`), виключаючи незняті прапорці.
-3. **ValidateStep (Order 300)**: Перевіряє наявність обов'язкових файлів, чинні шляхи та валідність налаштувань архіву.
-4. **CopyStep (Order 400)**: Копіює відібрані файли у тимчасову ізольовану директорію зі збереженням структури.
-5. **ArchiveStep (Order 500)**: Стискає файли в `.zip`, нормалізує імена записів до стандарту Unix/Zip (`/`), рахує хеш SHA-256 та записує подію в історію.
-
----
-
-## 💻 Інструкція користувача
-
-### 1. Первинне налаштування
-1. Запустіть програму. Перейдіть у розділ **Налаштування** (або натисніть `Ctrl+,`).
-2. Якщо Skyrim встановлено через Steam, шлях до `Data\` буде знайдено автоматично. Якщо ні — скористайтеся кнопкою «Огляд» або перетягніть папку `Data` прямо у вікно.
-3. Оберіть бажану мову (Українська / English) та тему оформлення.
-
-### 2. Створення профілю моду
-1. Відкрийте розділ **Профілі** (`Ctrl+2`) та натисніть «Створити профіль».
-2. Заповніть:
-   - **Назва моду**: наприклад, `NordicSilverSword`.
-   - **Ключові слова**: папки або частини імен файлів у meshes/textures (наприклад, `nordic_sword, silversword`).
-   - **Файл плагіна**: ім'я файлу (наприклад, `NordicSilverSword.esp`).
-   - **Версія**: стартова версія (наприклад, `1.0.0`) та перемикач «Автоінкремент».
-3. Натисніть «Зберегти профіль».
-
-### 3. Попередній перегляд та збірка
-1. У розділі **Збірка** (`Ctrl+1`) оберіть ваш профіль.
-2. Натисніть **«Сканувати»** (або `F5`). Програма побудує дерево всіх знайдених асетів.
-3. За потреби зніміть прапорці з непотрібних файлів (наприклад, тестових текстур чи робочих бекапів).
-4. Натисніть **«Зібрати мод»** (`Ctrl+B`).
-5. Після завершення готовий архів з'явиться у вихідній папці (за замовчуванням — на Робочому столі), а в інтерфейсі з'явиться кнопка швидкого відкриття папки з архівом.
-
----
-
-## 🛠 Керівництво для розробників
-
-### Вимоги
-- Windows 10/11 x64
-- .NET 8.0 SDK або новіший
-- Visual Studio 2022 (v17.8+) або Visual Studio Code / Rider
-
-### Збірка та запуск тестів
-
-```bash
-# Клонування або перехід у папку проєкту
-cd c:\Users\volod\OneDrive\Desktop\Projects\skyrim
-
-# Відновлення пакетів та компіляція
-dotnet build SkyrimModPacker.sln
-
-# Запуск модульних та інтеграційних тестів
-dotnet test SkyrimModPacker.sln
-```
-
-### Публікація автономного виконуваного файлу (Self-Contained Single-File)
-
-Для створення єдиного автономного `.exe` файлу, який не вимагає встановленого .NET Runtime у користувача:
-
-```bash
-dotnet publish src/SkyrimModPacker.UI/SkyrimModPacker.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/win-x64
-```
-
-Готовий файл `SkyrimModPacker.UI.exe` буде знаходитись у теці `publish/win-x64/`.
-
----
-
-## 🧩 Гайд з розширення (Extension Guide)
-
-### Як додати новий крок у конвеєр пакування
-Кожен крок реалізує інтерфейс `IPackStep` з `SkyrimModPacker.Core.Interfaces`:
+Приклад додаткового кроку:
 
 ```csharp
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
 
-public class MyCustomStep : IPackStep
+public sealed class CustomStep : IPackStep
 {
-    // Порядок виконання у ланцюжку (наприклад, 450 — після копіювання, але до архівації)
-    public int Order => 450;
-    public string Name => "MyCustomStep";
+    public string Name => "Custom step";
+    public int Order => 475;
 
-    public async Task<Result> ExecuteAsync(PackingContext context, CancellationToken ct = default)
-    {
-        // Доступ до файлів, профілю та робочих директорій через context
-        // Наприклад, перевірка .nif заголовків або додавання readme.txt
-        return Result.Ok();
-    }
-}
-```
-
-Зареєструйте новий крок у `SkyrimModPacker.Application/DependencyInjection.cs`:
-```csharp
-services.AddTransient<IPackStep, MyCustomStep>();
-```
-Він автоматично підхопиться `PackingPipeline` у відповідній послідовності.
-
-### Як додати інший архіватор (наприклад, 7-Zip / SharpCompress)
-Реалізуйте інтерфейс `IArchiver`:
-
-```csharp
-public class SevenZipArchiver : IArchiver
-{
-    public string Extension => ".7z";
-
-    public async Task<Result<ArchiveResult>> ArchiveAsync(
-        string sourceDirectory,
-        string destinationArchiveFilePath,
-        IProgress<double>? progress = null,
+    public Task<bool> ExecuteAsync(PackingContext context,
         CancellationToken cancellationToken = default)
     {
-        // Ваша логіка стиснення у формат .7z
+        cancellationToken.ThrowIfCancellationRequested();
+        // При помилці додайте пояснення в context.Errors і поверніть false.
+        return Task.FromResult(true);
     }
 }
 ```
-Та зареєструйте реалізацію в `SkyrimModPacker.Infrastructure/DependencyInjection.cs`.
 
----
+Реєстрація: `services.AddSingleton<IPackStep, CustomStep>();`. Наявний ZIP-архіватор використовує `System.IO.Compression`; контракт `IArchiver.CreateArchiveAsync` приймає вихідний шлях і список пар `(SourcePath, EntryPath)`.
 
-## 📄 Ліцензія
+## Збірка і тести
 
-Проєкт поширюється за ліцензією MIT. Модифікуйте та використовуйте вільно для розробки та публікації власних модів!
+Потрібні Windows 10/11 x64, .NET 8 SDK або сумісний новіший SDK та доступ до NuGet для першого відновлення. WPF-тести виконуються на Windows.
+
+З кореня репозиторію:
+
+```powershell
+dotnet restore SkyrimModPacker.sln
+dotnet test SkyrimModPacker.sln -c Release --no-restore --verbosity minimal
+dotnet publish src/SkyrimModPacker.UI/SkyrimModPacker.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/win-x64
+```
+
+Запуск: `publish/win-x64/SkyrimModPacker.UI.exe`. Це автономна збірка, окремий .NET Runtime не потрібний. Файли PDB у вихідній папці потрібні лише для діагностики.
+
+Фінальна автоматична перевірка: **160 тестів пройдено в Release, 0 помилок, 0 пропущено**. Покрито старий конвеєр, ESL-діапазони й прапорець, резервні копії, захист гри, створення/клонування/редагування, COBJ, LVLI, профіль → пакування, режими копіювання та рендеринг WPF на вузькому й широкому екранах. Тестові плагіни створюються в тимчасових папках; власна копія гри для тестів не потрібна.
+
+Для знімків WPF можна додати до команди тестів `--environment SKYRIM_UI_PREVIEW_DIR=C:\Temp\SkyrimUiPreview` (абсолютний шлях до бажаної папки).
+
+### Ручна приймальна перевірка
+
+- Старий профіль із вимкненим ESL: **Сканувати → Запакувати**, перевірити ZIP у вихідній папці й його вміст.
+- Сумісний плагін: увімкнути ESL у профілі, запакувати, перевірити наявність `.bak`; відкрити плагін з архіву в xEdit і перевірити прапорець **ESL / Small master**, незмінність FormID. Несумісний плагін має зупинити збірку з поясненням у журналі.
+- Створити меч із ванільного шаблону, додати рецепт або список за потреби, прив’язати профіль і запакувати. Встановити ZIP через менеджер модів у тестовий профіль, увімкнути плагін та перевірити меч у грі (пошук через консоль `help`, потім `player.additem` з ID запису у фактичному порядку завантаження).
+
+Перевірка в реальній грі й xEdit ще не виконана: автоматичні тести використовують синтетичні дані, а WPF-перевірки — тестовий рендеринг. Вони не підтверджують вигляд моделі або поведінку в конкретній збірці модів.
