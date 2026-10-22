@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="NSubstitute" Version="5.1.*" />
+    <PackageReference Include="xunit" Version="2.9.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SkyrimModPacker.Core\SkyrimModPacker.Core.csproj" />
+    <ProjectReference Include="..\..\src\SkyrimModPacker.Application\SkyrimModPacker.Application.csproj" />
+    <ProjectReference Include="..\..\src\SkyrimModPacker.Infrastructure\SkyrimModPacker.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SkyrimModPacker.UI\SkyrimModPacker.UI.csproj" />
+  </ItemGroup>
+
+</Project>

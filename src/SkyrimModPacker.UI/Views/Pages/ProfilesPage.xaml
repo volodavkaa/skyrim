@@ -1,0 +1,244 @@
+<Page
+    x:Class="SkyrimModPacker.UI.Views.Pages.ProfilesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:SkyrimModPacker.UI.ViewModels"
+    xmlns:models="clr-namespace:SkyrimModPacker.Core.Models;assembly=SkyrimModPacker.Core"
+    d:DataContext="{d:DesignInstance vm:ProfilesViewModel, IsDesignTimeCreatable=False}"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Profiles"
+    d:DesignHeight="700" d:DesignWidth="900">
+
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <!-- Profiles List (Master) -->
+            <ColumnDefinition Width="280" />
+            <!-- Profile Editor (Detail) -->
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Left: Profiles Master List -->
+        <ui:Card Grid.Column="0" Margin="0,0,16,0" Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="{DynamicResource Profiles_Title}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+
+                    <ui:Button Grid.Column="1"
+                               Content="{DynamicResource Profiles_New}"
+                               Appearance="Primary"
+                               Icon="{ui:SymbolIcon Add24}"
+                               Command="{Binding CreateNewProfileCommand}" />
+                </Grid>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Profiles}"
+                         SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                         BorderThickness="0"
+                         Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:ModProfile}">
+                            <Grid Margin="0,4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0"
+                                           Text="{Binding Name}"
+                                           FontWeight="SemiBold"
+                                           FontSize="14" />
+
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="v"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{Binding Version}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text=" • "
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{Binding Keywords.Count}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text=" keywords"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </ui:Card>
+
+        <!-- Right: Profile Editor -->
+        <ui:Card Grid.Column="1" Padding="20">
+            <Grid Visibility="{Binding IsEditing, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid.RowDefinitions>
+                    <!-- Header -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Feedback Alerts -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Form Fields -->
+                    <RowDefinition Height="*" />
+                    <!-- Bottom Actions -->
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <TextBlock Grid.Row="0"
+                           Text="{DynamicResource Profiles_EditTitle}"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,16" />
+
+                <!-- Status / Error InfoBar -->
+                <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                    <ui:InfoBar Title="Success"
+                                Message="{Binding StatusMessage}"
+                                Severity="Success"
+                                IsOpen="{Binding StatusMessage, Converter={StaticResource NotNullToVisibilityConverter}, FallbackValue=False}"
+                                Margin="0,0,0,8" />
+
+                    <ui:InfoBar Title="Error"
+                                Message="{Binding ErrorMessage}"
+                                Severity="Error"
+                                IsOpen="{Binding ErrorMessage, Converter={StaticResource NotNullToVisibilityConverter}, FallbackValue=False}"
+                                Margin="0,0,0,8" />
+                </StackPanel>
+
+                <!-- Form Fields -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,8,0">
+                        <!-- Mod Name -->
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_ModName}" FontWeight="Medium" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="{DynamicResource Profiles_ModNamePlaceholder}" />
+                        </StackPanel>
+
+                        <!-- Mod Version -->
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_Version}" FontWeight="Medium" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="{DynamicResource Profiles_VersionPlaceholder}" />
+                        </StackPanel>
+
+                        <!-- Plugin Filename -->
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_PluginFileName}" FontWeight="Medium" Margin="0,0,0,6" />
+                            <ui:TextBox Text="{Binding PluginFileName, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="{DynamicResource Profiles_PluginPlaceholder}" />
+                        </StackPanel>
+
+                        <!-- Keywords / Folders -->
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Text="{DynamicResource Profiles_KeywordsTitle}" FontWeight="Medium" Margin="0,0,0,4" />
+                            <TextBlock Text="{DynamicResource Profiles_KeywordsDesc}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Margin="0,0,0,8" />
+
+                            <!-- Add Keyword Input -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ui:TextBox Grid.Column="0"
+                                            Text="{Binding NewKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="{DynamicResource Profiles_KeywordPlaceholder}"
+                                            Margin="0,0,8,0" />
+
+                                <ui:Button Grid.Column="1"
+                                           Content="{DynamicResource Profiles_Add}"
+                                           Icon="{ui:SymbolIcon Add24}"
+                                           Command="{Binding AddKeywordCommand}" />
+                            </Grid>
+
+                            <!-- Keywords List -->
+                            <Border BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    CornerRadius="6"
+                                    MinHeight="120"
+                                    MaxHeight="200"
+                                    Padding="8">
+                                <ListBox ItemsSource="{Binding Keywords}"
+                                         SelectedItem="{Binding SelectedKeyword, Mode=TwoWay}"
+                                         BorderThickness="0"
+                                         Background="Transparent">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding}"
+                                                           VerticalAlignment="Center" />
+
+                                                <ui:Button Grid.Column="1"
+                                                           Icon="{ui:SymbolIcon Dismiss16}"
+                                                           Appearance="Transparent"
+                                                           Command="{Binding DataContext.RemoveKeywordCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                           CommandParameter="{Binding}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Actions -->
+                <Grid Grid.Row="3" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:Button Grid.Column="0"
+                               Content="{DynamicResource Profiles_Delete}"
+                               Appearance="Danger"
+                               Icon="{ui:SymbolIcon Delete24}"
+                               Command="{Binding DeleteProfileCommand}" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <ui:Button Content="{DynamicResource Profiles_Duplicate}"
+                                   Icon="{ui:SymbolIcon Copy24}"
+                                   Margin="0,0,8,0"
+                                   Command="{Binding DuplicateProfileCommand}" />
+
+                        <ui:Button Content="{DynamicResource Profiles_Save}"
+                                   Appearance="Primary"
+                                   Icon="{ui:SymbolIcon Save24}"
+                                   Command="{Binding SaveProfileCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </ui:Card>
+    </Grid>
+</Page>

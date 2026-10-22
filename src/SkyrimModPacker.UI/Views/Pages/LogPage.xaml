@@ -1,0 +1,219 @@
+<Page
+    x:Class="SkyrimModPacker.UI.Views.Pages.LogPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:SkyrimModPacker.UI.ViewModels"
+    xmlns:models="clr-namespace:SkyrimModPacker.Core.Models;assembly=SkyrimModPacker.Core"
+    xmlns:logging="clr-namespace:SkyrimModPacker.Infrastructure.Logging;assembly=SkyrimModPacker.Infrastructure"
+    d:DataContext="{d:DesignInstance vm:LogViewModel, IsDesignTimeCreatable=False}"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Log"
+    d:DesignHeight="700" d:DesignWidth="900">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <!-- Header Toolbar -->
+            <RowDefinition Height="Auto" />
+            <!-- Tabbed Content (History / Live Logs) -->
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Toolbar -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="{DynamicResource Log_Title}"
+                           FontSize="24"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{DynamicResource Log_Subtitle}"
+                           FontSize="13"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Margin="0,2,0,0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <ui:Button Content="{DynamicResource Log_OpenLogsFolder}"
+                           Icon="{ui:SymbolIcon Folder24}"
+                           Margin="0,0,8,0"
+                           Command="{Binding OpenLogsFolderCommand}" />
+
+                <ui:Button Content="{DynamicResource Log_ClearHistory}"
+                           Appearance="Danger"
+                           Icon="{ui:SymbolIcon Delete24}"
+                           Command="{Binding ClearHistoryCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Tabbed Content -->
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+
+            <!-- Tab 1: Build History -->
+            <TabItem Header="{DynamicResource Log_HistoryTab}">
+                <Grid Margin="0,12,0,0">
+                    <!-- Empty Placeholder -->
+                    <ui:Card VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                             Visibility="{Binding HistoryRecords.Count, Converter={StaticResource InverseBooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="ClipboardTextLtr24"
+                                           FontSize="64"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,0,0,16" />
+                            <TextBlock Text="{DynamicResource Log_NoHistoryTitle}"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,8" />
+                            <TextBlock Text="{DynamicResource Log_NoHistoryDesc}"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- History List -->
+                    <ListView ItemsSource="{Binding HistoryRecords}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListView.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:BuildRecord}">
+                                <ui:Card Margin="0,4" Padding="14">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Status Icon -->
+                                        <ui:SymbolIcon Grid.Column="0"
+                                                       Symbol="CheckmarkCircle24"
+                                                       Foreground="LightGreen"
+                                                       FontSize="24"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,16,0" />
+
+                                        <!-- Details -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding ProfileName}"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="15" />
+                                                <TextBlock Text=" v"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="15" />
+                                                <TextBlock Text="{Binding Version}"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="15" />
+                                                <TextBlock Text=" • "
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                                                           FontSize="13"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                <TextBlock Text="{Binding FileCount, StringFormat='{}{0} files'}"
+                                                           FontSize="12"
+                                                           Margin="0,0,12,0"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <TextBlock Text="{Binding ArchivePath}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxWidth="500" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Action: Open in Explorer -->
+                                        <ui:Button Grid.Column="2"
+                                                   Content="{DynamicResource Log_Show}"
+                                                   Icon="{ui:SymbolIcon FolderOpen24}"
+                                                   VerticalAlignment="Center"
+                                                   Command="{Binding DataContext.OpenArchiveCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding ArchivePath}" />
+                                    </Grid>
+                                </ui:Card>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: Live Console Output -->
+            <TabItem Header="{DynamicResource Log_LiveLogsTab}">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Console Action Bar -->
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <TextBlock Text="Real-time Serilog application events"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+
+                        <ui:Button Content="Clear Console"
+                                   HorizontalAlignment="Right"
+                                   Command="{Binding ClearLiveLogsCommand}" />
+                    </Grid>
+
+                    <!-- Console Box -->
+                    <Border Grid.Row="1"
+                            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="8">
+                        <ListView ItemsSource="{Binding LiveLogs}"
+                                  BorderThickness="0"
+                                  Background="Transparent"
+                                  FontFamily="Consolas, Cascadia Code, Courier New"
+                                  FontSize="12"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemTemplate>
+                                <DataTemplate DataType="{x:Type logging:LogEntry}">
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="85" />
+                                            <ColumnDefinition Width="40" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Timestamp -->
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding FormattedTimestamp}"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                                        <!-- Level Badge -->
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding LevelBadge}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
+
+                                        <!-- Message -->
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Message}"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Page>

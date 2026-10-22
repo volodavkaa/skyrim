@@ -1,0 +1,77 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!-- Application & Navigation -->
+    <system:String x:Key="AppTitle">Skyrim Mod Packer</system:String>
+    <system:String x:Key="Nav_Build">Збірка</system:String>
+    <system:String x:Key="Nav_Profiles">Профілі</system:String>
+    <system:String x:Key="Nav_Settings">Налаштування</system:String>
+    <system:String x:Key="Nav_Log">Журнал</system:String>
+
+    <!-- Build Screen -->
+    <system:String x:Key="Build_ModProfile">Профіль моду:</system:String>
+    <system:String x:Key="Build_Scan">Сканувати</system:String>
+    <system:String x:Key="Build_Pack">Запакувати</system:String>
+    <system:String x:Key="Build_Cancel">Скасувати</system:String>
+    <system:String x:Key="Build_SelectAll">Вибрати все</system:String>
+    <system:String x:Key="Build_DeselectAll">Зняти вибір</system:String>
+    <system:String x:Key="Build_NoFilesScannedTitle">Файли ще не відскановано</system:String>
+    <system:String x:Key="Build_NoFilesScannedDesc">Виберіть профіль та натисніть «Сканувати», щоб знайти файли моду.</system:String>
+    <system:String x:Key="Build_ArchiveReady">Архів готовий</system:String>
+    <system:String x:Key="Build_ShowInExplorer">Показати у Провіднику</system:String>
+    <system:String x:Key="Build_Error">Помилка</system:String>
+    <system:String x:Key="Build_DragDropHint">Перетягніть сюди папку або .esp плагін для автоматичного пакування</system:String>
+
+    <!-- Profiles Screen -->
+    <system:String x:Key="Profiles_Title">Профілі</system:String>
+    <system:String x:Key="Profiles_New">Новий</system:String>
+    <system:String x:Key="Profiles_EditTitle">Редагування профілю</system:String>
+    <system:String x:Key="Profiles_ModName">Назва моду</system:String>
+    <system:String x:Key="Profiles_ModNamePlaceholder">наприклад, MyAxe</system:String>
+    <system:String x:Key="Profiles_Version">Версія</system:String>
+    <system:String x:Key="Profiles_VersionPlaceholder">наприклад, 1.0</system:String>
+    <system:String x:Key="Profiles_PluginFileName">Ім'я плагіна (.esp / .esl / .esm)</system:String>
+    <system:String x:Key="Profiles_PluginPlaceholder">наприклад, MyAxe.esp</system:String>
+    <system:String x:Key="Profiles_KeywordsTitle">Назви папок і ключові слова для пошуку</system:String>
+    <system:String x:Key="Profiles_KeywordsDesc">Файли та підпапки у meshes\ і textures\, що містять ці слова, будуть упаковані.</system:String>
+    <system:String x:Key="Profiles_KeywordPlaceholder">Введіть назву папки або ключове слово (наприклад, MyAxe)</system:String>
+    <system:String x:Key="Profiles_Add">Додати</system:String>
+    <system:String x:Key="Profiles_Delete">Видалити</system:String>
+    <system:String x:Key="Profiles_Duplicate">Дублювати</system:String>
+    <system:String x:Key="Profiles_Save">Зберегти профіль</system:String>
+
+    <!-- Settings Screen -->
+    <system:String x:Key="Settings_Title">Налаштування</system:String>
+    <system:String x:Key="Settings_SkyrimDataTitle">Шлях до папки Skyrim Data</system:String>
+    <system:String x:Key="Settings_SkyrimDataDesc">Шлях до каталогу Data\ гри Skyrim, що містить meshes, textures та плагіни.</system:String>
+    <system:String x:Key="Settings_Browse">Огляд...</system:String>
+    <system:String x:Key="Settings_AutoDetect">Автопошук</system:String>
+    <system:String x:Key="Settings_ValidFolder">Виявлено дійсну папку Skyrim Data</system:String>
+    <system:String x:Key="Settings_PackagingTitle">Пакування та вивід</system:String>
+    <system:String x:Key="Settings_OutputDirTitle">Папка виводу (куди зберігати .zip архіви)</system:String>
+    <system:String x:Key="Settings_Desktop">Робочий стіл</system:String>
+    <system:String x:Key="Settings_StagingToggleTitle">Використовувати тимчасову папку</system:String>
+    <system:String x:Key="Settings_StagingToggleDesc">Копіює файли у чисту тимчасову папку перед створенням zip-архіву.</system:String>
+    <system:String x:Key="Settings_OverwriteToggleTitle">Перезаписувати існуючі архіви</system:String>
+    <system:String x:Key="Settings_OverwriteToggleDesc">Якщо вимкнено — програма зупиниться і попередить, якщо архів з такою назвою вже існує.</system:String>
+    <system:String x:Key="Settings_AppearanceTitle">Вигляд та параметри</system:String>
+    <system:String x:Key="Settings_Theme">Тема оформлення</system:String>
+    <system:String x:Key="Settings_ThemeDark">Темна</system:String>
+    <system:String x:Key="Settings_ThemeLight">Світла</system:String>
+    <system:String x:Key="Settings_Language">Мова інтерфейсу</system:String>
+    <system:String x:Key="Settings_Save">Зберегти налаштування</system:String>
+
+    <!-- Log & History Screen -->
+    <system:String x:Key="Log_Title">Журнал та історія</system:String>
+    <system:String x:Key="Log_Subtitle">Історія завершених операцій пакування модів</system:String>
+    <system:String x:Key="Log_OpenLogsFolder">Відкрити папку логів</system:String>
+    <system:String x:Key="Log_ClearHistory">Очистити історію</system:String>
+    <system:String x:Key="Log_NoHistoryTitle">Історія порожня</system:String>
+    <system:String x:Key="Log_NoHistoryDesc">Створені архіви з'являтимуться тут після завершення пакування.</system:String>
+    <system:String x:Key="Log_LiveLogsTab">Консоль подій</system:String>
+    <system:String x:Key="Log_HistoryTab">Історія збірок</system:String>
+    <system:String x:Key="Log_Show">Показати</system:String>
+
+</ResourceDictionary>

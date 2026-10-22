@@ -1,0 +1,77 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!-- Application & Navigation -->
+    <system:String x:Key="AppTitle">Skyrim Mod Packer</system:String>
+    <system:String x:Key="Nav_Build">Build</system:String>
+    <system:String x:Key="Nav_Profiles">Profiles</system:String>
+    <system:String x:Key="Nav_Settings">Settings</system:String>
+    <system:String x:Key="Nav_Log">Log</system:String>
+
+    <!-- Build Screen -->
+    <system:String x:Key="Build_ModProfile">Mod Profile:</system:String>
+    <system:String x:Key="Build_Scan">Scan</system:String>
+    <system:String x:Key="Build_Pack">Pack</system:String>
+    <system:String x:Key="Build_Cancel">Cancel</system:String>
+    <system:String x:Key="Build_SelectAll">Select All</system:String>
+    <system:String x:Key="Build_DeselectAll">Deselect All</system:String>
+    <system:String x:Key="Build_NoFilesScannedTitle">No Files Scanned</system:String>
+    <system:String x:Key="Build_NoFilesScannedDesc">Select a profile and click Scan to discover mod files.</system:String>
+    <system:String x:Key="Build_ArchiveReady">Archive Ready</system:String>
+    <system:String x:Key="Build_ShowInExplorer">Show in Explorer</system:String>
+    <system:String x:Key="Build_Error">Error</system:String>
+    <system:String x:Key="Build_DragDropHint">Drop Skyrim Data subfolders or .esp plugins here to pack</system:String>
+
+    <!-- Profiles Screen -->
+    <system:String x:Key="Profiles_Title">Profiles</system:String>
+    <system:String x:Key="Profiles_New">New</system:String>
+    <system:String x:Key="Profiles_EditTitle">Edit Profile</system:String>
+    <system:String x:Key="Profiles_ModName">Mod Name</system:String>
+    <system:String x:Key="Profiles_ModNamePlaceholder">e.g. MyAxe</system:String>
+    <system:String x:Key="Profiles_Version">Version</system:String>
+    <system:String x:Key="Profiles_VersionPlaceholder">e.g. 1.0</system:String>
+    <system:String x:Key="Profiles_PluginFileName">Plugin Filename (.esp / .esl / .esm)</system:String>
+    <system:String x:Key="Profiles_PluginPlaceholder">e.g. MyAxe.esp</system:String>
+    <system:String x:Key="Profiles_KeywordsTitle">Folder Names &amp; Search Keywords</system:String>
+    <system:String x:Key="Profiles_KeywordsDesc">Files and subfolders in meshes\ and textures\ matching these keywords will be packaged.</system:String>
+    <system:String x:Key="Profiles_KeywordPlaceholder">Enter folder name or keyword (e.g. MyAxe)</system:String>
+    <system:String x:Key="Profiles_Add">Add</system:String>
+    <system:String x:Key="Profiles_Delete">Delete</system:String>
+    <system:String x:Key="Profiles_Duplicate">Duplicate</system:String>
+    <system:String x:Key="Profiles_Save">Save Profile</system:String>
+
+    <!-- Settings Screen -->
+    <system:String x:Key="Settings_Title">Settings</system:String>
+    <system:String x:Key="Settings_SkyrimDataTitle">Skyrim Data Directory</system:String>
+    <system:String x:Key="Settings_SkyrimDataDesc">Path to Skyrim's Data\ folder containing meshes, textures, and plugins.</system:String>
+    <system:String x:Key="Settings_Browse">Browse...</system:String>
+    <system:String x:Key="Settings_AutoDetect">Auto-Detect</system:String>
+    <system:String x:Key="Settings_ValidFolder">Valid Skyrim Data folder detected</system:String>
+    <system:String x:Key="Settings_PackagingTitle">Packaging &amp; Output</system:String>
+    <system:String x:Key="Settings_OutputDirTitle">Output Directory (where .zip archives will be saved)</system:String>
+    <system:String x:Key="Settings_Desktop">Desktop</system:String>
+    <system:String x:Key="Settings_StagingToggleTitle">Use temporary staging directory</system:String>
+    <system:String x:Key="Settings_StagingToggleDesc">Copies files into a clean temporary folder before compressing into zip.</system:String>
+    <system:String x:Key="Settings_OverwriteToggleTitle">Overwrite existing archives</system:String>
+    <system:String x:Key="Settings_OverwriteToggleDesc">If disabled, packing will stop and warn you if an archive with the same name already exists.</system:String>
+    <system:String x:Key="Settings_AppearanceTitle">Appearance &amp; Preferences</system:String>
+    <system:String x:Key="Settings_Theme">Application Theme</system:String>
+    <system:String x:Key="Settings_ThemeDark">Dark</system:String>
+    <system:String x:Key="Settings_ThemeLight">Light</system:String>
+    <system:String x:Key="Settings_Language">Language</system:String>
+    <system:String x:Key="Settings_Save">Save Settings</system:String>
+
+    <!-- Log & History Screen -->
+    <system:String x:Key="Log_Title">Build History</system:String>
+    <system:String x:Key="Log_Subtitle">Log of completed mod packaging operations</system:String>
+    <system:String x:Key="Log_OpenLogsFolder">Open Logs Folder</system:String>
+    <system:String x:Key="Log_ClearHistory">Clear History</system:String>
+    <system:String x:Key="Log_NoHistoryTitle">No Build History</system:String>
+    <system:String x:Key="Log_NoHistoryDesc">Completed mod archives will appear here after packing.</system:String>
+    <system:String x:Key="Log_LiveLogsTab">Live Console</system:String>
+    <system:String x:Key="Log_HistoryTab">Build History</system:String>
+    <system:String x:Key="Log_Show">Show</system:String>
+
+</ResourceDictionary>
