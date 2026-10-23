@@ -224,4 +224,20 @@
     <system:String x:Key="Diagnostics_Warnings">Попередження</system:String>
     <system:String x:Key="Diagnostics_Unsupported">Непідтримувані перевірки</system:String>
     <system:String x:Key="Diagnostics_Action">Рекомендована дія</system:String>
+    <system:String x:Key="Models_Third">Модель третьої особи</system:String>
+    <system:String x:Key="Models_First">Модель першої особи</system:String>
+    <system:String x:Key="Models_Restore">Повернути ванільну модель</system:String>
+    <system:String x:Key="Models_RestoreHint">Відновлюється початковий шаблон проєкту. Для старих проєктів спершу виберіть потрібний ванільний шаблон.</system:String>
+    <system:String x:Key="Models_SelectOriginal">Виберіть ванільний шаблон для відновлення моделі.</system:String>
+    <system:String x:Key="Models_NoFirst">Окрема модель першої особи не задана</system:String>
+    <system:String x:Key="Models_Register">Імпортуйте й зареєструйте NIF першої особи перед збереженням.</system:String>
+    <system:String x:Key="Models_Origin_Vanilla">Ванільна</system:String>
+    <system:String x:Key="Models_Origin_Project">Власна (проєкт)</system:String>
+    <system:String x:Key="Models_Origin_Unknown">Походження не підтверджено</system:String>
+    <system:String x:Key="Models_Availability_Found">Знайдено</system:String>
+    <system:String x:Key="Models_Availability_Missing">Відсутня</system:String>
+    <system:String x:Key="Models_Availability_CheckFailed">Перевірка не вдалася</system:String>
+    <system:String x:Key="Models_Yes">Так</system:String>
+    <system:String x:Key="Models_No">Ні</system:String>
+    <system:String x:Key="Models_Checked">Перевірку завершено. Дивіться стан кожної моделі. Вміст NIF і текстурні посилання не перевірялися.</system:String>
 </ResourceDictionary>

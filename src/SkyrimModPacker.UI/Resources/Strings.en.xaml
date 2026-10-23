@@ -224,4 +224,20 @@
     <system:String x:Key="Diagnostics_Warnings">Warnings</system:String>
     <system:String x:Key="Diagnostics_Unsupported">Checks not supported</system:String>
     <system:String x:Key="Diagnostics_Action">Recommended action</system:String>
+    <system:String x:Key="Models_Third">Third-person model</system:String>
+    <system:String x:Key="Models_First">First-person model</system:String>
+    <system:String x:Key="Models_Restore">Restore vanilla model</system:String>
+    <system:String x:Key="Models_RestoreHint">Restores the original project template. For legacy projects, select the intended vanilla template first.</system:String>
+    <system:String x:Key="Models_SelectOriginal">Select a vanilla template to restore its model.</system:String>
+    <system:String x:Key="Models_NoFirst">No separate first-person model</system:String>
+    <system:String x:Key="Models_Register">Import and register the first-person NIF before saving.</system:String>
+    <system:String x:Key="Models_Origin_Vanilla">Vanilla</system:String>
+    <system:String x:Key="Models_Origin_Project">Custom (project)</system:String>
+    <system:String x:Key="Models_Origin_Unknown">Origin unconfirmed</system:String>
+    <system:String x:Key="Models_Availability_Found">Found</system:String>
+    <system:String x:Key="Models_Availability_Missing">Missing</system:String>
+    <system:String x:Key="Models_Availability_CheckFailed">Check failed</system:String>
+    <system:String x:Key="Models_Yes">Yes</system:String>
+    <system:String x:Key="Models_No">No</system:String>
+    <system:String x:Key="Models_Checked">Model checks completed. See each model's status. NIF contents and texture references have not been checked.</system:String>
 </ResourceDictionary>

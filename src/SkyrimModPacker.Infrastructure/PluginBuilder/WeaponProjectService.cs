@@ -20,6 +20,8 @@ public sealed partial class WeaponProjectService(IPluginBuilderService builder, 
         public string Name { get; set; } = string.Empty;
         public string PluginFileName { get; set; } = string.Empty;
         public List<string> Resources { get; set; } = [];
+        public Dictionary<uint, uint> VanillaTemplates { get; set; } = [];
+        public Dictionary<uint, WeaponModels> VanillaModels { get; set; } = [];
     }
 
     public Task<Result<WeaponProject>> CreateAsync(CreatePluginRequest request, CancellationToken cancellationToken = default) =>

@@ -24,6 +24,7 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
             switch (record)
             {
                 case IWeaponGetter weapon:
+                    Check(record, "WEAP.FirstPersonModel", weapon.FirstPersonModel);
                     if (weapon.Keywords != null)
                         foreach (var keyword in weapon.Keywords) Check(record, "WEAP.Keywords", keyword, required: true);
                     Check(record, "WEAP.AttackSound", weapon.AttackSound);
@@ -49,7 +50,7 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
             }
         }
         diagnostics.Add(new("REFERENCE_SCOPE", DiagnosticSeverity.Unsupported, path, null,
-            "Only WEAP keywords/attack sound/enchantment, COBJ output/materials/workbench/HasPerk and LVLI entries are resolved against declared masters and this plugin. Other fields, condition semantics and the full installed load order are not checked.",
+            "Only WEAP first-person model/keywords/attack sound/enchantment, COBJ output/materials/workbench/HasPerk and LVLI entries are resolved against declared masters and this plugin. Other fields, condition semantics and the full installed load order are not checked.",
             "Review other fields and the final load order in xEdit before installing."));
     }
 
@@ -58,7 +59,9 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
         token.ThrowIfCancellationRequested();
         if (link.FormKey == FormKey.Null)
         {
-            if (required) Add("REFERENCE_NULL", DiagnosticSeverity.Error, owner, field, "A required reference is null.");
+            if (required || link is IFormLinkNullableGetter<T> optional && optional.FormKeyNullable.HasValue)
+                Add("REFERENCE_NULL", DiagnosticSeverity.Error, owner, field,
+                    "The reference is explicitly NULL. Optional links must be absent rather than serialized as a NULL target.");
             return;
         }
         Load();

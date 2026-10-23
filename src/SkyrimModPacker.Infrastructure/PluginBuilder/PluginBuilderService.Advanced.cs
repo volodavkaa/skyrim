@@ -39,11 +39,13 @@ public sealed partial class PluginBuilderService
     private static PluginRecordReference? Reference(FormKey key) => key == FormKey.Null
         ? null : new PluginRecordReference(key.ModKey.FileName.String, key.ID);
 
-    private static WeaponDetails ToDetails(IWeaponGetter sword) => new()
+    private static WeaponDetails ToDetails(IWeaponGetter sword, ISkyrimModGetter? source = null) => new()
     {
         Description = sword.Description?.String ?? string.Empty,
         Speed = sword.Data?.Speed ?? 1, Reach = sword.Data?.Reach ?? 1,
         ModelPath = sword.Model?.File.GivenPath ?? string.Empty,
+        FirstPersonModel = Reference(sword.FirstPersonModel.FormKey),
+        FirstPersonModelPath = source?.Statics.FirstOrDefault(s => s.FormKey == sword.FirstPersonModel.FormKey && !s.IsDeleted)?.Model?.File.GivenPath,
         Keywords = sword.Keywords?.Select(k => Reference(k.FormKey)).OfType<PluginRecordReference>().ToList() ?? [],
         AttackSound = Reference(sword.AttackSound.FormKey), Enchantment = Reference(sword.ObjectEffect.FormKey),
         EnchantmentCharge = sword.EnchantmentAmount ?? 0
@@ -75,10 +77,11 @@ public sealed partial class PluginBuilderService
         sword.Data.Reach = details.Reach;
         sword.Model ??= new Model();
         sword.Model.File = modelPath;
+        ApplyFirstPersonModel(mod, sword, details, gameDataPath);
         sword.Keywords = [];
         foreach (var key in keywords) sword.Keywords.Add(new FormLink<IKeywordGetter>(key));
-        sword.AttackSound.SetTo(sound);
-        sword.ObjectEffect.SetTo(enchantment?.FormKey ?? FormKey.Null);
+        sword.AttackSound.SetTo(details.AttackSound == null ? (FormKey?)null : sound);
+        sword.ObjectEffect.SetTo(enchantment?.FormKey);
         sword.EnchantmentAmount = enchantment == null ? null : details.EnchantmentCharge;
     }
 

@@ -66,6 +66,7 @@ public sealed partial class WeaponsViewModel
                     TemplateError = Text("Weapons_SelectTemplate", "Select a vanilla sword template first.");
                     return;
                 }
+                await InspectDraftModelsAsync(token);
                 break;
             case 2:
                 if (!await ValidateWizardModelAsync(token)) return;
@@ -191,6 +192,7 @@ public sealed partial class WeaponsViewModel
         Add("Weapons_Value", "Value", Value, (original?.Value ?? template?.Value)?.ToString());
         var details = original?.Details ?? template?.Details;
         Add("Weapons_Model", "Model", ModelPath, details?.ModelPath);
+        Add("Models_First", "First-person model", FirstPersonModelPath);
         Add("Weapons_Description", "Description", Description, details?.Description);
         Add("Weapons_Speed", "Speed", Speed, details?.Speed.ToString(CultureInfo.CurrentCulture));
         Add("Weapons_Reach", "Reach", Reach, details?.Reach.ToString(CultureInfo.CurrentCulture));
@@ -216,6 +218,7 @@ public sealed partial class WeaponsViewModel
             case nameof(Reach): ReachError = null; break;
             case nameof(EnchantmentCharge): ChargeError = null; break;
             case nameof(ModelPath): ModelError = null; break;
+            case nameof(FirstPersonModelPath): break;
             case nameof(Description):
             case nameof(SelectedSound):
             case nameof(SelectedEnchantment):

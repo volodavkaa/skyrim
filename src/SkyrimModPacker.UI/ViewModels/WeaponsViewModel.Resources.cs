@@ -12,7 +12,7 @@ public sealed partial class WeaponsViewModel
     [ObservableProperty] private string _textureSubdirectory = string.Empty;
     [ObservableProperty] private string? _resourceStatus;
 
-    partial void OnModelPathChanged(string value) => ResourceStatus = null;
+    partial void OnModelPathChanged(string value) { ResourceStatus = null; ThirdPersonModelStatus = null; }
 
     partial void OnProjectFilePathChanged(string value)
     {
@@ -104,13 +104,14 @@ public sealed partial class WeaponsViewModel
         await RefreshProjectResourcesAsync(token);
         var assets = await _projects.ValidateResourcesAsync(ProjectFilePath, GameDataPath, token);
         if (assets.IsFailure) { ResourceStatus = null; throw new InvalidOperationException(assets.Error); }
-        var model = await _projects.ValidateModelAsync(ProjectFilePath, ModelPath, GameDataPath, token);
-        if (model.IsFailure) { ResourceStatus = null; throw new InvalidOperationException(model.Error); }
-        ResourceStatus = Text("Weapons_ResourcesValid", "Model and added resources exist in the project. NIF contents and texture references have not been checked.");
+        await InspectDraftModelsAsync(token);
+        await EnsureFirstPersonAvailableAsync(token);
+        ResourceStatus = Text("Models_Checked", "Model checks completed. See each model's status. NIF contents and texture references have not been checked.");
     });
 
     private async Task EnsureImportedModelAvailableAsync(CancellationToken token)
     {
+        await EnsureFirstPersonAvailableAsync(token);
         if (string.IsNullOrWhiteSpace(ProjectFilePath)) return;
         var resources = await _projects.GetResourcesAsync(ProjectFilePath, GameDataPath, token);
         if (resources.IsFailure) throw new InvalidOperationException(resources.Error);

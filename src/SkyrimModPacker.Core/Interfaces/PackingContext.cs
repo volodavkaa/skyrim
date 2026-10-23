@@ -47,6 +47,7 @@ public sealed class PackingContext
     /// <summary>Non-fatal diagnostics, including failures to release temporary files.</summary>
     public List<string> Warnings { get; } = [];
     public List<PluginDiagnostic> PluginDiagnostics { get; } = [];
+    public List<string> ExternalDependencies { get; } = [];
 
     /// <summary>Total size in bytes of the created archive file.</summary>
     public long ArchiveSizeBytes { get; set; }

@@ -81,6 +81,7 @@ public sealed partial class WeaponsViewModel
         Speed = details.Speed.ToString(CultureInfo.CurrentCulture);
         Reach = details.Reach.ToString(CultureInfo.CurrentCulture);
         ModelPath = details.ModelPath;
+        ResetFirstPersonDraft(details);
         WeaponKeywords = new ObservableCollection<RecordOption>(details.Keywords.Select(k => Option(Options.Keywords, k)));
         SelectedSound = SelectOption(SoundChoices, details.AttackSound);
         SelectedEnchantment = SelectOption(EnchantmentChoices, details.Enchantment);
@@ -100,6 +101,9 @@ public sealed partial class WeaponsViewModel
         return new WeaponDetails
         {
             Description = Description, Speed = Positive(Speed), Reach = Positive(Reach), ModelPath = ModelPath,
+            FirstPersonModel = _restoreFirstPerson ? _firstPersonReference : null,
+            ClearFirstPersonModel = _restoreFirstPerson && _firstPersonReference == null,
+            FirstPersonModelPath = _firstPersonEdited ? FirstPersonModelPath : null,
             Keywords = WeaponKeywords.Select(k => k.Reference).ToList(), AttackSound = SelectedSound?.Reference,
             Enchantment = SelectedEnchantment?.Reference, EnchantmentCharge = charge
         };

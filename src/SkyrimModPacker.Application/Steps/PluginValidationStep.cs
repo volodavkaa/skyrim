@@ -28,6 +28,11 @@ public sealed class PluginValidationStep(IPluginValidationService validator, ILo
             var diagnostics = await validator.ValidateAsync(plugin.AbsolutePath, context.Settings.SkyrimDataPath,
                 context.Profile.EnableEsl, runtime, cancellationToken);
             context.PluginDiagnostics.AddRange(diagnostics);
+            var packagedPlugins = context.SelectedFiles.Where(f => f.Category == FileCategory.Plugin)
+                .Select(f => Path.GetFileName(f.RelativePath)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var dependency in diagnostics.Where(d => d.Code == "MASTER_DEPENDENCY" && d.Record != null))
+                if (!packagedPlugins.Contains(dependency.Record!) && !context.ExternalDependencies.Contains(dependency.Record!, StringComparer.OrdinalIgnoreCase))
+                    context.ExternalDependencies.Add(dependency.Record!);
             foreach (var diagnostic in diagnostics)
             {
                 var message = diagnostic.ToString();

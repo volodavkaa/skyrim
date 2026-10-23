@@ -12,4 +12,5 @@ public sealed class CloneSwordRequest
     public float? Weight { get; init; }
     public uint? Value { get; init; }
     public WeaponDetails? Details { get; init; }
+    public string? ProjectFilePath { get; init; }
 }

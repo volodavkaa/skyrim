@@ -2,130 +2,101 @@ using System.IO.Compression;
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Common;
+using SkyrimModPacker.Infrastructure.Persistence;
 
 namespace SkyrimModPacker.Infrastructure.Archivers;
 
-/// <summary>
-/// Creates ZIP archives using <see cref="ZipArchive"/> from <c>System.IO.Compression</c>.
-/// Preserves relative paths with standard forward slashes, reports progress, and supports cancellation.
-/// </summary>
-public sealed class ZipArchiver : IArchiver
+/// <summary>Publishes only a fully written ZIP matching prepared SHA-256 fingerprints.</summary>
+public sealed class ZipArchiver(ILogger<ZipArchiver>? logger = null) : IArchiver
 {
-    private const int BufferSize = 81920; // 80 KB
-    private readonly ILogger<ZipArchiver>? _logger;
-
-    public ZipArchiver(ILogger<ZipArchiver>? logger = null)
-    {
-        _logger = logger;
-    }
-
-    /// <inheritdoc />
     public string Extension => ".zip";
 
-    /// <inheritdoc />
-    public async Task CreateArchiveAsync(
-        string outputPath,
-        IReadOnlyList<(string SourcePath, string EntryPath)> files,
-        IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+    public async Task CreateArchiveAsync(string outputPath, IReadOnlyList<(string SourcePath, string EntryPath)> files,
+        IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(outputPath))
-            throw new ArgumentException("Output path cannot be null or empty.", nameof(outputPath));
-
-        if (files == null || files.Count == 0)
-            throw new ArgumentException("No files specified for archive creation.", nameof(files));
-
+        if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("Output path cannot be empty.", nameof(outputPath));
+        if (files == null || files.Count == 0) throw new ArgumentException("No files specified for archive creation.", nameof(files));
         cancellationToken.ThrowIfCancellationRequested();
         outputPath = PackingPathGuard.GetAbsolutePath(outputPath);
         PackingPathGuard.EnsureNoLinks(outputPath);
-        var normalizedEntries = PackingPathGuard.ValidateEntries(files.Select(file => file.EntryPath));
-        var preparedFiles = files.Select((file, index) => (
-            SourcePath: PackingPathGuard.GetAbsolutePath(file.SourcePath), EntryPath: normalizedEntries[index])).ToList();
-        foreach (var file in preparedFiles)
+        var names = PackingPathGuard.ValidateEntries(files.Select(f => f.EntryPath));
+        var prepared = files.Select((f, i) => (Source: PackingPathGuard.GetAbsolutePath(f.SourcePath), Entry: names[i])).ToArray();
+        foreach (var file in prepared)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            PackingPathGuard.EnsureNoLinks(file.SourcePath);
-            if (file.SourcePath.Equals(outputPath, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("The archive output must not overwrite a source file.");
-            if (!File.Exists(file.SourcePath))
-                throw new FileNotFoundException($"Source file not found for archiving: '{file.SourcePath}'", file.SourcePath);
+            ZipManifest.EnsureAllowed(file.Entry);
+            PackingPathGuard.EnsureNoLinks(file.Source);
+            if (file.Source.Equals(outputPath, StringComparison.OrdinalIgnoreCase) || file.Source.Equals(outputPath + ".lock", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Archive output or its lock must not overwrite a source file.");
+            if (!File.Exists(file.Source)) throw new FileNotFoundException("Archive source is missing.", file.Source);
         }
-
-        var outputDir = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
-        {
-            Directory.CreateDirectory(outputDir);
-        }
-
-        // Delete existing archive if present to ensure clean overwrite
-        if (File.Exists(outputPath))
-        {
-            File.Delete(outputPath);
-        }
-
-        _logger?.LogInformation("Creating ZIP archive at '{OutputPath}' with {FileCount} entries.",
-            outputPath, files.Count);
-
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        using var lease = await WorkspaceFileGate.AcquireAsync(outputPath, cancellationToken).ConfigureAwait(false);
+        var previous = new WorkspaceFileSnapshot(outputPath);
+        var temporary = Path.Combine(Path.GetDirectoryName(outputPath)!, ".zip-" + Guid.NewGuid().ToString("N") + ".tmp");
+        Exception? failure = null;
+        var created = false;
         try
         {
-            await using (var zipFileStream = new FileStream(
-                             outputPath,
-                             FileMode.CreateNew,
-                             FileAccess.ReadWrite,
-                             FileShare.None,
-                             BufferSize,
-                             useAsync: true))
-            using (var archive = new ZipArchive(zipFileStream, ZipArchiveMode.Create, leaveOpen: false))
+            var manifest = new List<ZipManifestEntry>();
+            foreach (var file in prepared)
+                manifest.Add(await ZipManifest.CaptureAsync(file.Source, file.Entry, cancellationToken).ConfigureAwait(false));
+            PackingPathGuard.EnsureNoLinks(temporary);
+            await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, useAsync: true))
             {
-                for (int i = 0; i < preparedFiles.Count; i++)
+                created = true;
+                using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var (sourcePath, entryPath) = preparedFiles[i];
-                    PackingPathGuard.EnsureNoLinks(outputPath);
-                    PackingPathGuard.EnsureNoLinks(sourcePath);
-
-                    if (!File.Exists(sourcePath))
+                    for (var i = 0; i < manifest.Count; i++)
                     {
-                        throw new FileNotFoundException($"Source file not found for archiving: '{sourcePath}'", sourcePath);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var file = manifest[i];
+                        PackingPathGuard.EnsureNoLinks(file.SourcePath);
+                        var entry = zip.CreateEntry(file.EntryPath, CompressionLevel.Optimal);
+                        await using (var input = new FileStream(file.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
+                        await using (var destination = entry.Open())
+                            await input.CopyToAsync(destination, 81920, cancellationToken).ConfigureAwait(false);
+                        progress?.Report(0.6 * (i + 1) / manifest.Count);
                     }
-
-                    var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
-
-                    await using (var sourceStream = new FileStream(
-                                     sourcePath,
-                                     FileMode.Open,
-                                     FileAccess.Read,
-                                     FileShare.Read,
-                                     BufferSize,
-                                     useAsync: true))
-                    await using (var entryStream = entry.Open())
-                    {
-                        await sourceStream.CopyToAsync(entryStream, BufferSize, cancellationToken);
-                    }
-
-                    progress?.Report((double)(i + 1) / files.Count);
                 }
+                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+                output.Flush(flushToDisk: true);
             }
-
-            _logger?.LogInformation("ZIP archive '{OutputPath}' created successfully.", outputPath);
+            progress?.Report(0.65);
+            var verifiedZip = await ZipManifest.CaptureAsync(temporary, "", cancellationToken).ConfigureAwait(false);
+            await ZipManifest.VerifyAsync(temporary, manifest, cancellationToken).ConfigureAwait(false);
+            progress?.Report(0.85);
+            progress?.Report(1);
+            foreach (var file in manifest)
+            {
+                var current = await ZipManifest.CaptureAsync(file.SourcePath, file.EntryPath, cancellationToken).ConfigureAwait(false);
+                if (current.Length != file.Length || !current.Hash.AsSpan().SequenceEqual(file.Hash))
+                    throw new IOException($"Archive source changed during packing: '{file.SourcePath}'. Scan and pack again.");
+                logger?.LogInformation("Verified ZIP entry {Entry}: SHA-256 {Hash}", file.EntryPath, Convert.ToHexString(file.Hash));
+            }
+            logger?.LogInformation("Validated temporary ZIP SHA-256 {Hash}; publication pending", Convert.ToHexString(verifiedZip.Hash));
+            cancellationToken.ThrowIfCancellationRequested();
+            PackingPathGuard.EnsureNoLinks(outputPath);
+            PackingPathGuard.EnsureNoLinks(temporary);
+            previous.EnsureUnchanged();
+            var finalZip = await ZipManifest.CaptureAsync(temporary, "", cancellationToken).ConfigureAwait(false);
+            if (finalZip.Length != verifiedZip.Length || !finalZip.Hash.AsSpan().SequenceEqual(verifiedZip.Hash))
+                throw new IOException("The verified temporary ZIP changed before publication.");
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(outputPath)) File.Replace(temporary, outputPath, null);
+            else File.Move(temporary, outputPath);
         }
-        catch
+        catch (Exception ex) { failure = ex; throw; }
+        finally
         {
-            // Clean up partial/corrupted archive on error or cancellation
-            try
-            {
-                if (File.Exists(outputPath))
+            if (created && File.Exists(temporary))
+                try { PackingPathGuard.EnsureNoLinks(temporary); File.Delete(temporary); }
+                catch (Exception cleanup) when (failure != null)
                 {
-                    File.Delete(outputPath);
+                    failure.Data["ZipTemporaryFile"] = temporary;
+                    failure.Data["ZipCleanupFailure"] = cleanup.Message;
+                    logger?.LogWarning(cleanup, "Unable to clean temporary ZIP {Path}; original failure preserved", temporary);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "Failed to clean up incomplete archive '{OutputPath}'", outputPath);
-            }
-
-            throw;
         }
     }
 }

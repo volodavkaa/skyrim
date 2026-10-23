@@ -83,7 +83,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                     Damage = weapon.BasicStats?.Damage ?? 0,
                     Weight = weapon.BasicStats?.Weight ?? 0,
                     Value = weapon.BasicStats?.Value ?? 0,
-                    Details = ToDetails(weapon)
+                    Details = ToDetails(weapon, source)
                 });
             }
             return templates.OrderBy(t => t.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
@@ -131,6 +131,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             if (mod.ModHeader.MasterReferences.All(m => m.Master != skyrimKey))
                 mod.ModHeader.MasterReferences.Insert(0, new MasterReference { Master = skyrimKey });
             var sword = mod.Weapons.DuplicateInAsNewRecord(template, new FormKey(mod.ModKey, nextId));
+            mod.ModHeader.Stats.NextFormID = nextId + 1;
             sword.EditorID = request.EditorId;
             sword.Name = request.Name;
             if (request.Damage.HasValue)
@@ -141,7 +142,6 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 sword.BasicStats!.Value = request.Value.Value;
             if (request.Details != null)
                 ApplyDetails(mod, sword, request.Details, request.GameDataPath);
-            mod.ModHeader.Stats.NextFormID = nextId + 1;
             var result = new WeaponRecord
             {
                 FormId = nextId,
@@ -150,9 +150,11 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 Damage = sword.BasicStats?.Damage ?? 0,
                 Weight = sword.BasicStats?.Weight ?? 0,
                 Value = sword.BasicStats?.Value ?? 0,
-                Details = ToDetails(sword)
+                Details = ToDetails(sword, mod)
             };
-            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken);
+            WeaponProjectService.WriteWithTemplateOrigin(request.ProjectFilePath, request.PluginPath, request.GameDataPath,
+                nextId, request.TemplateFormId, () => WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath,
+                    replace: true, cancellationToken, mod.ModHeader.Stats.NextFormID), cancellationToken);
             return result;
         }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
@@ -170,7 +172,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (weapon.FormKey.ModKey == mod.ModKey && !weapon.IsDeleted && weapon.Data?.AnimationType == WeaponAnimationType.OneHandSword)
-                    weapons.Add(ToWeaponRecord(weapon));
+                    weapons.Add(ToWeaponRecord(weapon, mod));
             }
             return weapons.OrderBy(w => w.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
         }, cancellationToken);
@@ -200,8 +202,12 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 ApplyDetails(mod, sword, request.Details, request.GameDataPath);
             // Preserve the allocation high-water mark, including IDs of deleted records.
             var nextId = mod.ModHeader.Stats.NextFormID;
-            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken, nextId);
-            return ToWeaponRecord(sword);
+            if (request.VanillaTemplateFormId is { } templateId)
+                WeaponProjectService.WriteWithTemplateOrigin(request.ProjectFilePath, request.PluginPath, request.GameDataPath,
+                    sword.FormKey.ID, templateId, () => WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath,
+                        replace: true, cancellationToken, nextId), cancellationToken);
+            else WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken, nextId);
+            return ToWeaponRecord(sword, mod);
         }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
@@ -241,7 +247,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
         return sword;
     }
 
-    private static WeaponRecord ToWeaponRecord(IWeaponGetter sword) => new()
+    private static WeaponRecord ToWeaponRecord(IWeaponGetter sword, ISkyrimModGetter? mod = null) => new()
     {
         FormId = sword.FormKey.ID,
         EditorId = sword.EditorID ?? string.Empty,
@@ -249,7 +255,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
         Damage = sword.BasicStats?.Damage ?? 0,
         Weight = sword.BasicStats?.Weight ?? 0,
         Value = sword.BasicStats?.Value ?? 0,
-        Details = ToDetails(sword)
+        Details = ToDetails(sword, mod)
     };
 
     private static ISkyrimModDisposableGetter ReadMaster(string gameDataPath, string fileName)

@@ -200,6 +200,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         var result = await _builder.CloneSwordAsync(new CloneSwordRequest
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, TemplateFormId = SelectedTemplate.FormId,
+            ProjectFilePath = string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath,
             EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
             Details = ParseDetails()
         }, token);
@@ -219,6 +220,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         var result = await _builder.UpdateSwordAsync(new UpdateSwordRequest
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, FormId = SelectedWeapon.FormId,
+            ProjectFilePath = string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath, VanillaTemplateFormId = _restorationOrigin,
             EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
             Details = ParseDetails()
         }, token);

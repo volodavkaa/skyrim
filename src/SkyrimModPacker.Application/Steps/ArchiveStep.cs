@@ -67,6 +67,10 @@ public sealed class ArchiveStep : IPackStep
 
             _logger?.LogInformation("Archiving {Count} files into '{ArchivePath}'...",
                 filesToArchive.Count, context.OutputArchivePath);
+            var dependencies = "External master dependencies: " + (context.ExternalDependencies.Count == 0
+                ? "none reported by plugin validation" : string.Join(", ", context.ExternalDependencies));
+            context.LogMessages.Add(dependencies);
+            _logger?.LogInformation("{Dependencies}", dependencies);
 
             await _archiver.CreateArchiveAsync(
                 context.OutputArchivePath,

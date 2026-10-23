@@ -141,7 +141,8 @@ internal sealed class PluginFileTransaction : IDisposable
                 !record.EnumerateFormLinks().Select(l => l.FormKey).SequenceEqual(original.EnumerateFormLinks().Select(l => l.FormKey)))
                 throw new IOException($"The temporary plugin record differs from the intended record: {record.FormKey}.");
             if (record is IWeaponGetter weapon && original is IWeaponGetter expectedWeapon &&
-                (weapon.Name?.String != expectedWeapon.Name?.String || weapon.Description?.String != expectedWeapon.Description?.String ||
+                ((weapon.Name?.String ?? string.Empty) != (expectedWeapon.Name?.String ?? string.Empty) ||
+                 (weapon.Description?.String ?? string.Empty) != (expectedWeapon.Description?.String ?? string.Empty) ||
                  weapon.BasicStats?.Damage != expectedWeapon.BasicStats?.Damage || weapon.BasicStats?.Weight != expectedWeapon.BasicStats?.Weight ||
                  weapon.BasicStats?.Value != expectedWeapon.BasicStats?.Value || weapon.Data?.AnimationType != expectedWeapon.Data?.AnimationType ||
                  weapon.Data?.Speed != expectedWeapon.Data?.Speed || weapon.Data?.Reach != expectedWeapon.Data?.Reach ||
@@ -151,6 +152,9 @@ internal sealed class PluginFileTransaction : IDisposable
                 (recipe.CreatedObjectCount != expectedRecipe.CreatedObjectCount ||
                  !(recipe.Items ?? []).Select(i => i.Item.Count).SequenceEqual((expectedRecipe.Items ?? []).Select(i => i.Item.Count))))
                 throw new IOException($"The temporary recipe counts differ from the intended record: {record.FormKey}.");
+            if (record is IStaticGetter stat && original is IStaticGetter expectedStat &&
+                stat.Model?.File.GivenPath != expectedStat.Model?.File.GivenPath)
+                throw new IOException($"The temporary STAT model differs from the intended record: {record.FormKey}.");
             if (record is ILeveledItemGetter list && original is ILeveledItemGetter expectedList &&
                 (list.Flags != expectedList.Flags || list.ChanceNone != expectedList.ChanceNone ||
                  !(list.Entries ?? []).Select(e => (e.Data?.Level, e.Data?.Count)).SequenceEqual(

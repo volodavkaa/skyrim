@@ -16,6 +16,15 @@ public sealed partial class WeaponProjectService
             var (folder, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             RequireSourceFile(sourcePath, ".nif");
             var relative = RelativeToAssetRoot(sourcePath, "meshes") ?? Path.Combine(document.Name, Path.GetFileName(sourcePath));
+            // A custom file must not shadow a vanilla mesh shared by unrelated game objects.
+            using (var master = Mutagen.Bethesda.Skyrim.SkyrimMod.CreateFromBinaryOverlay(
+                Path.Combine(gameDataPath, "Skyrim.esm"), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE))
+            {
+                var normalized = relative.Replace('\\', '/');
+                if (master.Weapons.Select(w => w.Model?.File.GivenPath).Concat(master.Statics.Select(s => s.Model?.File.GivenPath))
+                    .Any(p => string.Equals(p?.Replace('\\', '/'), normalized, StringComparison.OrdinalIgnoreCase)))
+                    relative = Path.Combine(document.Name, "Imported", Path.GetFileName(sourcePath));
+            }
             var resource = NormalizeResource("meshes/" + relative.Replace('\\', '/'));
             await CopyResourcesAsync(projectFilePath, folder, document, [(sourcePath, resource)], gameDataPath, original, cancellationToken);
             return resource["meshes/".Length..].Replace('/', '\\');

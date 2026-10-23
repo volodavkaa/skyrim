@@ -110,7 +110,7 @@ public sealed class PluginReferenceTests : IDisposable
         var expectedCode = state switch
         {
             "missing" => "REFERENCE_MISSING", "deleted" => "REFERENCE_DELETED", "wrong" => "REFERENCE_TYPE",
-            "null" when field is not ("sound" or "enchantment" or "workbench") => "REFERENCE_NULL", _ => null
+            "null" => "REFERENCE_NULL", _ => null
         };
         var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         if (expectedCode == null) Assert.Empty(errors);

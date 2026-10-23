@@ -31,6 +31,8 @@ public sealed class PluginValidationService : IPluginValidationService
             var seenMasters = new HashSet<ModKey>();
             foreach (var master in masters)
             {
+                Add("MASTER_DEPENDENCY", DiagnosticSeverity.Warning, $"Required master: {master}.",
+                    "Ensure this dependency is available in the destination mod setup; it is not automatically copied from Data.", master.FileName.String);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (master == mod.ModKey || !seenMasters.Add(master))
                     Add("MASTER_LIST", DiagnosticSeverity.Error, $"Duplicate or self master: {master}.", "Repair the master list in a plugin editor.");

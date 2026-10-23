@@ -31,6 +31,26 @@ public sealed partial class WeaponProjectService
             foreach (var sword in weapons.Value)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var models = await builder.GetWeaponModelsAsync(pluginPath, gameDataPath, sword.FormId, cancellationToken);
+                if (models.IsFailure) throw new InvalidOperationException(models.Error);
+                if (models.Value.Error != null) throw new InvalidOperationException(models.Value.Error);
+                if (models.Value.FirstPersonReference != null)
+                {
+                    var first = models.Value.FirstPersonPath ?? throw new InvalidOperationException("First-person STAT has no NIF model.");
+                    var firstResource = NormalizeResource("meshes/" + first.Replace('\\', '/'));
+                    if (!resources.Contains(firstResource, StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (File.Exists(ResourceTarget(folder, firstResource, gameDataPath)) ||
+                            !models.Value.FirstPersonReference.PluginName.Equals("Skyrim.esm", StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException("Import and register the first-person NIF before packing: " + first);
+                        // A Skyrim-owned FormKey alone does not establish a vanilla model: an override may change it.
+                        using var originalMaster = Mutagen.Bethesda.Skyrim.SkyrimMod.CreateFromBinaryOverlay(
+                            Path.Combine(gameDataPath, "Skyrim.esm"), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE);
+                        var originalStatic = originalMaster.Statics.FirstOrDefault(s => s.FormKey.ID == models.Value.FirstPersonReference.FormId && !s.IsDeleted);
+                        if (!string.Equals(originalStatic?.Model?.File.GivenPath.Replace('\\', '/'), first.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException("Unregistered custom first-person model: " + first);
+                    }
+                }
                 var model = sword.Details.ModelPath.Replace('\\', '/');
                 if (model.StartsWith("meshes/", StringComparison.OrdinalIgnoreCase)) model = model[7..];
                 ValidateResourcePath("meshes/" + model);

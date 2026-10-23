@@ -1,4 +1,4 @@
-<Page x:Class="SkyrimModPacker.UI.Views.Pages.WeaponsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" Title="{DynamicResource Nav_Weapons}" Loaded="OnPageLoaded" Unloaded="OnPageUnloaded" xmlns:layout="clr-namespace:SkyrimModPacker.UI.Controls" x:Name="WeaponsEditor" UseLayoutRounding="True" SnapsToDevicePixels="True" FontSize="14">
+<Page x:Class="SkyrimModPacker.UI.Views.Pages.WeaponsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" Title="{DynamicResource Nav_Weapons}" Loaded="OnPageLoaded" Unloaded="OnPageUnloaded" xmlns:layout="clr-namespace:SkyrimModPacker.UI.Controls" x:Name="WeaponsEditor" UseLayoutRounding="True" SnapsToDevicePixels="True" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <Page.Resources>
         <Style x:Key="FieldError" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
@@ -249,15 +249,29 @@
                         <layout:ResponsiveColumnsPanel MinColumnWidth="350" Gap="20" Margin="0,0,0,20">
                             <ui:Card Padding="24" Margin="0">
                                 <StackPanel>
-                                    <TextBlock Text="{DynamicResource Weapons_Model}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <TextBlock Text="{DynamicResource Models_Third}" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Border BorderBrush="{DynamicResource SystemAccentColorPrimaryBrush}" BorderThickness="1" Padding="20" Margin="0,0,0,12" AllowDrop="True" PreviewDragOver="OnModelDragOver" PreviewDrop="OnModelDrop" CornerRadius="12" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
                                         <StackPanel>
                                             <TextBlock Text="{DynamicResource Weapons_ModelDropHint}" TextWrapping="Wrap" Margin="0,0,0,8" />
                                             <ui:Button Content="{DynamicResource Weapons_ImportModel}" Command="{Binding ImportModelCommand}" Margin="0,0,0,8" Appearance="Primary" />
                                             <ui:TextBox Text="{Binding ModelPath, UpdateSourceTrigger=PropertyChanged}" />
+                                            <ui:Button Content="{DynamicResource Models_Restore}" Command="{Binding RestoreThirdPersonModelCommand}" Margin="0,8,0,0" />
+                                            <TextBlock Text="{Binding ThirdPersonModelStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
                                             <TextBlock Text="{Binding ModelPathError}" Style="{StaticResource FieldError}" Visibility="{Binding ModelPathError, Converter={StaticResource NotNullToVisibilityConverter}}" />
                                         </StackPanel>
                                     </Border>
+                                </StackPanel>
+                            </ui:Card>
+                            <ui:Card Padding="24" Margin="0">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource Models_First}" Margin="0,0,0,8" />
+                                    <ui:Button Content="{DynamicResource Weapons_ImportModel}" Command="{Binding ImportFirstPersonModelCommand}" Margin="0,0,0,8" />
+                                    <ui:TextBox Text="{Binding FirstPersonModelPath, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:Button Content="{DynamicResource Models_Restore}" Command="{Binding RestoreFirstPersonModelCommand}" Margin="0,8,0,0" />
+                                    <TextBlock Text="{Binding FirstPersonModelStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                    <ui:Button Content="{DynamicResource Weapons_CheckResources}" Command="{Binding CheckModelsCommand}" Margin="0,8,0,0" />
+                                    <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding RestorationTemplate}" DisplayMemberPath="EditorId" Margin="0,12,0,0" />
+                                    <TextBlock Text="{DynamicResource Models_RestoreHint}" TextWrapping="Wrap" Margin="0,12,0,0" />
                                 </StackPanel>
                             </ui:Card>
                             <ui:Card Margin="0">
