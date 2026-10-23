@@ -200,7 +200,8 @@ public sealed partial class BuildViewModel : ViewModelBase
         }
 
         var selectedCount = FileTree.Sum(n => n.SelectedFileCount);
-        if (selectedCount == 0)
+        // Let project validation report every required file when the entire tree is unchecked.
+        if (selectedCount == 0 && string.IsNullOrWhiteSpace(SelectedProfile.WeaponProjectPath))
         {
             ErrorMessage = "No files selected for packing. Please check at least one file.";
             return;
@@ -235,7 +236,8 @@ public sealed partial class BuildViewModel : ViewModelBase
                 SelectedProfile,
                 settings,
                 progress,
-                _operationCts.Token);
+                _operationCts.Token,
+                fileSelection: ScannedFiles);
 
             if (context.IsSuccess)
             {

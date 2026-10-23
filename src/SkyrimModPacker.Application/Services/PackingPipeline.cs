@@ -26,18 +26,29 @@ public sealed class PackingPipeline
     /// <param name="settings">Application settings.</param>
     /// <param name="progress">Optional progress callback.</param>
     /// <param name="cancellationToken">Token to support cancellation.</param>
+    /// <param name="fileSelection">Optional preview selection. New files are excluded and missing selected files fail the build.</param>
     /// <returns>The completed packing context with results.</returns>
     public async Task<PackingContext> ExecuteAsync(
         ModProfile profile,
         AppSettings settings,
         IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<ScannedFile>? fileSelection = null)
     {
         var context = new PackingContext
         {
             Profile = profile,
             Settings = settings,
-            Progress = progress
+            Progress = progress,
+            // Detach the selection from the UI before the first asynchronous step.
+            FileSelection = fileSelection?.Select(file => new ScannedFile
+            {
+                AbsolutePath = file.AbsolutePath,
+                RelativePath = file.RelativePath,
+                SizeBytes = file.SizeBytes,
+                Category = file.Category,
+                IsSelected = file.IsSelected
+            }).ToList()
         };
 
         var stepList = _steps.ToList();

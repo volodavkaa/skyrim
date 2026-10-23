@@ -10,11 +10,13 @@ namespace SkyrimModPacker.Tests;
 public class PipelineStepTests : IDisposable
 {
     private readonly string _testDir;
+    private string Data => Path.Combine(_testDir, "Game", "Data");
 
     public PipelineStepTests()
     {
         _testDir = Path.Combine(Path.GetTempPath(), "PipelineStepTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_testDir);
+        Directory.CreateDirectory(Path.Combine(Data, "meshes", "weapons"));
     }
 
     public void Dispose()
@@ -130,14 +132,14 @@ public class PipelineStepTests : IDisposable
         var existingZip = Path.Combine(_testDir, "MyMod-1.0.zip");
         await File.WriteAllTextAsync(existingZip, "fake zip");
 
-        var dummySource = Path.Combine(_testDir, "test.nif");
+        var dummySource = Path.Combine(Data, "meshes", "test.nif");
         await File.WriteAllTextAsync(dummySource, "nif");
 
         var step = new ValidateStep(archiver);
         var context = new PackingContext
         {
             Profile = new ModProfile { Name = "MyMod", Version = "1.0", Keywords = ["MyMod"] },
-            Settings = new AppSettings { OutputDirectory = _testDir, OverwriteExistingArchive = false },
+            Settings = new AppSettings { SkyrimDataPath = Data, OutputDirectory = _testDir, OverwriteExistingArchive = false },
             SelectedFiles = [new ScannedFile { AbsolutePath = dummySource, RelativePath = "meshes\\test.nif" }]
         };
 
@@ -156,14 +158,14 @@ public class PipelineStepTests : IDisposable
         var existingZip = Path.Combine(_testDir, "MyMod-1.0.zip");
         await File.WriteAllTextAsync(existingZip, "fake zip");
 
-        var dummySource = Path.Combine(_testDir, "test.nif");
+        var dummySource = Path.Combine(Data, "meshes", "test.nif");
         await File.WriteAllTextAsync(dummySource, "nif");
 
         var step = new ValidateStep(archiver);
         var context = new PackingContext
         {
             Profile = new ModProfile { Name = "MyMod", Version = "1.0", Keywords = ["MyMod"] },
-            Settings = new AppSettings { OutputDirectory = _testDir, OverwriteExistingArchive = true },
+            Settings = new AppSettings { SkyrimDataPath = Data, OutputDirectory = _testDir, OverwriteExistingArchive = true },
             SelectedFiles = [new ScannedFile { AbsolutePath = dummySource, RelativePath = "meshes\\test.nif" }]
         };
 
@@ -183,8 +185,8 @@ public class PipelineStepTests : IDisposable
         var context = new PackingContext
         {
             Profile = new ModProfile { Name = "MyMod", Version = "1.0", Keywords = ["MyMod"] },
-            Settings = new AppSettings { OutputDirectory = _testDir },
-            SelectedFiles = [new ScannedFile { AbsolutePath = Path.Combine(_testDir, "missing.nif"), RelativePath = "meshes\\missing.nif" }]
+            Settings = new AppSettings { SkyrimDataPath = Data, OutputDirectory = _testDir },
+            SelectedFiles = [new ScannedFile { AbsolutePath = Path.Combine(Data, "meshes", "missing.nif"), RelativePath = "meshes\\missing.nif" }]
         };
 
         var success = await step.ExecuteAsync(context);
@@ -213,13 +215,13 @@ public class PipelineStepTests : IDisposable
     public async Task CopyStep_TempMode_CopiesFilesPreservingStructure()
     {
         var step = new CopyStep();
-        var srcFile = Path.Combine(_testDir, "source.nif");
+        var srcFile = Path.Combine(Data, "meshes", "weapons", "source.nif");
         await File.WriteAllTextAsync(srcFile, "content");
 
         var context = new PackingContext
         {
             Profile = new ModProfile { Name = "MyMod" },
-            Settings = new AppSettings { UseTempDirectory = true },
+            Settings = new AppSettings { SkyrimDataPath = Data, UseTempDirectory = true },
             SelectedFiles = [new ScannedFile { AbsolutePath = srcFile, RelativePath = @"meshes\weapons\source.nif" }]
         };
 

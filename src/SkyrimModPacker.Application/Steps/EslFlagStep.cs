@@ -32,10 +32,7 @@ public sealed class EslFlagStep : IPackStep
         {
             if (string.IsNullOrEmpty(context.StagingDirectory) || !Directory.Exists(context.StagingDirectory))
                 throw new InvalidOperationException("ESL flagging requires a staging directory.");
-            PluginWriteGuard.EnsureOutsideGame(context.StagingDirectory, context.Settings.SkyrimDataPath);
-            var stagingRoot = Path.Combine(Path.GetTempPath(), "SkyrimModPacker", "staging") + Path.DirectorySeparatorChar;
-            if (!Path.GetFullPath(context.StagingDirectory).StartsWith(stagingRoot, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("ESL requires a workspace prepared by the copy step.");
+            PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
             ownsStagingDirectory = true;
 
             var plugins = context.SelectedFiles.Where(f => f.Category == FileCategory.Plugin).ToList();
@@ -46,9 +43,7 @@ public sealed class EslFlagStep : IPackStep
             var buildId = Guid.NewGuid().ToString("N");
             foreach (var plugin in plugins)
             {
-                var stagedPath = Path.GetFullPath(Path.Combine(context.StagingDirectory, plugin.RelativePath));
-                if (!stagedPath.StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(context.StagingDirectory)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Plugin path must stay inside the staging directory.");
+                var stagedPath = PackingPathGuard.ResolveUnderRoot(context.StagingDirectory, plugin.RelativePath);
 
                 var backupPath = Path.Combine(backupDirectory, buildId, Path.GetFileName(stagedPath) + ".bak");
                 var result = await _eslService.SetFlagAsync(stagedPath, context.Settings.SkyrimDataPath, backupPath, cancellationToken);
@@ -76,7 +71,10 @@ public sealed class EslFlagStep : IPackStep
             // ArchiveStep is not reached after failure or cancellation, so release our staged copies here.
             if (!completed && ownsStagingDirectory && !string.IsNullOrEmpty(context.StagingDirectory))
             {
-                try { Directory.Delete(context.StagingDirectory, recursive: true); }
+                try
+                {
+                    PackingPathGuard.DeleteStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
+                }
                 catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean ESL staging directory"); }
             }
         }

@@ -32,6 +32,22 @@ public static class ModProfileValidator
         var hasKeywords = profile.Keywords.Exists(k => !string.IsNullOrWhiteSpace(k));
         var hasPlugin = !string.IsNullOrWhiteSpace(profile.PluginFileName) || !string.IsNullOrWhiteSpace(profile.PluginSourcePath);
 
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(profile.PluginFileName))
+            {
+                var pluginName = PackingPathGuard.NormalizeEntryPath(profile.PluginFileName.Trim());
+                if (pluginName.Contains('/'))
+                    return Result.Failure("The plugin filename must be a plain name without a directory.");
+            }
+            if (!string.IsNullOrWhiteSpace(profile.PluginSourcePath)) PackingPathGuard.GetAbsolutePath(profile.PluginSourcePath.Trim());
+            if (!string.IsNullOrWhiteSpace(profile.WeaponProjectPath)) PackingPathGuard.GetAbsolutePath(profile.WeaponProjectPath.Trim());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            return Result.Failure(ex.Message);
+        }
+
         if (!string.IsNullOrWhiteSpace(profile.WeaponProjectPath))
         {
             if (!Path.IsPathFullyQualified(profile.WeaponProjectPath.Trim()))

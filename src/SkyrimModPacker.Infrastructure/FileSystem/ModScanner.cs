@@ -41,46 +41,55 @@ public sealed class ModScanner : IModScanner
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var keywords = profile.Keywords
-                .Where(k => !string.IsNullOrWhiteSpace(k))
-                .Select(k => k.Trim())
-                .ToList();
-
-            var results = new Dictionary<string, ScannedFile>(StringComparer.OrdinalIgnoreCase);
-
-            _logger?.LogInformation("Starting scan in '{DataPath}' for mod '{ModName}' with {KeywordCount} keywords",
-                dataPath, profile.Name, keywords.Count);
-
-            // 1. Scan plugin file
-            ScanPlugin(dataPath, profile, keywords, results);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // 2. Scan meshes directory
-            var meshesPath = Path.Combine(dataPath, "meshes");
-            if (Directory.Exists(meshesPath) && keywords.Count > 0)
+            try
             {
-                ScanDirectoryRecursively(dataPath, meshesPath, keywords, FileCategory.Mesh, results, cancellationToken);
-            }
+                dataPath = PackingPathGuard.GetAbsolutePath(dataPath);
+                PackingPathGuard.EnsureNoLinks(dataPath);
+                var keywords = profile.Keywords
+                    .Where(k => !string.IsNullOrWhiteSpace(k))
+                    .Select(k => k.Trim())
+                    .ToList();
 
-            // 3. Scan textures directory
-            var texturesPath = Path.Combine(dataPath, "textures");
-            if (Directory.Exists(texturesPath) && keywords.Count > 0)
+                var results = new Dictionary<string, ScannedFile>(StringComparer.OrdinalIgnoreCase);
+
+                _logger?.LogInformation("Starting scan in '{DataPath}' for mod '{ModName}' with {KeywordCount} keywords",
+                    dataPath, profile.Name, keywords.Count);
+
+                // 1. Scan plugin file
+                ScanPlugin(dataPath, profile, keywords, results);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // 2. Scan meshes directory
+                var meshesPath = Path.Combine(dataPath, "meshes");
+                if (Directory.Exists(meshesPath) && keywords.Count > 0)
+                {
+                    ScanDirectoryRecursively(dataPath, meshesPath, keywords, FileCategory.Mesh, results, cancellationToken);
+                }
+
+                // 3. Scan textures directory
+                var texturesPath = Path.Combine(dataPath, "textures");
+                if (Directory.Exists(texturesPath) && keywords.Count > 0)
+                {
+                    ScanDirectoryRecursively(dataPath, texturesPath, keywords, FileCategory.Texture, results, cancellationToken);
+                }
+
+                // 4. Optional: Scan other common mod directories (sound, SKSE)
+                ScanOptionalDirectory(dataPath, "sound", keywords, FileCategory.Other, results, cancellationToken);
+                ScanOptionalDirectory(dataPath, "SKSE", keywords, FileCategory.Other, results, cancellationToken);
+
+                var fileList = results.Values
+                    .OrderBy(f => f.Category)
+                    .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                _logger?.LogInformation("Scan completed. Found {Count} matching files.", fileList.Count);
+
+                return Result<List<ScannedFile>>.Success(fileList);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
             {
-                ScanDirectoryRecursively(dataPath, texturesPath, keywords, FileCategory.Texture, results, cancellationToken);
+                return Result<List<ScannedFile>>.Failure($"Unsafe or inaccessible scan path: {ex.Message}");
             }
-
-            // 4. Optional: Scan other common mod directories (sound, SKSE)
-            ScanOptionalDirectory(dataPath, "sound", keywords, FileCategory.Other, results, cancellationToken);
-            ScanOptionalDirectory(dataPath, "SKSE", keywords, FileCategory.Other, results, cancellationToken);
-
-            var fileList = results.Values
-                .OrderBy(f => f.Category)
-                .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            _logger?.LogInformation("Scan completed. Found {Count} matching files.", fileList.Count);
-
-            return Result<List<ScannedFile>>.Success(fileList);
         }, cancellationToken);
     }
 
@@ -92,7 +101,8 @@ public sealed class ModScanner : IModScanner
     {
         if (!string.IsNullOrWhiteSpace(profile.PluginSourcePath))
         {
-            var sourcePath = Path.GetFullPath(profile.PluginSourcePath.Trim());
+            var sourcePath = PackingPathGuard.GetAbsolutePath(profile.PluginSourcePath.Trim());
+            PackingPathGuard.EnsureNoLinks(sourcePath);
             var fileName = Path.GetFileName(sourcePath);
             results[fileName] = new ScannedFile
             {
@@ -140,7 +150,7 @@ public sealed class ModScanner : IModScanner
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _logger?.LogWarning(ex, "Error searching for plugin in '{DataPath}'", dataPath);
             }
@@ -163,7 +173,7 @@ public sealed class ModScanner : IModScanner
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _logger?.LogWarning(ex, "Error enumerating plugins in '{DataPath}'", dataPath);
             }
@@ -179,6 +189,7 @@ public sealed class ModScanner : IModScanner
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        PackingPathGuard.EnsureNoLinks(currentDir);
 
         var dirName = Path.GetFileName(currentDir);
         var dirMatchesKeyword = keywords.Any(k => dirName.Contains(k, StringComparison.OrdinalIgnoreCase));
@@ -231,11 +242,14 @@ public sealed class ModScanner : IModScanner
     {
         try
         {
-            foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+            PackingPathGuard.EnsureNoLinks(folder);
+            foreach (var file in Directory.EnumerateFiles(folder))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 AddFile(dataRoot, file, category, results);
             }
+            foreach (var directory in Directory.EnumerateDirectories(folder))
+                IncludeAllFilesUnder(dataRoot, directory, category, results, cancellationToken);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -265,6 +279,7 @@ public sealed class ModScanner : IModScanner
         Dictionary<string, ScannedFile> results)
     {
         var relativePath = Path.GetRelativePath(dataRoot, fullPath);
+        PackingPathGuard.EnsureSource(fullPath, relativePath, dataRoot);
         var normalizedKey = relativePath.Replace('/', '\\');
 
         if (results.ContainsKey(normalizedKey))

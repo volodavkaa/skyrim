@@ -27,6 +27,24 @@ public sealed class FilterStep : IPackStep
             .Where(f => f.IsSelected)
             .ToList();
 
+        // The project scanner returns its plugin and all registered resources.
+        // NIF texture links are not parsed, so none of these declared files may be omitted.
+        if (!string.IsNullOrWhiteSpace(context.Profile.WeaponProjectPath))
+        {
+            var missingRequiredFiles = false;
+            foreach (var file in context.ScannedFiles.Where(f => !f.IsSelected))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var msg = $"Required project file is not selected: '{file.RelativePath}'. Scan again and select all project files before packing.";
+                _logger?.LogError("{Message}", msg);
+                context.Errors.Add(msg);
+                missingRequiredFiles = true;
+            }
+
+            if (missingRequiredFiles)
+                return Task.FromResult(false);
+        }
+
         if (context.SelectedFiles.Count == 0)
         {
             const string msg = "No files selected for packing. Please check at least one file.";

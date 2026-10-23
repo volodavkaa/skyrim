@@ -136,6 +136,44 @@ public partial class WeaponProjectTests
         Assert.Contains("does not match", scan.Error);
     }
 
+    [Theory]
+    [InlineData("model")]
+    [InlineData("texture")]
+    [InlineData("manifest")]
+    [InlineData("plugin")]
+    public async Task BuildCommand_MissingProjectFileAfterPreview_StillValidatesProject(string missing)
+    {
+        var project = await PreparePackingProjectAsync();
+        using var provider = PackingProvider();
+        var profile = PackingProfile(project);
+        var archives = Path.Combine(_root, "archives");
+        var profiles = Substitute.For<IProfileRepository>();
+        profiles.LoadAllAsync(Arg.Any<CancellationToken>()).Returns(new List<ModProfile> { profile });
+        var settings = Substitute.For<ISettingsRepository>();
+        settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings { SkyrimDataPath = Data, OutputDirectory = archives });
+        var vm = new BuildViewModel(profiles, settings, provider.GetRequiredService<IModScanner>(), provider.GetRequiredService<PackingPipeline>());
+        await vm.ScanCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(3, vm.ScannedFiles.Count);
+        var folder = Path.GetDirectoryName(project.PluginPath)!;
+        File.Delete(missing switch
+        {
+            "model" => Path.Combine(folder, "meshes", "Custom", "Sword.nif"),
+            "texture" => Path.Combine(folder, "textures", "Custom", "Sword.dds"),
+            "manifest" => project.ProjectFilePath,
+            _ => project.PluginPath
+        });
+        await File.WriteAllTextAsync(Path.Combine(Data, "MySword.esp"), "wrong plugin");
+
+        await vm.PackCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.False(vm.HasSuccessNotification);
+        Assert.Null(vm.LastArchiveCreatedPath);
+        Assert.False(vm.IsLoading);
+        Assert.False(Directory.Exists(archives));
+    }
+
     [Fact]
     public async Task UnregisteredCustomModel_IsRejected_AndVanillaModelDoesNotNeedCopying()
     {

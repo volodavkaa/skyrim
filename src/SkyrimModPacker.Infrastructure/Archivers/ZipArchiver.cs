@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
+using SkyrimModPacker.Core.Common;
 
 namespace SkyrimModPacker.Infrastructure.Archivers;
 
@@ -34,6 +35,22 @@ public sealed class ZipArchiver : IArchiver
         if (files == null || files.Count == 0)
             throw new ArgumentException("No files specified for archive creation.", nameof(files));
 
+        cancellationToken.ThrowIfCancellationRequested();
+        outputPath = PackingPathGuard.GetAbsolutePath(outputPath);
+        PackingPathGuard.EnsureNoLinks(outputPath);
+        var normalizedEntries = PackingPathGuard.ValidateEntries(files.Select(file => file.EntryPath));
+        var preparedFiles = files.Select((file, index) => (
+            SourcePath: PackingPathGuard.GetAbsolutePath(file.SourcePath), EntryPath: normalizedEntries[index])).ToList();
+        foreach (var file in preparedFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PackingPathGuard.EnsureNoLinks(file.SourcePath);
+            if (file.SourcePath.Equals(outputPath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The archive output must not overwrite a source file.");
+            if (!File.Exists(file.SourcePath))
+                throw new FileNotFoundException($"Source file not found for archiving: '{file.SourcePath}'", file.SourcePath);
+        }
+
         var outputDir = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
         {
@@ -60,23 +77,20 @@ public sealed class ZipArchiver : IArchiver
                              useAsync: true))
             using (var archive = new ZipArchive(zipFileStream, ZipArchiveMode.Create, leaveOpen: false))
             {
-                for (int i = 0; i < files.Count; i++)
+                for (int i = 0; i < preparedFiles.Count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var (sourcePath, entryPath) = files[i];
+                    var (sourcePath, entryPath) = preparedFiles[i];
+                    PackingPathGuard.EnsureNoLinks(outputPath);
+                    PackingPathGuard.EnsureNoLinks(sourcePath);
 
                     if (!File.Exists(sourcePath))
                     {
                         throw new FileNotFoundException($"Source file not found for archiving: '{sourcePath}'", sourcePath);
                     }
 
-                    // Normalize entry path to forward slashes according to ZIP specification
-                    var normalizedEntry = entryPath
-                        .Replace('\\', '/')
-                        .TrimStart('/');
-
-                    var entry = archive.CreateEntry(normalizedEntry, CompressionLevel.Optimal);
+                    var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
 
                     await using (var sourceStream = new FileStream(
                                      sourcePath,

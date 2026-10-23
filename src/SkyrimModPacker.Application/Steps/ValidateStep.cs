@@ -44,16 +44,13 @@ public sealed class ValidateStep : IPackStep
 
         try
         {
-            if (context.Profile.EnableEsl || !string.IsNullOrWhiteSpace(context.Profile.WeaponProjectPath))
-                PluginWriteGuard.EnsureOutsideGame(outputDir, context.Settings.SkyrimDataPath);
-            if (!Directory.Exists(outputDir))
-            {
-                Directory.CreateDirectory(outputDir);
-            }
+            outputDir = PackingPathGuard.GetAbsolutePath(outputDir);
+            PluginWriteGuard.EnsureOutsideGame(outputDir, context.Settings.SkyrimDataPath);
+            PackingPathGuard.ValidateSources(context.SelectedFiles, context.Profile, context.Settings.SkyrimDataPath);
         }
         catch (Exception ex)
         {
-            var msg = $"Cannot access or create output directory '{outputDir}': {ex.Message}";
+            var msg = $"Unsafe packing path for output '{outputDir}' or a source file: {ex.Message}";
             _logger?.LogError(ex, "{Message}", msg);
             context.Errors.Add(msg);
             return Task.FromResult(false);
@@ -63,16 +60,16 @@ public sealed class ValidateStep : IPackStep
         var safeModName = SanitizeFileName(context.Profile.Name);
         var safeVersion = SanitizeFileName(context.Profile.Version);
         var archiveFileName = $"{safeModName}-{safeVersion}{_archiver.Extension}";
-        var outputArchivePath = Path.Combine(outputDir, archiveFileName);
-
-        if (!string.IsNullOrWhiteSpace(context.Profile.WeaponProjectPath))
+        string outputArchivePath;
+        try
         {
-            try { PluginWriteGuard.EnsureOutsideGame(outputArchivePath, context.Settings.SkyrimDataPath); }
-            catch (Exception ex)
-            {
-                context.Errors.Add($"Cannot write the project archive: {ex.Message}");
-                return Task.FromResult(false);
-            }
+            outputArchivePath = PackingPathGuard.ResolveUnderRoot(outputDir, archiveFileName);
+            PluginWriteGuard.EnsureOutsideGame(outputArchivePath, context.Settings.SkyrimDataPath);
+        }
+        catch (Exception ex)
+        {
+            context.Errors.Add($"Cannot write the archive: {ex.Message}");
+            return Task.FromResult(false);
         }
 
         // 4. Check if archive already exists
@@ -98,6 +95,13 @@ public sealed class ValidateStep : IPackStep
                 context.Errors.Add(msg);
                 return Task.FromResult(false);
             }
+        }
+
+        try { Directory.CreateDirectory(outputDir); }
+        catch (Exception ex)
+        {
+            context.Errors.Add($"Cannot create output directory '{outputDir}': {ex.Message}");
+            return Task.FromResult(false);
         }
 
         _logger?.LogInformation("Validation passed. Target archive: '{OutputPath}'", outputArchivePath);

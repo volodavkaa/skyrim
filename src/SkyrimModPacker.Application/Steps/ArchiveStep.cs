@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
+using SkyrimModPacker.Core.Common;
 
 namespace SkyrimModPacker.Application.Steps;
 
@@ -32,15 +33,24 @@ public sealed class ArchiveStep : IPackStep
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var ownsStagingDirectory = false;
         try
         {
+            if (!string.IsNullOrEmpty(context.StagingDirectory))
+            {
+                PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
+                ownsStagingDirectory = true;
+            }
+            PluginWriteGuard.EnsureOutsideGame(context.OutputArchivePath, context.Settings.SkyrimDataPath);
             IReadOnlyList<(string SourcePath, string EntryPath)> filesToArchive;
 
-            if (!string.IsNullOrEmpty(context.StagingDirectory) && Directory.Exists(context.StagingDirectory))
+            if (!string.IsNullOrEmpty(context.StagingDirectory))
             {
+                PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
+                if (!Directory.Exists(context.StagingDirectory))
+                    throw new DirectoryNotFoundException("The prepared staging directory is missing. Pack again.");
                 // Archive from staging directory
-                filesToArchive = Directory
-                    .EnumerateFiles(context.StagingDirectory, "*", SearchOption.AllDirectories)
+                filesToArchive = EnumerateStagedFiles(context.StagingDirectory, cancellationToken)
                     .Select(fullPath => (
                         SourcePath: fullPath,
                         EntryPath: Path.GetRelativePath(context.StagingDirectory, fullPath)))
@@ -48,6 +58,7 @@ public sealed class ArchiveStep : IPackStep
             }
             else
             {
+                PackingPathGuard.ValidateSources(context.SelectedFiles, context.Profile, context.Settings.SkyrimDataPath);
                 // Direct archive from original Skyrim Data files
                 filesToArchive = context.SelectedFiles
                     .Select(f => (SourcePath: f.AbsolutePath, EntryPath: f.RelativePath))
@@ -103,13 +114,13 @@ public sealed class ArchiveStep : IPackStep
         finally
         {
             // Clean up staging directory if one was created
-            if (!string.IsNullOrEmpty(context.StagingDirectory))
+            if (ownsStagingDirectory && !string.IsNullOrEmpty(context.StagingDirectory))
             {
                 try
                 {
                     if (Directory.Exists(context.StagingDirectory))
                     {
-                        Directory.Delete(context.StagingDirectory, recursive: true);
+                        PackingPathGuard.DeleteStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
                         _logger?.LogInformation("Cleaned up staging directory: '{StagingDir}'", context.StagingDirectory);
                     }
                 }
@@ -120,5 +131,19 @@ public sealed class ArchiveStep : IPackStep
                 }
             }
         }
+    }
+
+    private static IEnumerable<string> EnumerateStagedFiles(string directory, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        PackingPathGuard.EnsureNoLinks(directory);
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            token.ThrowIfCancellationRequested();
+            PackingPathGuard.EnsureNoLinks(file);
+            yield return file;
+        }
+        foreach (var child in Directory.EnumerateDirectories(directory))
+            foreach (var file in EnumerateStagedFiles(child, token)) yield return file;
     }
 }

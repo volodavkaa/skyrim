@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
+using SkyrimModPacker.Core.Models;
 
 namespace SkyrimModPacker.Application.Steps;
 
@@ -26,7 +27,7 @@ public sealed class ScanStep : IPackStep
         cancellationToken.ThrowIfCancellationRequested();
 
         // If files are already scanned (e.g. from preview UI), reuse them
-        if (context.ScannedFiles.Count > 0)
+        if (context.ScannedFiles.Count > 0 && context.FileSelection == null)
         {
             _logger?.LogInformation("Using {Count} files previously scanned.", context.ScannedFiles.Count);
             return true;
@@ -52,8 +53,33 @@ public sealed class ScanStep : IPackStep
             return false;
         }
 
+        if (context.FileSelection != null)
+        {
+            var selectedFiles = context.FileSelection.Where(file => file.IsSelected).ToLookup(
+                file => file.RelativePath.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
+            var availableFiles = scanResult.Value.ToLookup(
+                file => file.RelativePath.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in context.FileSelection.Where(file => file.IsSelected))
+            {
+                if (!availableFiles[file.RelativePath.Replace('\\', '/')].Any(candidate => SameSource(candidate, file)))
+                {
+                    var msg = $"Previously selected file is no longer available: '{file.RelativePath}'. Scan again before packing.";
+                    _logger?.LogError("{Message}", msg);
+                    context.Errors.Add(msg);
+                    return false;
+                }
+            }
+
+            foreach (var file in scanResult.Value)
+                file.IsSelected = selectedFiles[file.RelativePath.Replace('\\', '/')].Any(selected => SameSource(selected, file));
+        }
+
         context.ScannedFiles = scanResult.Value;
         _logger?.LogInformation("Discovered {Count} files for packing.", context.ScannedFiles.Count);
         return true;
     }
+
+    private static bool SameSource(ScannedFile first, ScannedFile second) =>
+        Path.GetFullPath(first.AbsolutePath).Equals(Path.GetFullPath(second.AbsolutePath), StringComparison.OrdinalIgnoreCase);
 }

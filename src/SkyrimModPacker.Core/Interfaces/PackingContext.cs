@@ -17,6 +17,9 @@ public sealed class PackingContext
     /// <summary>Files discovered during scanning.</summary>
     public List<ScannedFile> ScannedFiles { get; set; } = [];
 
+    /// <summary>Optional preview snapshot used to preserve selection when scanning again.</summary>
+    public IReadOnlyList<ScannedFile>? FileSelection { get; init; }
+
     /// <summary>Files selected for packing (after filtering).</summary>
     public List<ScannedFile> SelectedFiles { get; set; } = [];
 

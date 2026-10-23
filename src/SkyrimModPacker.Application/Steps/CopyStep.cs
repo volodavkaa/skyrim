@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
+using SkyrimModPacker.Core.Common;
 
 namespace SkyrimModPacker.Application.Steps;
 
@@ -24,13 +25,6 @@ public sealed class CopyStep : IPackStep
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!context.Settings.UseTempDirectory && !context.Profile.EnableEsl)
-        {
-            _logger?.LogInformation("Direct packing mode selected. Staging directory skipped.");
-            context.StagingDirectory = null;
-            return true;
-        }
-
         var stagingDir = Path.Combine(
             Path.GetTempPath(),
             "SkyrimModPacker",
@@ -39,6 +33,15 @@ public sealed class CopyStep : IPackStep
 
         try
         {
+            PackingPathGuard.ValidateSources(context.SelectedFiles, context.Profile, context.Settings.SkyrimDataPath);
+            if (!context.Settings.UseTempDirectory && !context.Profile.EnableEsl)
+            {
+                _logger?.LogInformation("Direct packing mode selected. Staging directory skipped.");
+                context.StagingDirectory = null;
+                return true;
+            }
+
+            PackingPathGuard.EnsureStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
             Directory.CreateDirectory(stagingDir);
             context.StagingDirectory = stagingDir;
 
@@ -50,9 +53,9 @@ public sealed class CopyStep : IPackStep
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var file = context.SelectedFiles[i];
-                var destinationPath = Path.Combine(stagingDir, file.RelativePath);
-                if (context.Profile.EnableEsl && !Path.GetFullPath(destinationPath).StartsWith(stagingDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("A staged file path must stay inside the staging directory.");
+                var destinationPath = PackingPathGuard.ResolveUnderRoot(stagingDir, file.RelativePath);
+                PluginWriteGuard.EnsureOutsideGame(destinationPath, context.Settings.SkyrimDataPath);
+                PackingPathGuard.EnsureNoLinks(file.AbsolutePath);
                 var destDirectory = Path.GetDirectoryName(destinationPath);
 
                 if (!string.IsNullOrEmpty(destDirectory) && !Directory.Exists(destDirectory))
@@ -60,6 +63,7 @@ public sealed class CopyStep : IPackStep
                     Directory.CreateDirectory(destDirectory);
                 }
 
+                PackingPathGuard.EnsureNoLinks(destinationPath);
                 // Copy file asynchronously using FileStream
                 await using (var sourceStream = new FileStream(file.AbsolutePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
                 await using (var destStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
@@ -73,7 +77,10 @@ public sealed class CopyStep : IPackStep
         }
         catch (OperationCanceledException) when (context.Profile.EnableEsl)
         {
-            try { Directory.Delete(stagingDir, recursive: true); }
+            try
+            {
+                PackingPathGuard.DeleteStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
+            }
             catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean cancelled ESL staging directory"); }
             throw;
         }
@@ -87,7 +94,9 @@ public sealed class CopyStep : IPackStep
             try
             {
                 if (Directory.Exists(stagingDir))
-                    Directory.Delete(stagingDir, recursive: true);
+                {
+                    PackingPathGuard.DeleteStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
+                }
             }
             catch
             {
