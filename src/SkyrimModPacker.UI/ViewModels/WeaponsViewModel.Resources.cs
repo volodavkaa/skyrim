@@ -3,6 +3,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using SkyrimModPacker.Core.Models.PluginBuilder;
 
 namespace SkyrimModPacker.UI.ViewModels;
 
@@ -11,12 +12,26 @@ public sealed partial class WeaponsViewModel
     [ObservableProperty] private ObservableCollection<string> _projectResources = [];
     [ObservableProperty] private string _textureSubdirectory = string.Empty;
     [ObservableProperty] private string? _resourceStatus;
+    [ObservableProperty] private ObservableCollection<ProjectResourceRow> _resourceCatalog = [];
+    [ObservableProperty] private string? _resourceCatalogError;
+    [ObservableProperty] private string? _resourceCatalogDiagnostics;
+    private ProjectResourceCatalog? _savedResourceCatalog;
 
     partial void OnModelPathChanged(string value) { ResourceStatus = null; ThirdPersonModelStatus = null; }
+
+    partial void OnGameDataPathChanged(string value)
+    {
+        _savedResourceCatalog = null;
+        ResourceCatalog = [];
+        ResourceCatalogError = ResourceCatalogDiagnostics = null;
+    }
 
     partial void OnProjectFilePathChanged(string value)
     {
         ProjectResources = [];
+        ResourceCatalog = [];
+        _savedResourceCatalog = null;
+        ResourceCatalogError = ResourceCatalogDiagnostics = null;
         ResourceStatus = null;
         SelectedPackingProfile = null;
         EnableProjectEsl = false;
@@ -35,6 +50,36 @@ public sealed partial class WeaponsViewModel
         var result = await _projects.GetResourcesAsync(ProjectFilePath, GameDataPath, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         ProjectResources = new ObservableCollection<string>(result.Value);
+        await RefreshResourceCatalogCoreAsync(token);
+    }
+
+    [RelayCommand]
+    private Task RefreshResourceCatalogAsync() => RunOperationAsync(async token =>
+    {
+        RequireProject();
+        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        await RefreshResourceCatalogCoreAsync(token);
+    });
+
+    private async Task RefreshResourceCatalogCoreAsync(CancellationToken token)
+    {
+        // Never leave a previous project's or a stale successful preview on screen after an error.
+        ResourceCatalogError = ResourceCatalogDiagnostics = null;
+        ResourceCatalog = [];
+        _savedResourceCatalog = null;
+        var result = await _projects.GetResourceCatalogAsync(ProjectFilePath, GameDataPath, token);
+        if (result.IsFailure) { ResourceCatalogError = result.Error; return; }
+        _savedResourceCatalog = result.Value;
+        ProjectResources = new(result.Value.Entries.Where(e => e.IsRegistered).Select(e => e.RelativePath));
+        RenderResourceCatalog();
+    }
+
+    private void RenderResourceCatalog()
+    {
+        if (_savedResourceCatalog == null) return;
+        ResourceCatalog = new(_savedResourceCatalog.Entries.Select(entry => new ProjectResourceRow(entry, Text)));
+        ResourceCatalogDiagnostics = _savedResourceCatalog.Diagnostics.Count == 0 ? null :
+            string.Join(Environment.NewLine, _savedResourceCatalog.Diagnostics.Select(d => d.Record + ": " + d.Detail));
     }
 
     [RelayCommand]

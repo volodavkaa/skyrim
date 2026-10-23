@@ -240,4 +240,26 @@
     <system:String x:Key="Models_Yes">Yes</system:String>
     <system:String x:Key="Models_No">No</system:String>
     <system:String x:Key="Models_Checked">Model checks completed. See each model's status. NIF contents and texture references have not been checked.</system:String>
+    <system:String x:Key="Resources_Title">Project resources</system:String>
+    <system:String x:Key="Resources_SavedHint">Registered NIF/DDS and model references from saved WEAP/STAT records. Draft model changes appear after saving. All registered custom files are required for ZIP; vanilla assets are not automatically copied.</system:String>
+    <system:String x:Key="Resources_Refresh">Refresh resource list</system:String>
+    <system:String x:Key="Resources_Registered">Registered</system:String>
+    <system:String x:Key="Resources_Unregistered">Not registered</system:String>
+    <system:String x:Key="Resources_Archive_Included">ZIP: included</system:String>
+    <system:String x:Key="Resources_Archive_VanillaExcluded">ZIP: vanilla resource, excluded</system:String>
+    <system:String x:Key="Resources_Archive_Blocked">ZIP: packing blocked</system:String>
+    <system:String x:Key="Resources_Archive_NotRegistered">ZIP: registration required</system:String>
+    <system:String x:Key="Resources_TextureUsageUnknown">DDS usage inside NIF has not been analyzed. This file remains required for ZIP.</system:String>
+    <system:String x:Key="Resources_NoSavedUses">No references in saved WEAP/STAT. The registered file remains in ZIP.</system:String>
+    <system:String x:Key="Resources_NoConflicts">No resource issues detected</system:String>
+    <system:String x:Key="Resources_Use_ThirdPerson">WEAP / third-person model</system:String>
+    <system:String x:Key="Resources_Use_FirstPerson">WEAP / first-person model</system:String>
+    <system:String x:Key="Resources_Use_Static">STAT / model path</system:String>
+    <system:String x:Key="Resources_Issue_DuplicateRegistration">Duplicate registration of one path; ZIP will contain one copy.</system:String>
+    <system:String x:Key="Resources_Issue_VanillaShadow">A project file shadows a vanilla path and may affect other items.</system:String>
+    <system:String x:Key="Resources_Issue_UnregisteredCustom">Custom model is not registered. Import the NIF to include it in ZIP.</system:String>
+    <system:String x:Key="Resources_Issue_MissingOrEmpty">File is missing or empty.</system:String>
+    <system:String x:Key="Resources_Issue_ReadFailed">Availability check failed; absence has not been established.</system:String>
+    <system:String x:Key="Resources_Issue_InvalidPath">Unsafe or unsupported path.</system:String>
+    <system:String x:Key="Resources_Issue_ArchivePathConflict">An archive file path conflicts with another resource directory.</system:String>
 </ResourceDictionary>

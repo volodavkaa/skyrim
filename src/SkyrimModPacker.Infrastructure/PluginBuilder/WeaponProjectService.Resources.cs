@@ -164,7 +164,7 @@ public sealed partial class WeaponProjectService
         }
     }
 
-    private static async Task<(string Folder, ProjectDocument Document)> ReadResourceProjectAsync(string projectFilePath, string gameDataPath, CancellationToken token)
+    private static async Task<(string Folder, ProjectDocument Document)> ReadResourceProjectAsync(string projectFilePath, string gameDataPath, CancellationToken token, bool validateResourcePaths = true)
     {
         if (!Path.IsPathFullyQualified(projectFilePath)) throw new InvalidOperationException("Create or open a workspace mod before importing resources.");
         PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
@@ -176,7 +176,8 @@ public sealed partial class WeaponProjectService
         var folder = Path.GetDirectoryName(projectFilePath)!;
         PluginWriteGuard.EnsureOutsideGame(Path.Combine(folder, document.PluginFileName), gameDataPath);
         if (!File.Exists(Path.Combine(folder, document.PluginFileName))) throw new FileNotFoundException("Project plugin is missing.");
-        foreach (var relative in document.Resources) ResourceTarget(folder, relative, gameDataPath);
+        if (validateResourcePaths)
+            foreach (var relative in document.Resources) ResourceTarget(folder, relative, gameDataPath);
         return (folder, document);
     }
 

@@ -62,6 +62,16 @@ public class WeaponsPageTests
                 {
                     IsBaseConnected = true, GameDataPath = @"C:\Games\Skyrim\Data",
                     ProjectResources = ["meshes/Custom/blade.nif", "textures/Custom/blade.dds"], TextureSubdirectory = "Custom",
+                    ResourceCatalog =
+                    [
+                        new ProjectResourceRow(new ProjectResourceEntry("meshes/Custom/shared/blade.nif", FileCategory.Mesh,
+                            ModelOrigin.Project, ModelAvailability.Found, true, ResourceArchiveStatus.Included,
+                            [new ResourceUsage(new PluginRecordReference("MySwords.esp", 0x800), "CustomIronSword", ResourceUseKind.ThirdPerson)],
+                            [ResourceIssue.VanillaShadow]), (key, fallback) => app.TryFindResource(key) as string ?? fallback),
+                        new ProjectResourceRow(new ProjectResourceEntry("textures/Custom/blade.dds", FileCategory.Texture,
+                            ModelOrigin.Project, ModelAvailability.Missing, true, ResourceArchiveStatus.Blocked, [],
+                            [ResourceIssue.MissingOrEmpty]), (key, fallback) => app.TryFindResource(key) as string ?? fallback)
+                    ],
                     PluginPath = @"C:\Mods\MySwords.esp", ShowCreationPanel = false,
                     Templates = [new SwordTemplate { FormId = 0x12EB7, EditorId = "IronSword", Name = "Iron Sword", Damage = 7, Weight = 9, Value = 25 }],
                     Weapons = [new WeaponRecord

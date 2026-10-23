@@ -6,6 +6,7 @@ namespace SkyrimModPacker.Core.Interfaces;
 
 public interface IWeaponProjectService
 {
+    Task<Result<ProjectResourceCatalog>> GetResourceCatalogAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<uint?>> GetTemplateOriginAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<WeaponModels?>> GetOriginalModelsAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<ModelResourceInfo>> InspectModelAsync(string projectFilePath, string modelPath, string gameDataPath, bool vanilla, CancellationToken cancellationToken = default);

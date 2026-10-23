@@ -60,6 +60,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         _projects = projectService;
         _packingPipeline = packingPipeline;
         _localization = localizationService;
+        if (_localization != null) _localization.LanguageChanged += RenderResourceCatalog;
         _logger = logger;
         PageTitle = "Weapons";
     }
@@ -248,6 +249,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         Weapons = new ObservableCollection<WeaponRecord>(result.Value);
         SelectedWeapon = Weapons.FirstOrDefault(w => w.FormId == selectedId);
         if (SelectedWeapon == null) ResetDraft();
+        if (!string.IsNullOrWhiteSpace(ProjectFilePath)) await RefreshProjectResourcesAsync(token);
     }
 
     private void ResetDraft()

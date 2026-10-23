@@ -15,6 +15,13 @@ public sealed partial class WeaponProjectService
             if (weapons.IsFailure) throw new InvalidOperationException(weapons.Error);
             if (weapons.Value.Count == 0) throw new InvalidOperationException("Save at least one sword to the project plugin before packing.");
 
+            // Rebuild from disk rather than trusting an earlier UI preview or its selected rows.
+            var catalog = await Task.Run(() => BuildResourceCatalog(folder, document, gameDataPath, cancellationToken, inspectVanilla: false), cancellationToken);
+            if (!catalog.CanPack)
+                throw new InvalidOperationException("Project resources block packing: " + string.Join("; ",
+                    catalog.Entries.Where(e => e.BlocksPacking).Select(e => e.RelativePath + " (" + string.Join(", ", e.Issues) + ")")
+                        .Concat(catalog.Diagnostics.Select(d => d.Record + ": " + d.Detail))));
+
             var resources = document.Resources.Select(NormalizeResource).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var files = new List<ScannedFile> { DescribeFile(pluginPath, document.PluginFileName, FileCategory.Plugin) };
             foreach (var relative in resources)

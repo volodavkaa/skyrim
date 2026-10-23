@@ -284,17 +284,50 @@
                                         <ui:Button Content="{DynamicResource Weapons_ImportTextures}" Command="{Binding ImportTexturesCommand}" Margin="0,0,8,8" />
                                         <ui:Button Content="{DynamicResource Weapons_ImportTextureFolder}" Command="{Binding ImportTextureFolderCommand}" Margin="0,0,0,8" />
                                     </WrapPanel>
-                                    <ItemsControl ItemsSource="{Binding ProjectResources}" Margin="0,0,0,8">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
                                     <ui:Button Content="{DynamicResource Weapons_CheckResources}" Command="{Binding CheckResourcesCommand}" />
                                 </StackPanel>
                             </ui:Card>
                         </layout:ResponsiveColumnsPanel>
+                        <ui:Card Padding="24" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Resources_Title}" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <TextBlock Text="{DynamicResource Resources_SavedHint}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <ui:Button Content="{DynamicResource Resources_Refresh}" Command="{Binding RefreshResourceCatalogCommand}" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                                <TextBlock Text="{Binding ResourceCatalogError}" Style="{StaticResource FieldError}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding ResourceCatalogDiagnostics}" Style="{StaticResource FieldError}" TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding ResourceCatalog}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="0,12" Margin="0,4,0,0">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding RelativePath}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                    <WrapPanel Margin="0,6,0,6">
+                                                        <TextBlock Text="{Binding OriginText}" Margin="0,0,16,4" />
+                                                        <TextBlock Text="{Binding AvailabilityText}" Margin="0,0,16,4" />
+                                                        <TextBlock Text="{Binding RegistrationText}" Margin="0,0,16,4" />
+                                                        <TextBlock Text="{Binding ArchiveText}" Margin="0,0,0,4" />
+                                                    </WrapPanel>
+                                                    <TextBlock Text="{Binding UsageText}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                                    <TextBlock Text="{Binding IssueText}" TextWrapping="Wrap">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasIssues}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ui:Card>
                         <TextBlock Text="{Binding ResourceStatus}" TextWrapping="Wrap" Margin="0,0,0,12" />
                     </StackPanel>
                     <StackPanel Visibility="{Binding IsPropertiesStep, Converter={StaticResource BooleanToVisibilityConverter}}">

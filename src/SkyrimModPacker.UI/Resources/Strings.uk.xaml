@@ -240,4 +240,26 @@
     <system:String x:Key="Models_Yes">Так</system:String>
     <system:String x:Key="Models_No">Ні</system:String>
     <system:String x:Key="Models_Checked">Перевірку завершено. Дивіться стан кожної моделі. Вміст NIF і текстурні посилання не перевірялися.</system:String>
+    <system:String x:Key="Resources_Title">Ресурси проєкту</system:String>
+    <system:String x:Key="Resources_SavedHint">Показано зареєстровані NIF/DDS і моделі зі збережених WEAP/STAT. Зміни моделей у редакторі відобразяться після збереження. Усі зареєстровані власні файли обов’язкові для ZIP; ванільні автоматично не копіюються.</system:String>
+    <system:String x:Key="Resources_Refresh">Оновити список ресурсів</system:String>
+    <system:String x:Key="Resources_Registered">Зареєстровано</system:String>
+    <system:String x:Key="Resources_Unregistered">Не зареєстровано</system:String>
+    <system:String x:Key="Resources_Archive_Included">ZIP: включається</system:String>
+    <system:String x:Key="Resources_Archive_VanillaExcluded">ZIP: ванільний ресурс, не включається</system:String>
+    <system:String x:Key="Resources_Archive_Blocked">ZIP: пакування заблоковано</system:String>
+    <system:String x:Key="Resources_Archive_NotRegistered">ZIP: потрібно зареєструвати</system:String>
+    <system:String x:Key="Resources_TextureUsageUnknown">Використання DDS всередині NIF не аналізувалося. Цей файл залишається обов’язковим для ZIP.</system:String>
+    <system:String x:Key="Resources_NoSavedUses">Посилань у збережених WEAP/STAT немає. Зареєстрований файл залишається в ZIP.</system:String>
+    <system:String x:Key="Resources_NoConflicts">Проблем ресурсів не виявлено</system:String>
+    <system:String x:Key="Resources_Use_ThirdPerson">WEAP / модель третьої особи</system:String>
+    <system:String x:Key="Resources_Use_FirstPerson">WEAP / модель першої особи</system:String>
+    <system:String x:Key="Resources_Use_Static">STAT / шлях моделі</system:String>
+    <system:String x:Key="Resources_Issue_DuplicateRegistration">Повторна реєстрація одного шляху; у ZIP буде одна копія.</system:String>
+    <system:String x:Key="Resources_Issue_VanillaShadow">Власний файл перекриває ванільний шлях і може впливати на інші предмети.</system:String>
+    <system:String x:Key="Resources_Issue_UnregisteredCustom">Власна модель не зареєстрована. Імпортуйте NIF, щоб вона потрапила до ZIP.</system:String>
+    <system:String x:Key="Resources_Issue_MissingOrEmpty">Файл відсутній або порожній.</system:String>
+    <system:String x:Key="Resources_Issue_ReadFailed">Перевірка доступності не вдалася; відсутність не підтверджена.</system:String>
+    <system:String x:Key="Resources_Issue_InvalidPath">Небезпечний або непідтримуваний шлях.</system:String>
+    <system:String x:Key="Resources_Issue_ArchivePathConflict">Один шлях ZIP конфліктує з каталогом іншого ресурсу.</system:String>
 </ResourceDictionary>
