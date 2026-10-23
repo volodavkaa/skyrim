@@ -1,0 +1,5 @@
+{
+    "dotnet.defaultSolution": "SkyrimModPacker.sln",
+    "dotnet.projects.enableFileBasedPrograms": false,
+    "dotnet.server.sourceGeneratorExecution": "Automatic"
+}

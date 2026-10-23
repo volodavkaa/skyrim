@@ -25,6 +25,9 @@ public sealed class ModProfile
     /// <summary>Optional absolute path to a workspace plugin outside Data; archived by filename at the ZIP root.</summary>
     public string PluginSourcePath { get; set; } = string.Empty;
 
+    /// <summary>Optional project manifest; when set, pack its registered resources instead of scanning Data keywords.</summary>
+    public string WeaponProjectPath { get; set; } = string.Empty;
+
     /// <summary>Apply ESL to compatible staged plugins before archiving; disabled for existing profiles.</summary>
     public bool EnableEsl { get; set; }
 

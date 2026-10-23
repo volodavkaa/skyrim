@@ -252,7 +252,7 @@ public class AdvancedPluginBuilderTests : IDisposable
         var settings = Substitute.For<ISettingsRepository>();
         settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings { SkyrimDataPath = Data });
         var profiles = new JsonProfileRepository(Path.Combine(_root, "appdata"));
-        var vm = new WeaponsViewModel(_builder, settings, profiles) { PluginName = "Sword", OutputDirectory = Path.GetDirectoryName(Plugin)! };
+        var vm = new WeaponsViewModel(_builder, settings, profiles, new WeaponProjectService(_builder)) { PluginName = "Sword", OutputDirectory = Path.GetDirectoryName(Plugin)! };
         await vm.CreatePluginCommand.ExecuteAsync(null);
         await vm.LoadTemplatesCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
@@ -279,7 +279,7 @@ public class AdvancedPluginBuilderTests : IDisposable
         var profile = Assert.Single(await profiles.LoadAllAsync());
         profile.EnableEsl = true;
         var gameBytes = await File.ReadAllBytesAsync(MasterPath);
-        var workspaceBytes = await File.ReadAllBytesAsync(Plugin);
+        var workspaceBytes = await File.ReadAllBytesAsync(vm.PluginPath);
         var services = new ServiceCollection();
         services.AddLogging(); services.AddApplicationServices(); services.AddInfrastructureServices(Path.Combine(_root, "appdata"));
         using var provider = services.BuildServiceProvider();
@@ -301,7 +301,7 @@ public class AdvancedPluginBuilderTests : IDisposable
             Assert.Equal(2, mod.EnumerateMajorRecords().Count(r => r.FormKey.ModKey == mod.ModKey));
         }
         Assert.Equal(gameBytes, await File.ReadAllBytesAsync(MasterPath));
-        Assert.Equal(workspaceBytes, await File.ReadAllBytesAsync(Plugin));
+        Assert.Equal(workspaceBytes, await File.ReadAllBytesAsync(vm.PluginPath));
         // Reloading lookup choices must not overwrite unsaved field edits.
         vm.Description = "Unsaved description";
         await vm.LoadOptionsCommand.ExecuteAsync(null);

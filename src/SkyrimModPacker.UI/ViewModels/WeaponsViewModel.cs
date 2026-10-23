@@ -10,6 +10,7 @@ using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
 using SkyrimModPacker.Core.Models.PluginBuilder;
 using SkyrimModPacker.UI.Services;
+using SkyrimModPacker.Application.Services;
 
 namespace SkyrimModPacker.UI.ViewModels;
 
@@ -19,6 +20,8 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     private readonly IPluginBuilderService _builder;
     private readonly ISettingsRepository _settings;
     private readonly IProfileRepository _profiles;
+    private readonly IWeaponProjectService _projects;
+    private readonly PackingPipeline? _packingPipeline;
     private readonly ILocalizationService? _localization;
     private readonly ILogger<WeaponsViewModel>? _logger;
     private CancellationTokenSource? _operationCts;
@@ -48,11 +51,14 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     [ObservableProperty] private ModProfile? _selectedPackingProfile;
 
     public WeaponsViewModel(IPluginBuilderService pluginBuilderService, ISettingsRepository settingsRepository,
-        IProfileRepository profileRepository, ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null)
+        IProfileRepository profileRepository, IWeaponProjectService projectService,
+        ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null, PackingPipeline? packingPipeline = null)
     {
         _builder = pluginBuilderService;
         _settings = settingsRepository;
         _profiles = profileRepository;
+        _projects = projectService;
+        _packingPipeline = packingPipeline;
         _localization = localizationService;
         _logger = logger;
         PageTitle = "Weapons";
@@ -62,14 +68,11 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     private Task InitializeAsync() => RunOperationAsync(async token =>
     {
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
-        if (!string.Equals(GameDataPath, _templateGameDataPath, StringComparison.OrdinalIgnoreCase))
-        {
-            SelectedTemplate = null;
-            Templates.Clear();
-        }
         var selectedId = SelectedPackingProfile?.Id;
         PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
         SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == selectedId);
+        if (!IsBaseConnected || !string.Equals(GameDataPath, _templateGameDataPath, StringComparison.OrdinalIgnoreCase))
+            await LoadTemplatesCoreAsync(token, selectFirst: string.IsNullOrWhiteSpace(EditorId));
     });
 
     [RelayCommand]
@@ -85,15 +88,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     {
         var settings = await _settings.LoadAsync(token);
         GameDataPath = settings.SkyrimDataPath;
-        // Clear choices from a previous game installation even when this load fails.
-        SelectedTemplate = null;
-        Templates.Clear();
-        var result = await _builder.GetSwordTemplatesAsync(GameDataPath, token);
-        if (result.IsFailure) throw new InvalidOperationException(result.Error);
-        Templates = new ObservableCollection<SwordTemplate>(result.Value);
-        _templateGameDataPath = GameDataPath;
-        await LoadOptionsCoreAsync(token);
-        SelectedTemplate = Templates.FirstOrDefault();
+        await LoadTemplatesCoreAsync(token, selectFirst: SelectedWeapon == null);
         StatusMessage = Text("Weapons_TemplatesLoaded", "Sword templates loaded.");
     });
 
@@ -101,7 +96,8 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     private Task CreatePluginAsync() => RunOperationAsync(async token =>
     {
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
-        var result = await _builder.CreateAsync(new CreatePluginRequest
+        if (!ValidateProjectFields()) return;
+        var result = await _projects.CreateAsync(new CreatePluginRequest
         {
             PluginFileName = PluginName.Trim() + PluginExtension,
             OutputDirectory = OutputDirectory.Trim(),
@@ -109,9 +105,11 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             Masters = MastersText.Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         }, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
-        PluginPath = result.Value;
+        ProjectFilePath = result.Value.ProjectFilePath;
+        PluginPath = result.Value.PluginPath;
         ShowCreationPanel = false;
         await RefreshWeaponsAsync(null, token);
+        await RefreshProjectResourcesAsync(token);
         StatusMessage = Text("Weapons_PluginCreated", "Plugin created.");
     });
 
@@ -129,11 +127,16 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         {
             var selectedPath = Path.GetFullPath(path);
             GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
-            PluginWriteGuard.EnsureOutsideGame(selectedPath, GameDataPath);
+            try { PluginWriteGuard.EnsureOutsideGame(selectedPath, GameDataPath); }
+            catch (InvalidOperationException ex)
+            {
+                throw new InvalidOperationException(Text("Weapons_UseWorkingCopy", "Open a plugin outside the game, or use Create working copy for a supported ESP/ESL. Skyrim.esm is loaded automatically as a template source."), ex);
+            }
             var result = await _builder.GetWeaponsAsync(selectedPath, token);
             if (result.IsFailure) throw new InvalidOperationException(result.Error);
             await LoadOptionsCoreAsync(token);
             PluginPath = selectedPath;
+            ProjectFilePath = string.Empty;
             ShowCreationPanel = false;
             Weapons = new ObservableCollection<WeaponRecord>(result.Value);
             SelectedWeapon = Weapons.FirstOrDefault();
@@ -146,7 +149,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     {
         if (value == null) return;
         SelectedWeapon = null;
-        FillEditor(value.EditorId + "Custom", value.Name, value.Damage, value.Weight, value.Value);
+        FillEditor(SuggestEditorId(value.EditorId), value.Name, value.Damage, value.Weight, value.Value);
         FillDetails(value.Details);
         ResetRecipeEditor();
     }
@@ -175,7 +178,12 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     [RelayCommand]
     private void NewSword()
     {
-        if (IsLoading || SelectedTemplate == null) return;
+        if (IsLoading) return;
+        if (SelectedTemplate == null)
+        {
+            TemplateError = Text("Weapons_SelectTemplate", "Select a vanilla sword template first.");
+            return;
+        }
         OnSelectedTemplateChanged(SelectedTemplate);
     }
 
@@ -188,6 +196,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
         if (!string.Equals(GameDataPath, _templateGameDataPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(Text("Weapons_SelectTemplate", "Reload the vanilla sword templates first."));
+        await EnsureImportedModelAvailableAsync(token);
         var result = await _builder.CloneSwordAsync(new CloneSwordRequest
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, TemplateFormId = SelectedTemplate.FormId,
@@ -206,6 +215,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         if (SelectedWeapon == null) throw new InvalidOperationException(Text("Weapons_SelectRecord", "Select a sword in the plugin first."));
         var stats = ParseStatistics();
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        await EnsureImportedModelAvailableAsync(token);
         var result = await _builder.UpdateSwordAsync(new UpdateSwordRequest
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, FormId = SelectedWeapon.FormId,
@@ -265,7 +275,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             Id = existing?.Id ?? Guid.NewGuid(), Name = existing?.Name ?? Path.GetFileNameWithoutExtension(PluginPath),
             Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = existing?.EnableEsl ?? false,
             CreatedAt = existing?.CreatedAt ?? DateTime.UtcNow, ModifiedAt = DateTime.UtcNow,
-            PluginFileName = Path.GetFileName(PluginPath), PluginSourcePath = PluginPath
+            PluginFileName = Path.GetFileName(PluginPath), PluginSourcePath = PluginPath, WeaponProjectPath = ProjectFilePath
         };
         var validation = ModProfileValidator.Validate(profile);
         if (validation.IsFailure) throw new InvalidOperationException(validation.Error);

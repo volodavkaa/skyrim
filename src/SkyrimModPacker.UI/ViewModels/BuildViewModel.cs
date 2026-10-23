@@ -421,6 +421,7 @@ public sealed partial class BuildViewModel : ViewModelBase
                     {
                         SelectedProfile.PluginFileName = fileName;
                         SelectedProfile.PluginSourcePath = Path.GetFullPath(path);
+                        SelectedProfile.WeaponProjectPath = string.Empty;
                         await _profileRepository.SaveAsync(SelectedProfile);
                         StatusMessage = $"Plugin set to '{fileName}' from dropped file. Scanning...";
                         await ScanAsync();

@@ -32,6 +32,14 @@ public static class ModProfileValidator
         var hasKeywords = profile.Keywords.Exists(k => !string.IsNullOrWhiteSpace(k));
         var hasPlugin = !string.IsNullOrWhiteSpace(profile.PluginFileName) || !string.IsNullOrWhiteSpace(profile.PluginSourcePath);
 
+        if (!string.IsNullOrWhiteSpace(profile.WeaponProjectPath))
+        {
+            if (!Path.IsPathFullyQualified(profile.WeaponProjectPath.Trim()))
+                return Result.Failure("The weapon project path must be absolute.");
+            if (string.IsNullOrWhiteSpace(profile.PluginSourcePath) || string.IsNullOrWhiteSpace(profile.PluginFileName))
+                return Result.Failure("A project profile requires its workspace plugin path and filename.");
+        }
+
         if (!string.IsNullOrWhiteSpace(profile.PluginSourcePath))
         {
             var sourcePath = profile.PluginSourcePath.Trim();

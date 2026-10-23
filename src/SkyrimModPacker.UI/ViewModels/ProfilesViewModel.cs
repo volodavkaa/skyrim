@@ -34,6 +34,9 @@ public sealed partial class ProfilesViewModel : ViewModelBase
     private string _pluginSourcePath = string.Empty;
 
     [ObservableProperty]
+    private string _weaponProjectPath = string.Empty;
+
+    [ObservableProperty]
     private bool _enableEsl;
 
     [ObservableProperty]
@@ -101,6 +104,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
         Version = value.Version;
         PluginFileName = value.PluginFileName;
         PluginSourcePath = value.PluginSourcePath;
+        WeaponProjectPath = value.WeaponProjectPath;
         EnableEsl = value.EnableEsl;
         Keywords = new ObservableCollection<string>(value.Keywords);
         NewKeyword = string.Empty;
@@ -163,6 +167,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             Version = Version.Trim(),
             PluginFileName = PluginFileName.Trim(),
             PluginSourcePath = PluginSourcePath.Trim(),
+            WeaponProjectPath = WeaponProjectPath.Trim(),
             EnableEsl = EnableEsl,
             Keywords = Keywords.ToList(),
             CreatedAt = SelectedProfile.CreatedAt,
@@ -231,6 +236,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             Version = SelectedProfile.Version,
             PluginFileName = SelectedProfile.PluginFileName,
             PluginSourcePath = SelectedProfile.PluginSourcePath,
+            WeaponProjectPath = SelectedProfile.WeaponProjectPath,
             EnableEsl = SelectedProfile.EnableEsl,
             Keywords = new List<string>(SelectedProfile.Keywords)
         };

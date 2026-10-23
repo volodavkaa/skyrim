@@ -22,7 +22,7 @@ public class WpfPageCollection { }
 public class WeaponsPageTests
 {
     [Fact]
-    public async Task Page_LoadsBindingsAndRendersAtDesktopAndMinimumWidths()
+    public async Task Page_RendersEveryWizardStepAtDesktopAndMinimumWidths()
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
@@ -58,8 +58,10 @@ public class WeaponsPageTests
                 var ingredient = Choice(0x102, "IngotIron");
                 var perk = Choice(0x106, "SteelSmithing");
                 var list = Choice(0x2000, "LItemSword");
-                var vm = new WeaponsViewModel(Substitute.For<IPluginBuilderService>(), settings, profiles)
+                var vm = new WeaponsViewModel(Substitute.For<IPluginBuilderService>(), settings, profiles, Substitute.For<IWeaponProjectService>())
                 {
+                    IsBaseConnected = true, GameDataPath = @"C:\Games\Skyrim\Data",
+                    ProjectResources = ["meshes/Custom/blade.nif", "textures/Custom/blade.dds"], TextureSubdirectory = "Custom",
                     PluginPath = @"C:\Mods\MySwords.esp", ShowCreationPanel = false,
                     Templates = [new SwordTemplate { FormId = 0x12EB7, EditorId = "IronSword", Name = "Iron Sword", Damage = 7, Weight = 9, Value = 25 }],
                     Weapons = [new WeaponRecord
@@ -86,34 +88,71 @@ public class WeaponsPageTests
                     Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)),
                     Child = new Frame { Content = page, NavigationUIVisibility = NavigationUIVisibility.Hidden }
                 };
-                foreach (var (width, creation, advanced) in new[] { (900, false, false), (600, false, false), (600, true, false), (600, false, true) })
+                vm.WeaponSummary = [
+                    new WeaponSummaryRow { Label = "Плагін", Value = @"C:\Mods\MySwords.esp" },
+                    new WeaponSummaryRow { Label = "Шаблон", Value = "IronSword" },
+                    new WeaponSummaryRow { Label = "Назва", Value = "Iron Sword → Крижаний меч", IsChanged = true },
+                    new WeaponSummaryRow { Label = "Шкода", Value = "7 → 20", IsChanged = true },
+                    new WeaponSummaryRow { Label = "Модель", Value = @"Weapons\Custom\blade.nif", IsChanged = true }
+                ];
+                vm.SummaryFiles = ["MySwords.esp", "meshes/Custom/blade.nif", "textures/Custom/blade.dds"];
+                foreach (var (width, scale) in new[] { (900, 1d), (600, 1d), (420, 1d), (1200, 1d), (600, 1.3d) })
+                foreach (var step in Enumerable.Range(0, 5))
                 {
-                    vm.ShowCreationPanel = creation;
-                    var height = advanced ? 2600 : creation ? 1100 : 780;
+                    page.EditorScale = scale;
+                    vm.CurrentStep = step;
+                    vm.ShowCreationPanel = step == 0;
+                    vm.ShowAdvancedProperties = step == 3;
+                    vm.Weight = "6.5";
+                    if (width == 600 && step == 3)
+                    {
+                        vm.Weight = "NaN";
+                        vm.WeightError = "Введіть скінченну вагу від 0.";
+                    }
+                    var height = step == 0 || step == 3 ? 1300 : 1000;
+                    var scroll = Descendants<ScrollViewer>(page).FirstOrDefault();
+                    scroll?.ScrollToTop();
                     root.Measure(new Size(width, height));
                     root.Arrange(new Rect(0, 0, width, height));
                     root.UpdateLayout();
                     foreach (var expander in Descendants<Expander>(page).ToList())
                     {
-                        var isCreation = Equals(expander.Header, app.FindResource("Weapons_CreatePlugin"));
-                        expander.SetCurrentValue(Expander.IsExpandedProperty, isCreation ? creation : advanced);
+                        if (Equals(expander.Header, app.FindResource("Weapons_Resources")))
+                            expander.SetCurrentValue(Expander.IsExpandedProperty, true);
                     }
-                    Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
-                    if (creation || advanced)
-                    {
-                        // Let the WPF-UI expander finish its animation before capturing the form.
-                        var frame = new DispatcherFrame();
-                        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
-                        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
-                        timer.Start();
-                        Dispatcher.PushFrame(frame);
-                    }
+                    var frame = new DispatcherFrame();
+                    var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+                    timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+                    timer.Start();
+                    Dispatcher.PushFrame(frame);
                     root.UpdateLayout();
+                    var viewport = Descendants<ScrollViewer>(page).First();
+                    Assert.True(viewport.ExtentWidth <= viewport.ViewportWidth + 1, $"Horizontal overflow at width {width}, scale {scale}, step {step}");
                     var texts = Descendants<TextBox>(page).ToList();
-                    Assert.Contains(texts, box => box.Text == "Крижаний меч");
-                    Assert.Contains(texts, box => box.Text == @"C:\Mods\MySwords.esp");
-                    Assert.Single(Assert.Single(Descendants<DataGrid>(page)).Items);
-                    if (advanced) Assert.Contains(texts, box => box.Text == "Опис меча");
+                    switch (step)
+                    {
+                        case 0:
+                            Assert.Contains(texts, box => box.Text == @"C:\Mods\MySwords.esp");
+                            break;
+                        case 1:
+                            Assert.Single(Assert.Single(Descendants<DataGrid>(page)).Items);
+                            break;
+                        case 2:
+                            Assert.Contains(texts, box => box.Text == @"Weapons\Custom\blade.nif");
+                            Assert.Contains(texts, box => box.Text == "Custom");
+                            Assert.Contains(Descendants<TextBlock>(page), text => text.Text == "textures/Custom/blade.dds");
+                            break;
+                        case 3:
+                            Assert.Contains(texts, box => box.Text == "Крижаний меч");
+                            Assert.Contains(texts, box => box.Text == "Опис меча");
+                            if (width == 600) Assert.Contains(Descendants<TextBlock>(page), text => text.Text == vm.WeightError);
+                            break;
+                        case 4:
+                            Assert.Contains(Descendants<TextBlock>(page), text => text.Text == "7 → 20");
+                            Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.SaveWizardSwordCommand);
+                            Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.PackProjectCommand);
+                            break;
+                    }
                     var previewDirectory = Environment.GetEnvironmentVariable("SKYRIM_UI_PREVIEW_DIR");
                     if (!string.IsNullOrWhiteSpace(previewDirectory))
                     {
@@ -122,22 +161,8 @@ public class WeaponsPageTests
                         bitmap.Render(root);
                         var encoder = new PngBitmapEncoder();
                         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                        using var file = File.Create(Path.Combine(previewDirectory, $"weapons-{(advanced ? "advanced-" : creation ? "create-" : string.Empty)}{width}.png"));
-                        encoder.Save(file);
-                    }
-                    if (advanced && !string.IsNullOrWhiteSpace(previewDirectory))
-                    {
-                        root.Measure(new Size(width, 1000));
-                        root.Arrange(new Rect(0, 0, width, 1000));
-                        root.UpdateLayout();
-                        Descendants<ScrollViewer>(page).First().ScrollToEnd();
-                        Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
-                        root.UpdateLayout();
-                        var bitmap = new RenderTargetBitmap(width, 1000, 96, 96, PixelFormats.Pbgra32);
-                        bitmap.Render(root);
-                        var encoder = new PngBitmapEncoder();
-                        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                        using var file = File.Create(Path.Combine(previewDirectory, "weapons-advanced-bottom.png"));
+                        var zoomSuffix = scale == 1 ? "" : "-zoom130";
+                        using var file = File.Create(Path.Combine(previewDirectory, $"weapons-step{step}-{width}{zoomSuffix}.png"));
                         encoder.Save(file);
                     }
                 }
@@ -148,7 +173,7 @@ public class WeaponsPageTests
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await completion.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(60));
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject

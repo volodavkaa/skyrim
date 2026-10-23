@@ -44,7 +44,7 @@ public sealed class ValidateStep : IPackStep
 
         try
         {
-            if (context.Profile.EnableEsl)
+            if (context.Profile.EnableEsl || !string.IsNullOrWhiteSpace(context.Profile.WeaponProjectPath))
                 PluginWriteGuard.EnsureOutsideGame(outputDir, context.Settings.SkyrimDataPath);
             if (!Directory.Exists(outputDir))
             {
@@ -64,6 +64,16 @@ public sealed class ValidateStep : IPackStep
         var safeVersion = SanitizeFileName(context.Profile.Version);
         var archiveFileName = $"{safeModName}-{safeVersion}{_archiver.Extension}";
         var outputArchivePath = Path.Combine(outputDir, archiveFileName);
+
+        if (!string.IsNullOrWhiteSpace(context.Profile.WeaponProjectPath))
+        {
+            try { PluginWriteGuard.EnsureOutsideGame(outputArchivePath, context.Settings.SkyrimDataPath); }
+            catch (Exception ex)
+            {
+                context.Errors.Add($"Cannot write the project archive: {ex.Message}");
+                return Task.FromResult(false);
+            }
+        }
 
         // 4. Check if archive already exists
         if (File.Exists(outputArchivePath) && !context.Settings.OverwriteExistingArchive)

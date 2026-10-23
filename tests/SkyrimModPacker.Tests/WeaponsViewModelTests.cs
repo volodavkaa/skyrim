@@ -17,7 +17,7 @@ using Xunit;
 
 namespace SkyrimModPacker.Tests;
 
-public class WeaponsViewModelTests : IDisposable
+public partial class WeaponsViewModelTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "WeaponsViewModelTests", Guid.NewGuid().ToString("N"));
     private readonly ISettingsRepository _settings = Substitute.For<ISettingsRepository>();
@@ -46,7 +46,7 @@ public class WeaponsViewModelTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private WeaponsViewModel CreateViewModel() => new(_builder, _settings, _profiles)
+    private WeaponsViewModel CreateViewModel() => new(_builder, _settings, _profiles, new WeaponProjectService(_builder))
     {
         PluginName = "Swords", OutputDirectory = Path.Combine(_root, "plugins")
     };
@@ -60,6 +60,92 @@ public class WeaponsViewModelTests : IDisposable
         await vm.LoadTemplatesCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         return vm;
+    }
+
+    [Fact]
+    public async Task Screen_InitializesVanillaTemplatesAutomatically_AndKeepsDraftOnReturn()
+    {
+        var original = await File.ReadAllBytesAsync(Path.Combine(DataPath, "Skyrim.esm"));
+        var vm = CreateViewModel();
+        await vm.InitializeCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.True(vm.IsBaseConnected);
+        Assert.Equal("IronSword", Assert.Single(vm.Templates).EditorId);
+        Assert.NotNull(vm.SelectedTemplate);
+        vm.WeaponName = "My unsaved sword";
+        vm.Damage = "42";
+        var templates = vm.Templates;
+        await vm.InitializeCommand.ExecuteAsync(null);
+        Assert.Same(templates, vm.Templates);
+        Assert.Equal("My unsaved sword", vm.WeaponName);
+        Assert.Equal("42", vm.Damage);
+        Assert.Equal(original, await File.ReadAllBytesAsync(Path.Combine(DataPath, "Skyrim.esm")));
+    }
+
+    [Fact]
+    public async Task Screen_MissingBaseCanBeConnectedFromEditor_PreservingOtherSettings()
+    {
+        var stored = new AppSettings { OutputDirectory = "KeepThisOutput", Language = "uk", Theme = "Light", UseTempDirectory = false };
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
+        var vm = CreateViewModel();
+        await vm.InitializeCommand.ExecuteAsync(null);
+        Assert.False(vm.IsBaseConnected);
+        Assert.Contains("Skyrim.esm", vm.ErrorMessage);
+        Assert.Empty(vm.FilteredTemplates);
+        await vm.ChooseGameDataCommand.ExecuteAsync(DataPath);
+        Assert.Null(vm.ErrorMessage);
+        Assert.True(vm.IsBaseConnected);
+        Assert.Single(vm.FilteredTemplates);
+        await _settings.Received(1).SaveAsync(Arg.Is<AppSettings>(s =>
+            s.SkyrimDataPath == DataPath && s.OutputDirectory == "KeepThisOutput" &&
+            s.Language == "uk" && s.Theme == "Light" && !s.UseTempDirectory), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Screen_InvalidFolderDoesNotReplaceSavedGamePath()
+    {
+        var vm = CreateViewModel();
+        await vm.InitializeCommand.ExecuteAsync(null);
+        await vm.ChooseGameDataCommand.ExecuteAsync(_root);
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.True(vm.IsBaseConnected);
+        Assert.Equal(DataPath, vm.GameDataPath);
+        await _settings.DidNotReceiveWithAnyArgs().SaveAsync(default!, default);
+    }
+
+    [Theory]
+    [InlineData("iron sword", 1)]
+    [InlineData("IRONSWORD", 1)]
+    [InlineData("  iron  ", 1)]
+    [InlineData("missing sword", 0)]
+    public async Task Screen_SearchesTemplatesByNameOrEditorId(string query, int count)
+    {
+        var vm = CreateViewModel();
+        await vm.InitializeCommand.ExecuteAsync(null);
+        vm.TemplateSearch = query;
+        Assert.Equal(count, vm.FilteredTemplates.Count);
+        Assert.Single(vm.Templates);
+        vm.TemplateSearch = string.Empty;
+        Assert.Single(vm.FilteredTemplates);
+    }
+
+    [Fact]
+    public async Task Screen_ChangedGamePathClearsPreviousBase_AndCanRetry()
+    {
+        var stored = new AppSettings { SkyrimDataPath = DataPath };
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
+        var vm = CreateViewModel();
+        await vm.InitializeCommand.ExecuteAsync(null);
+        Assert.True(vm.IsBaseConnected);
+        stored.SkyrimDataPath = Path.Combine(_root, "MissingGame", "Data");
+        await vm.InitializeCommand.ExecuteAsync(null);
+        Assert.False(vm.IsBaseConnected);
+        Assert.Empty(vm.Templates);
+        Assert.Empty(vm.FilteredTemplates);
+        Assert.Null(vm.SelectedTemplate);
+        await vm.ChooseGameDataCommand.ExecuteAsync(DataPath);
+        Assert.Null(vm.ErrorMessage);
+        Assert.True(vm.IsBaseConnected);
     }
 
     [Theory]
@@ -133,6 +219,100 @@ public class WeaponsViewModelTests : IDisposable
         Assert.Empty(vm.Weapons);
         Assert.Equal(original, await File.ReadAllBytesAsync(vm.PluginPath));
         Assert.False(File.Exists(vm.PluginPath + ".bak"));
+    }
+
+    [Fact]
+    public async Task Screen_ImportsModelAndTextures_SavesPath_ReopensAndBlocksMissingImportedModel()
+    {
+        var vm = await PrepareAsync();
+        var sourceDirectory = Path.Combine(_root, "source-assets");
+        Directory.CreateDirectory(sourceDirectory);
+        var nif = Path.Combine(sourceDirectory, "blade.nif");
+        var dds = Path.Combine(sourceDirectory, "blade.dds");
+        await File.WriteAllTextAsync(nif, "model fixture");
+        await File.WriteAllTextAsync(dds, "texture fixture");
+        await vm.ImportModelCommand.ExecuteAsync(nif);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(@"Swords\blade.nif", vm.ModelPath);
+        Assert.Single(vm.ProjectResources);
+        vm.TextureSubdirectory = "Custom";
+        await vm.ImportTexturesCommand.ExecuteAsync(new[] { dds });
+        Assert.Null(vm.ErrorMessage);
+        Assert.Contains("textures/Custom/blade.dds", vm.ProjectResources);
+        await vm.CheckResourcesCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.NotNull(vm.ResourceStatus);
+        await vm.CloneSwordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.Equal(@"Swords\blade.nif", Assert.Single(vm.Weapons).Details.ModelPath);
+        var reopened = CreateViewModel();
+        await reopened.OpenProjectCommand.ExecuteAsync(vm.ProjectFilePath);
+        Assert.Null(reopened.ErrorMessage);
+        Assert.Equal(2, reopened.ProjectResources.Count);
+        Assert.Equal(vm.ModelPath, reopened.ModelPath);
+        var pluginBefore = await File.ReadAllBytesAsync(vm.PluginPath);
+        File.Delete(Path.Combine(Path.GetDirectoryName(vm.PluginPath)!, "meshes", vm.ModelPath));
+        reopened.WeaponName = "Must not save";
+        await reopened.SaveSwordCommand.ExecuteAsync(null);
+        Assert.NotNull(reopened.ErrorMessage);
+        Assert.Equal(pluginBefore, await File.ReadAllBytesAsync(vm.PluginPath));
+        await reopened.CheckResourcesCommand.ExecuteAsync(null);
+        Assert.NotNull(reopened.ErrorMessage);
+        Assert.Null(reopened.ResourceStatus);
+        Assert.Equal("model fixture", await File.ReadAllTextAsync(nif));
+        Assert.Equal("texture fixture", await File.ReadAllTextAsync(dds));
+    }
+
+    [Fact]
+    public async Task Screen_LoosePluginCannotImportWithoutProject()
+    {
+        var vm = await PrepareAsync();
+        await vm.OpenPluginCommand.ExecuteAsync(vm.PluginPath);
+        var source = Path.Combine(_root, "blade.nif");
+        await File.WriteAllTextAsync(source, "fixture");
+        await vm.ImportModelCommand.ExecuteAsync(source);
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.Empty(vm.ProjectResources);
+        Assert.Empty(vm.ProjectFilePath);
+    }
+
+    [Fact]
+    public async Task Screen_ReopensProjectAndImportsGamePlugin_WithoutChangingSource()
+    {
+        var vm = await PrepareAsync();
+        await vm.CloneSwordCommand.ExecuteAsync(null);
+        Assert.Null(vm.ErrorMessage);
+        Assert.True(File.Exists(vm.ProjectFilePath));
+        var opened = CreateViewModel();
+        await opened.OpenProjectCommand.ExecuteAsync(vm.ProjectFilePath);
+        Assert.Null(opened.ErrorMessage);
+        Assert.Equal(vm.PluginPath, opened.PluginPath);
+        Assert.Equal(vm.ProjectFilePath, opened.ProjectFilePath);
+        Assert.Single(opened.Weapons);
+        var source = Path.Combine(DataPath, "Installed.esp");
+        File.Copy(vm.PluginPath, source);
+        var original = await File.ReadAllBytesAsync(source);
+        await opened.OpenPluginCommand.ExecuteAsync(source);
+        Assert.NotNull(opened.ErrorMessage);
+        Assert.Equal(vm.PluginPath, opened.PluginPath);
+        await opened.ImportProjectCommand.ExecuteAsync(source);
+        Assert.Null(opened.ErrorMessage);
+        Assert.Equal("Installed.esp", Path.GetFileName(opened.PluginPath));
+        Assert.Single(opened.Weapons);
+        Assert.True(File.Exists(opened.ProjectFilePath));
+        opened.WeaponName = "Edited working copy";
+        await opened.SaveSwordCommand.ExecuteAsync(null);
+        Assert.Null(opened.ErrorMessage);
+        Assert.Equal(original, await File.ReadAllBytesAsync(source));
+        await opened.OpenProjectCommand.ExecuteAsync(Path.Combine(_root, "missing-project.json"));
+        Assert.NotNull(opened.ErrorMessage);
+        Assert.Equal("Edited working copy", opened.SelectedWeapon!.Name);
+        await opened.CreatePackingProfileCommand.ExecuteAsync(null);
+        Assert.Null(opened.ErrorMessage);
+        Assert.Equal(opened.PluginPath, Assert.Single(await _profiles.LoadAllAsync()).PluginSourcePath);
+        await opened.OpenPluginCommand.ExecuteAsync(vm.PluginPath);
+        Assert.Null(opened.ErrorMessage);
+        Assert.Empty(opened.ProjectFilePath);
     }
 
     [Fact]
@@ -211,7 +391,7 @@ public class WeaponsViewModelTests : IDisposable
             await Task.Delay(Timeout.Infinite, call.ArgAt<CancellationToken>(1));
             return Result<IReadOnlyList<SwordTemplate>>.Success([]);
         });
-        var vm = new WeaponsViewModel(builder, _settings, _profiles);
+        var vm = new WeaponsViewModel(builder, _settings, _profiles, new WeaponProjectService(builder));
         var loading = vm.LoadTemplatesCommand.ExecuteAsync(null);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(vm.IsLoading);

@@ -1,6 +1,7 @@
 using SkyrimModPacker.UI.ViewModels;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
+using System.Windows;
 
 namespace SkyrimModPacker.UI.Views;
 
@@ -23,5 +24,13 @@ public partial class MainWindow : FluentWindow
 
         // Connect WPF-UI's navigation service to the NavigationView control
         navigationService.SetNavigationControl(RootNavigation);
+    }
+
+    private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (RootNavigation == null) return;
+        RootNavigation.PaneDisplayMode = ActualWidth < 1000
+            ? NavigationViewPaneDisplayMode.LeftMinimal
+            : NavigationViewPaneDisplayMode.Left;
     }
 }

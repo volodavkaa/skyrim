@@ -156,6 +156,8 @@
                         <StackPanel Margin="0,0,0,14">
                             <TextBlock Text="{DynamicResource Profiles_PluginSourcePath}" TextWrapping="Wrap" FontWeight="Medium" Margin="0,0,0,6" />
                             <ui:TextBox Text="{Binding PluginSourcePath, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{DynamicResource Profiles_WeaponProjectPath}" TextWrapping="Wrap" FontWeight="Medium" Margin="0,12,0,6" />
+                            <ui:TextBox Text="{Binding WeaponProjectPath, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                         <StackPanel Margin="0,0,0,14">
                             <TextBlock Text="{DynamicResource Profiles_KeywordsTitle}" FontWeight="Medium" Margin="0,0,0,4" />
