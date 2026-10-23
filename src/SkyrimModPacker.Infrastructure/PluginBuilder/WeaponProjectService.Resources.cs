@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Common;
+using SkyrimModPacker.Infrastructure.Persistence;
 
 namespace SkyrimModPacker.Infrastructure.PluginBuilder;
 
@@ -8,11 +10,14 @@ public sealed partial class WeaponProjectService
     public Task<Result<string>> ImportModelAsync(string projectFilePath, string sourcePath, string gameDataPath, CancellationToken cancellationToken = default) =>
         RunAsync(async () =>
         {
+            PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
+            using var lease = await WorkspaceFileGate.AcquireAsync(projectFilePath, cancellationToken);
+            var original = new WorkspaceFileSnapshot(projectFilePath);
             var (folder, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             RequireSourceFile(sourcePath, ".nif");
             var relative = RelativeToAssetRoot(sourcePath, "meshes") ?? Path.Combine(document.Name, Path.GetFileName(sourcePath));
             var resource = NormalizeResource("meshes/" + relative.Replace('\\', '/'));
-            await CopyResourcesAsync(projectFilePath, folder, document, [(sourcePath, resource)], gameDataPath, cancellationToken);
+            await CopyResourcesAsync(projectFilePath, folder, document, [(sourcePath, resource)], gameDataPath, original, cancellationToken);
             return resource["meshes/".Length..].Replace('/', '\\');
         }, cancellationToken);
 
@@ -20,12 +25,15 @@ public sealed partial class WeaponProjectService
         string gameDataPath, string targetSubdirectory = "", CancellationToken cancellationToken = default) =>
         RunAsync<IReadOnlyList<string>>(async () =>
         {
+            PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
+            using var lease = await WorkspaceFileGate.AcquireAsync(projectFilePath, cancellationToken);
+            var original = new WorkspaceFileSnapshot(projectFilePath);
             var (folder, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             // Validate even an unused destination, so absolute and traversing paths never pass silently.
             if (!string.IsNullOrWhiteSpace(targetSubdirectory)) ValidateResourcePath("textures/" + targetSubdirectory.Replace('\\', '/') + "/check.dds");
             var files = await Task.Run(() => CollectTextures(sourcePaths, targetSubdirectory, cancellationToken), cancellationToken);
             if (files.Count == 0) throw new InvalidOperationException("No DDS textures were selected.");
-            await CopyResourcesAsync(projectFilePath, folder, document, files, gameDataPath, cancellationToken);
+            await CopyResourcesAsync(projectFilePath, folder, document, files, gameDataPath, original, cancellationToken);
             return files.Select(f => f.Relative).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }, cancellationToken);
 
@@ -96,6 +104,7 @@ public sealed partial class WeaponProjectService
 
     private static void RequireSourceFile(string path, string extension)
     {
+        PackingPathGuard.EnsureNoLinks(path);
         if (!Path.IsPathFullyQualified(path) || !File.Exists(path) || !Path.GetExtension(path).Equals(extension, StringComparison.OrdinalIgnoreCase) || new FileInfo(path).Length == 0)
             throw new InvalidOperationException($"Select an existing non-empty {extension} file using an absolute path.");
     }
@@ -162,8 +171,8 @@ public sealed partial class WeaponProjectService
         return (folder, document);
     }
 
-    private static async Task CopyResourcesAsync(string projectFilePath, string folder, ProjectDocument document,
-        IReadOnlyList<(string Source, string Relative)> files, string gameDataPath, CancellationToken token)
+    private async Task CopyResourcesAsync(string projectFilePath, string folder, ProjectDocument document,
+        IReadOnlyList<(string Source, string Relative)> files, string gameDataPath, WorkspaceFileSnapshot original, CancellationToken token)
     {
         var pending = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (source, relative) in files)
@@ -179,7 +188,7 @@ public sealed partial class WeaponProjectService
         PluginWriteGuard.EnsureOutsideGame(stage, gameDataPath);
         var created = new List<string>();
         var directories = new List<string>();
-        var metadataTemp = projectFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        Exception? failure = null;
         try
         {
             Directory.CreateDirectory(stage);
@@ -192,7 +201,11 @@ public sealed partial class WeaponProjectService
                 var temp = Path.Combine(stage, staged.Count.ToString());
                 await using (var input = File.OpenRead(source))
                 await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
                     await input.CopyToAsync(output, token);
+                    await output.FlushAsync(token);
+                    output.Flush(flushToDisk: true);
+                }
                 if (new FileInfo(temp).Length == 0) throw new IOException("An imported resource is empty: " + relative);
                 staged.Add((temp, target));
             }
@@ -207,33 +220,49 @@ public sealed partial class WeaponProjectService
                 created.Add(target);
             }
             document.Resources = document.Resources.Concat(pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
-            PluginWriteGuard.EnsureOutsideGame(metadataTemp, gameDataPath);
-            await File.WriteAllTextAsync(metadataTemp, JsonSerializer.Serialize(document, JsonOptions), token);
             token.ThrowIfCancellationRequested();
+            PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
             PluginWriteGuard.EnsureOutsideGame(projectFilePath + ".bak", gameDataPath);
-            File.Copy(projectFilePath, projectFilePath + ".bak", overwrite: true);
-            File.Move(metadataTemp, projectFilePath, overwrite: true);
+            original.EnsureUnchanged();
+            var metadata = new AtomicJsonFile<ProjectDocument>(projectFilePath, () => new ProjectDocument(), JsonOptions, logger);
+            await metadata.WriteUnderLeaseAsync(document, token, original.EnsureUnchanged);
         }
-        catch
+        catch (Exception ex)
         {
-            foreach (var path in created) { PluginWriteGuard.EnsureOutsideGame(path, gameDataPath); File.Delete(path); }
+            failure = ex;
+            foreach (var path in created)
+                Cleanup(() => { PluginWriteGuard.EnsureOutsideGame(path, gameDataPath); File.Delete(path); }, path);
             foreach (var directory in directories.AsEnumerable().Reverse())
-                if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                Cleanup(() =>
                 {
-                    PluginWriteGuard.EnsureOutsideGame(directory, gameDataPath);
-                    Directory.Delete(directory);
-                }
+                    if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                    {
+                        PluginWriteGuard.EnsureOutsideGame(directory, gameDataPath);
+                        Directory.Delete(directory);
+                    }
+                }, directory);
             throw;
         }
         finally
         {
-            if (File.Exists(metadataTemp)) File.Delete(metadataTemp);
             // Delete only direct temporary files in the unique directory created by this operation.
-            if (Directory.Exists(stage))
+            Cleanup(() =>
             {
+                if (!Directory.Exists(stage)) return;
                 PluginWriteGuard.EnsureOutsideGame(stage, gameDataPath);
                 foreach (var file in Directory.EnumerateFiles(stage)) File.Delete(file);
                 Directory.Delete(stage);
+            }, stage);
+        }
+
+        void Cleanup(Action action, string path)
+        {
+            try { action(); }
+            catch (Exception cleanupError)
+            {
+                logger?.LogWarning(cleanupError, "Resource operation cleanup failed for {Path}", path);
+                if (failure != null) failure.Data["ResourceCleanupFailure:" + path] = cleanupError.Message;
+                else if (logger == null) throw;
             }
         }
     }

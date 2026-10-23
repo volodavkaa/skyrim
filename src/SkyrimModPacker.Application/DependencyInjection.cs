@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddSingleton<IPackStep, ScanStep>();
         services.AddSingleton<IPackStep, FilterStep>();
         services.AddSingleton<IPackStep, ValidateStep>();
+        services.AddSingleton<IPackStep, PluginValidationStep>();
         services.AddSingleton<IPackStep, CopyStep>();
         services.AddSingleton<IPackStep, EslFlagStep>();
         services.AddSingleton<IPackStep, ArchiveStep>();

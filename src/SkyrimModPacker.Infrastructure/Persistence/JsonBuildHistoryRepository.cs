@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
 
@@ -15,42 +17,25 @@ public sealed class JsonBuildHistoryRepository : IBuildHistoryRepository
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly string _filePath;
+    private readonly AtomicJsonFile<List<BuildRecord>> _file;
 
-    public JsonBuildHistoryRepository(string appDataDirectory)
+    public JsonBuildHistoryRepository(string appDataDirectory, ILogger<JsonBuildHistoryRepository>? logger = null)
     {
+        appDataDirectory = Path.GetFullPath(appDataDirectory);
+        PackingPathGuard.EnsureNoLinks(appDataDirectory);
         Directory.CreateDirectory(appDataDirectory);
-        _filePath = Path.Combine(appDataDirectory, "build_history.json");
+        _file = new AtomicJsonFile<List<BuildRecord>>(Path.Combine(appDataDirectory, "build_history.json"), () => [], JsonOptions, logger);
     }
 
     /// <inheritdoc />
-    public async Task<List<BuildRecord>> LoadAllAsync(CancellationToken cancellationToken = default)
-    {
-        if (!File.Exists(_filePath))
-            return [];
-
-        await using var stream = File.OpenRead(_filePath);
-        return await JsonSerializer.DeserializeAsync<List<BuildRecord>>(stream, JsonOptions, cancellationToken)
-               ?? [];
-    }
+    public Task<List<BuildRecord>> LoadAllAsync(CancellationToken cancellationToken = default) =>
+        _file.LoadAsync(token: cancellationToken);
 
     /// <inheritdoc />
-    public async Task AddAsync(BuildRecord record, CancellationToken cancellationToken = default)
-    {
-        var records = await LoadAllAsync(cancellationToken);
-        records.Add(record);
-        await WriteAllAsync(records, cancellationToken);
-    }
+    public Task AddAsync(BuildRecord record, CancellationToken cancellationToken = default) =>
+        _file.UpdateAsync(records => { records.Add(record); return records; }, cancellationToken);
 
     /// <inheritdoc />
-    public async Task ClearAsync(CancellationToken cancellationToken = default)
-    {
-        await WriteAllAsync([], cancellationToken);
-    }
-
-    private async Task WriteAllAsync(List<BuildRecord> records, CancellationToken cancellationToken)
-    {
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, records, JsonOptions, cancellationToken);
-    }
+    public Task ClearAsync(CancellationToken cancellationToken = default) =>
+        _file.UpdateAsync(_ => [], cancellationToken);
 }

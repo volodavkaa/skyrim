@@ -207,20 +207,8 @@ public class PackingPipelineTests : IDisposable
         var normalMap = scannedFiles.First(f => f.RelativePath.Contains("blade_n.dds"));
         normalMap.IsSelected = false;
 
-        // Run pipeline with pre-populated files
-        var context = new PackingContext
-        {
-            Profile = profile,
-            Settings = settings,
-            ScannedFiles = scannedFiles
-        };
-
-        var stepList = steps.OrderBy(s => s.Order).ToList();
-        foreach (var step in stepList)
-        {
-            var ok = await step.ExecuteAsync(context);
-            Assert.True(ok);
-        }
+        // Exercise selection through the public pipeline entry point.
+        var context = await pipeline.ExecuteAsync(profile, settings, fileSelection: scannedFiles);
 
         Assert.True(context.IsSuccess);
 

@@ -12,6 +12,8 @@ public sealed partial class WeaponsViewModel
 {
     [ObservableProperty] private string? _lastProjectArchivePath;
     [ObservableProperty] private bool _enableProjectEsl;
+    [ObservableProperty] private ObservableCollection<PluginDiagnostic> _pluginDiagnostics = [];
+    partial void OnPluginPathChanged(string value) => PluginDiagnostics = [];
 
     partial void OnSelectedPackingProfileChanged(ModProfile? value) => EnableProjectEsl = value?.EnableEsl ?? false;
 
@@ -27,6 +29,7 @@ public sealed partial class WeaponsViewModel
     [RelayCommand]
     private Task PackProjectAsync() => RunOperationAsync(async token =>
     {
+        PluginDiagnostics = [];
         LastProjectArchivePath = null;
         RequireProject();
         RequirePlugin();
@@ -53,8 +56,11 @@ public sealed partial class WeaponsViewModel
         PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
         SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == profile.Id);
         var result = await _packingPipeline.ExecuteAsync(profile, settings, cancellationToken: token);
+        PluginDiagnostics = new ObservableCollection<PluginDiagnostic>(result.PluginDiagnostics);
         if (!result.IsSuccess) throw new InvalidOperationException(string.Join(Environment.NewLine, result.Errors));
         LastProjectArchivePath = result.OutputArchivePath;
         StatusMessage = Text("Weapons_ProjectPacked", "Project archive created, including the plugin and registered resources.");
+        if (result.Warnings.Count > 0)
+            StatusMessage += Environment.NewLine + string.Join(Environment.NewLine, result.Warnings);
     });
 }

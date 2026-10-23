@@ -22,18 +22,18 @@ public sealed class EslFlagStep : IPackStep
 
     public async Task<bool> ExecuteAsync(PackingContext context, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!context.Profile.EnableEsl)
-            return true;
-
         var completed = false;
-        var ownsStagingDirectory = false;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!context.Profile.EnableEsl)
+            {
+                completed = true;
+                return true;
+            }
             if (string.IsNullOrEmpty(context.StagingDirectory) || !Directory.Exists(context.StagingDirectory))
                 throw new InvalidOperationException("ESL flagging requires a staging directory.");
-            PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
-            ownsStagingDirectory = true;
+            context.EnsureOwnsStagingDirectory();
 
             var plugins = context.SelectedFiles.Where(f => f.Category == FileCategory.Plugin).ToList();
             if (plugins.Count == 0)
@@ -69,14 +69,8 @@ public sealed class EslFlagStep : IPackStep
         finally
         {
             // ArchiveStep is not reached after failure or cancellation, so release our staged copies here.
-            if (!completed && ownsStagingDirectory && !string.IsNullOrEmpty(context.StagingDirectory))
-            {
-                try
-                {
-                    PackingPathGuard.DeleteStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
-                }
-                catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean ESL staging directory"); }
-            }
+            if (!completed && !context.TryCleanupStaging())
+                _logger?.LogWarning("{Warning}", context.Warnings.Last());
         }
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Infrastructure.Logging;
 using SkyrimModPacker.Infrastructure.Persistence;
@@ -15,14 +16,15 @@ public static class DependencyInjection
         string appDataDirectory,
         InMemoryLogSink? inMemoryLogSink = null)
     {
-        services.AddSingleton<IProfileRepository>(new JsonProfileRepository(appDataDirectory));
-        services.AddSingleton<ISettingsRepository>(new JsonSettingsRepository(appDataDirectory));
-        services.AddSingleton<IBuildHistoryRepository>(new JsonBuildHistoryRepository(appDataDirectory));
+        services.AddSingleton<IProfileRepository>(provider => new JsonProfileRepository(appDataDirectory, provider.GetService<ILogger<JsonProfileRepository>>()));
+        services.AddSingleton<ISettingsRepository>(provider => new JsonSettingsRepository(appDataDirectory, provider.GetService<ILogger<JsonSettingsRepository>>()));
+        services.AddSingleton<IBuildHistoryRepository>(provider => new JsonBuildHistoryRepository(appDataDirectory, provider.GetService<ILogger<JsonBuildHistoryRepository>>()));
         services.AddSingleton<FileSystem.ModScanner>();
         services.AddSingleton<IModScanner, FileSystem.ProfileModScanner>();
         services.AddSingleton<ISkyrimLocator, Services.SkyrimLocator>();
         services.AddSingleton<IArchiver, Archivers.ZipArchiver>();
         services.AddSingleton<IEslService, Esl.EslService>();
+        services.AddSingleton<IPluginValidationService, PluginBuilder.PluginValidationService>();
         services.AddSingleton<IPluginBuilderService, PluginBuilder.PluginBuilderService>();
         services.AddSingleton<IWeaponProjectService, PluginBuilder.WeaponProjectService>();
 

@@ -3,9 +3,10 @@ using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models.Esl;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using System.Buffers.Binary;
 using Mutagen.Bethesda.Skyrim;
 using Microsoft.Extensions.Logging;
+using SkyrimModPacker.Infrastructure.PluginBuilder;
 
 namespace SkyrimModPacker.Infrastructure.Esl;
 
@@ -22,7 +23,6 @@ public sealed class EslService : IEslService
     public async Task<Result<string>> SetFlagAsync(string pluginPath, string gameDataPath, string? backupPath = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string? temporaryDirectory = null;
         try
         {
             PluginWriteGuard.EnsureOutsideGame(pluginPath, gameDataPath);
@@ -31,6 +31,8 @@ public sealed class EslService : IEslService
             if (Path.GetFullPath(pluginPath).Equals(backupPath, StringComparison.OrdinalIgnoreCase))
                 return Result<string>.Failure("The backup must be a different file.");
 
+            using var transaction = await PluginFileTransaction.AcquireAsync(pluginPath, gameDataPath, cancellationToken).ConfigureAwait(false);
+            // Analyze only after acquiring the same destination lock used by the editor.
             var analysis = await AnalyzeAsync(pluginPath, cancellationToken);
             if (analysis.IsFailure)
                 return Result<string>.Failure(analysis.Error);
@@ -42,21 +44,22 @@ public sealed class EslService : IEslService
             return await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var mod = SkyrimMod.CreateFromBinary(pluginPath, SkyrimRelease.SkyrimSE);
+                var mod = SkyrimMod.Create(SkyrimRelease.SkyrimSE).FromPath(pluginPath).WithUtf8Encoding().Mutable().Construct();
                 mod.IsSmallMaster = true;
-                temporaryDirectory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(pluginPath))!, ".esl-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(temporaryDirectory);
-                var temporaryPath = Path.Combine(temporaryDirectory, Path.GetFileName(pluginPath));
-                mod.WriteToBinary(temporaryPath, new BinaryWriteParameters
+                transaction.Write(mod, temporaryPath =>
                 {
-                    FormIDCompaction = FormIDCompactionOption.NoCheck
-                });
-                cancellationToken.ThrowIfCancellationRequested();
-                Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                // Refuse to overwrite an earlier backup. The pipeline supplies a unique path per build.
-                File.Copy(pluginPath, backupPath, overwrite: false);
-                cancellationToken.ThrowIfCancellationRequested();
-                File.Move(temporaryPath, pluginPath, overwrite: true);
+                    // Set only TES4's ESL bit, preserving string encodings, localized string IDs,
+                    // record bytes, master order and NextFormID exactly. Mutagen verifies the copy afterwards.
+                    File.Copy(pluginPath, temporaryPath, overwrite: false);
+                    using var stream = new FileStream(temporaryPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                    Span<byte> header = stackalloc byte[12];
+                    stream.ReadExactly(header);
+                    if (!header[..4].SequenceEqual("TES4"u8)) throw new IOException("The plugin has no TES4 header.");
+                    var flags = BinaryPrimitives.ReadUInt32LittleEndian(header[8..]) | 0x200u;
+                    BinaryPrimitives.WriteUInt32LittleEndian(header[8..], flags);
+                    stream.Position = 8;
+                    stream.Write(header[8..]);
+                }, backupPath, replace: true, replaceBackup: false, cancellationToken, _logger);
                 _logger?.LogInformation("ESL flag set on {Plugin}; backup: {Backup}", pluginPath, backupPath);
                 return Result<string>.Success(backupPath);
             }, cancellationToken);
@@ -65,14 +68,6 @@ public sealed class EslService : IEslService
         {
             _logger?.LogError(ex, "Failed to set ESL flag on {Plugin}", pluginPath);
             return Result<string>.Failure($"Unable to set ESL flag: {ex.Message}");
-        }
-        finally
-        {
-            if (temporaryDirectory != null && Directory.Exists(temporaryDirectory))
-            {
-                try { Directory.Delete(temporaryDirectory, recursive: true); }
-                catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean ESL temporary directory"); }
-            }
         }
     }
 

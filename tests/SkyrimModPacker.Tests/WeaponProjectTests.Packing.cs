@@ -1,3 +1,4 @@
+using Mutagen.Bethesda.Plugins;
 using System.IO.Compression;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda.Skyrim;
@@ -196,7 +197,7 @@ public partial class WeaponProjectTests
     }
 
     [Fact]
-    public async Task LegacyJsonProfile_StillScansDataAndPacks_OpaquePluginAndAssets()
+    public async Task LegacyJsonProfile_StillScansDataAndPacks_ValidPluginAndAssets()
     {
         var appdata = Path.Combine(_root, "oldprofiles");
         Directory.CreateDirectory(appdata);
@@ -205,7 +206,8 @@ public partial class WeaponProjectTests
             """);
         var profile = Assert.Single(await new JsonProfileRepository(appdata).LoadAllAsync());
         Assert.Empty(profile.WeaponProjectPath);
-        await File.WriteAllTextAsync(Path.Combine(Data, "Legacy.esp"), "legacy plugin fixture");
+        new SkyrimMod(ModKey.FromNameAndExtension("Legacy.esp"), SkyrimRelease.SkyrimSE)
+            .WriteToBinary(Path.Combine(Data, "Legacy.esp"));
         Directory.CreateDirectory(Path.Combine(Data, "meshes"));
         await File.WriteAllTextAsync(Path.Combine(Data, "meshes", "Legacy.nif"), "legacy model");
         using var provider = PackingProvider();

@@ -209,6 +209,25 @@ public sealed class BuildSelectionTests : IDisposable
     }
 
     [Fact]
+    public async Task PackCommand_FailedRetry_ClearsPreviousSuccessNotificationAndArchiveLink()
+    {
+        var vm = ViewModel(useTemp: false);
+        await vm.ScanCommand.ExecuteAsync(null);
+        await vm.PackCommand.ExecuteAsync(null);
+        Assert.True(vm.HasSuccessNotification);
+        var archive = vm.LastArchiveCreatedPath!;
+        var before = await File.ReadAllBytesAsync(archive);
+        vm.DeselectAllCommand.Execute(null);
+
+        await vm.PackCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.False(vm.HasSuccessNotification);
+        Assert.Null(vm.LastArchiveCreatedPath);
+        Assert.Equal(before, await File.ReadAllBytesAsync(archive));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_EmptySelection_DoesNotFallBackToAllFiles()
     {
         var result = await Pipeline().ExecuteAsync(_profile, Settings(useTemp: false), fileSelection: []);

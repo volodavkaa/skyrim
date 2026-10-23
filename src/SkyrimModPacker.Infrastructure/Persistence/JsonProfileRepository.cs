@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
 
@@ -15,54 +17,39 @@ public sealed class JsonProfileRepository : IProfileRepository
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly string _filePath;
+    private readonly AtomicJsonFile<List<ModProfile>> _file;
 
-    public JsonProfileRepository(string appDataDirectory)
+    public JsonProfileRepository(string appDataDirectory, ILogger<JsonProfileRepository>? logger = null)
     {
+        appDataDirectory = Path.GetFullPath(appDataDirectory);
+        PackingPathGuard.EnsureNoLinks(appDataDirectory);
         Directory.CreateDirectory(appDataDirectory);
-        _filePath = Path.Combine(appDataDirectory, "profiles.json");
+        _file = new AtomicJsonFile<List<ModProfile>>(Path.Combine(appDataDirectory, "profiles.json"), () => [], JsonOptions, logger);
     }
 
     /// <inheritdoc />
-    public async Task<List<ModProfile>> LoadAllAsync(CancellationToken cancellationToken = default)
-    {
-        if (!File.Exists(_filePath))
-            return [];
-
-        await using var stream = File.OpenRead(_filePath);
-        return await JsonSerializer.DeserializeAsync<List<ModProfile>>(stream, JsonOptions, cancellationToken)
-               ?? [];
-    }
+    public Task<List<ModProfile>> LoadAllAsync(CancellationToken cancellationToken = default) =>
+        _file.LoadAsync(token: cancellationToken);
 
     /// <inheritdoc />
-    public async Task SaveAsync(ModProfile profile, CancellationToken cancellationToken = default)
-    {
-        var profiles = await LoadAllAsync(cancellationToken);
-        var existing = profiles.FindIndex(p => p.Id == profile.Id);
-        if (existing >= 0)
+    public Task SaveAsync(ModProfile profile, CancellationToken cancellationToken = default) =>
+        _file.UpdateAsync(profiles =>
         {
-            profile.ModifiedAt = DateTime.UtcNow;
-            profiles[existing] = profile;
-        }
-        else
-        {
-            profiles.Add(profile);
-        }
+            var existing = profiles.FindIndex(p => p.Id == profile.Id);
+            if (existing >= 0)
+            {
+                profile.ModifiedAt = DateTime.UtcNow;
+                profiles[existing] = profile;
+            }
+            else
+            {
+                profiles.Add(profile);
+            }
 
-        await WriteAllAsync(profiles, cancellationToken);
-    }
+            return profiles;
+        }, cancellationToken);
 
     /// <inheritdoc />
-    public async Task DeleteAsync(Guid profileId, CancellationToken cancellationToken = default)
-    {
-        var profiles = await LoadAllAsync(cancellationToken);
-        profiles.RemoveAll(p => p.Id == profileId);
-        await WriteAllAsync(profiles, cancellationToken);
-    }
-
-    private async Task WriteAllAsync(List<ModProfile> profiles, CancellationToken cancellationToken)
-    {
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, profiles, JsonOptions, cancellationToken);
-    }
+    public Task DeleteAsync(Guid profileId, CancellationToken cancellationToken = default) =>
+        _file.UpdateAsync(profiles => { profiles.RemoveAll(p => p.Id == profileId); return profiles; }, cancellationToken);
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models.PluginBuilder;
+using SkyrimModPacker.Infrastructure.Persistence;
 
 namespace SkyrimModPacker.Infrastructure.PluginBuilder;
 
@@ -105,10 +106,11 @@ public sealed partial class WeaponProjectService(IPluginBuilderService builder, 
             await writePlugin(stage, token);
             Directory.CreateDirectory(Path.Combine(stage, "meshes"));
             Directory.CreateDirectory(Path.Combine(stage, "textures"));
-            await File.WriteAllTextAsync(Path.Combine(stage, ProjectFileName), JsonSerializer.Serialize(new ProjectDocument
+            var metadata = new AtomicJsonFile<ProjectDocument>(Path.Combine(stage, ProjectFileName), () => new ProjectDocument(), JsonOptions);
+            await metadata.WriteUnderLeaseAsync(new ProjectDocument
             {
                 Name = name, PluginFileName = pluginName
-            }, JsonOptions), token);
+            }, token);
             token.ThrowIfCancellationRequested();
             PluginWriteGuard.EnsureOutsideGame(folder, gameDataPath);
             Directory.Move(stage, folder);

@@ -109,7 +109,7 @@ public class EslPackingTests : IDisposable
         var original = await File.ReadAllBytesAsync(setup.PluginPath);
         var result = await provider.GetRequiredService<PackingPipeline>().ExecuteAsync(setup.Profile, setup.Settings);
         Assert.False(result.IsSuccess);
-        Assert.Contains(result.Errors, e => e.Contains("1 own records") && e.Contains("outside"));
+        Assert.Contains(result.PluginDiagnostics, d => d.Code == "ESL_RANGE" && d.Severity == DiagnosticSeverity.Error);
         Assert.False(File.Exists(result.OutputArchivePath));
         Assert.False(Directory.Exists(result.OutputArchivePath + ".backups"));
         Assert.False(Directory.Exists(result.StagingDirectory));

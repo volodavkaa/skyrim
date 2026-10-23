@@ -219,4 +219,9 @@
     <system:String x:Key="Log_HistoryTab">Build History</system:String>
     <system:String x:Key="Log_Show">Show</system:String>
 
+    <system:String x:Key="Diagnostics_Title">Plugin validation</system:String>
+    <system:String x:Key="Diagnostics_Errors">Errors — packing blocked</system:String>
+    <system:String x:Key="Diagnostics_Warnings">Warnings</system:String>
+    <system:String x:Key="Diagnostics_Unsupported">Checks not supported</system:String>
+    <system:String x:Key="Diagnostics_Action">Recommended action</system:String>
 </ResourceDictionary>

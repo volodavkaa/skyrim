@@ -1,0 +1,34 @@
+<UserControl x:Class="SkyrimModPacker.UI.Controls.PluginDiagnosticsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
+        <DataTemplate x:Key="DiagnosticRow">
+            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FilePath}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Record}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" Margin="0,4,0,4" />
+                    <TextBlock Text="{DynamicResource Diagnostics_Action}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding RecommendedAction}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Expander x:Name="Panel" Header="{DynamicResource Diagnostics_Title}" Margin="0,0,0,12" Visibility="Collapsed" IsExpanded="True">
+        <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <Expander Header="{DynamicResource Diagnostics_Errors}" IsExpanded="True" Visibility="{Binding HasItems, ElementName=Errors, Converter={StaticResource VisibleWhenTrue}}">
+                    <ItemsControl x:Name="Errors" ItemTemplate="{StaticResource DiagnosticRow}" />
+                </Expander>
+                <Expander Header="{DynamicResource Diagnostics_Warnings}" IsExpanded="True" Visibility="{Binding HasItems, ElementName=Warnings, Converter={StaticResource VisibleWhenTrue}}">
+                    <ItemsControl x:Name="Warnings" ItemTemplate="{StaticResource DiagnosticRow}" />
+                </Expander>
+                <Expander Header="{DynamicResource Diagnostics_Unsupported}" IsExpanded="True" Visibility="{Binding HasItems, ElementName=Unsupported, Converter={StaticResource VisibleWhenTrue}}">
+                    <ItemsControl x:Name="Unsupported" ItemTemplate="{StaticResource DiagnosticRow}" />
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+    </Expander>
+</UserControl>

@@ -219,4 +219,9 @@
     <system:String x:Key="Log_HistoryTab">Історія збірок</system:String>
     <system:String x:Key="Log_Show">Показати</system:String>
 
+    <system:String x:Key="Diagnostics_Title">Перевірка плагінів</system:String>
+    <system:String x:Key="Diagnostics_Errors">Помилки — пакування заблоковано</system:String>
+    <system:String x:Key="Diagnostics_Warnings">Попередження</system:String>
+    <system:String x:Key="Diagnostics_Unsupported">Непідтримувані перевірки</system:String>
+    <system:String x:Key="Diagnostics_Action">Рекомендована дія</system:String>
 </ResourceDictionary>

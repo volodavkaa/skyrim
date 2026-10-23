@@ -23,27 +23,28 @@ public sealed class CopyStep : IPackStep
     /// <inheritdoc />
     public async Task<bool> ExecuteAsync(PackingContext context, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         var stagingDir = Path.Combine(
             Path.GetTempPath(),
             "SkyrimModPacker",
             "staging",
             Guid.NewGuid().ToString("N"));
 
+        var completed = false;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             PackingPathGuard.ValidateSources(context.SelectedFiles, context.Profile, context.Settings.SkyrimDataPath);
             if (!context.Settings.UseTempDirectory && !context.Profile.EnableEsl)
             {
                 _logger?.LogInformation("Direct packing mode selected. Staging directory skipped.");
                 context.StagingDirectory = null;
+                completed = true;
                 return true;
             }
 
             PackingPathGuard.EnsureStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
+            context.RegisterStagingDirectory(stagingDir);
             Directory.CreateDirectory(stagingDir);
-            context.StagingDirectory = stagingDir;
 
             _logger?.LogInformation("Copying {Count} files to staging directory '{StagingDir}'...",
                 context.SelectedFiles.Count, stagingDir);
@@ -73,16 +74,8 @@ public sealed class CopyStep : IPackStep
             }
 
             _logger?.LogInformation("All files successfully staged.");
+            completed = true;
             return true;
-        }
-        catch (OperationCanceledException) when (context.Profile.EnableEsl)
-        {
-            try
-            {
-                PackingPathGuard.DeleteStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
-            }
-            catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean cancelled ESL staging directory"); }
-            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -90,20 +83,12 @@ public sealed class CopyStep : IPackStep
             _logger?.LogError(ex, "{Message}", msg);
             context.Errors.Add(msg);
 
-            // Clean up staging on failure
-            try
-            {
-                if (Directory.Exists(stagingDir))
-                {
-                    PackingPathGuard.DeleteStagingDirectory(stagingDir, context.Settings.SkyrimDataPath);
-                }
-            }
-            catch
-            {
-                // Ignore cleanup error
-            }
-
             return false;
+        }
+        finally
+        {
+            if (!completed && !context.TryCleanupStaging())
+                _logger?.LogWarning("{Warning}", context.Warnings.Last());
         }
     }
 }

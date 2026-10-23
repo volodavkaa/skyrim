@@ -37,6 +37,7 @@
                 </Border>
                 <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding ErrorMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
                 <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="{Binding StatusMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
+                <layout:PluginDiagnosticsView Diagnostics="{Binding PluginDiagnostics}" />
                 <Grid Margin="0,0,0,12" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

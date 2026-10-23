@@ -25,6 +25,8 @@ public sealed partial class BuildViewModel : ViewModelBase
     private readonly ILogger<BuildViewModel>? _logger;
     private readonly IEslService? _eslService;
 
+    [ObservableProperty] private ObservableCollection<PluginDiagnostic> _pluginDiagnostics = [];
+
     [ObservableProperty]
     private EslAnalysisResult? _eslAnalysis;
 
@@ -109,6 +111,7 @@ public sealed partial class BuildViewModel : ViewModelBase
 
     partial void OnSelectedProfileChanged(ModProfile? value)
     {
+        PluginDiagnostics = [];
         // Reset file tree when switching profiles
         ClearScanResults();
         if (value != null)
@@ -120,6 +123,7 @@ public sealed partial class BuildViewModel : ViewModelBase
     [RelayCommand]
     private async Task ScanAsync()
     {
+        PluginDiagnostics = [];
         if (SelectedProfile == null)
         {
             ErrorMessage = "Please select or create a mod profile first.";
@@ -193,6 +197,9 @@ public sealed partial class BuildViewModel : ViewModelBase
     [RelayCommand]
     private async Task PackAsync()
     {
+        PluginDiagnostics = [];
+        HasSuccessNotification = false;
+        LastArchiveCreatedPath = null;
         if (SelectedProfile == null)
         {
             ErrorMessage = "Please select a mod profile.";
@@ -239,11 +246,15 @@ public sealed partial class BuildViewModel : ViewModelBase
                 _operationCts.Token,
                 fileSelection: ScannedFiles);
 
+            PluginDiagnostics = new ObservableCollection<PluginDiagnostic>(context.PluginDiagnostics);
+
             if (context.IsSuccess)
             {
                 LastArchiveCreatedPath = context.OutputArchivePath;
                 HasSuccessNotification = true;
                 StatusMessage = $"Successfully packed {context.OutputArchivePath} ({FileTreeNode.FormatBytes(context.ArchiveSizeBytes)})";
+                if (context.Warnings.Count > 0)
+                    StatusMessage += Environment.NewLine + string.Join(Environment.NewLine, context.Warnings);
             }
             else
             {

@@ -51,33 +51,70 @@ public sealed class PackingPipeline
             }).ToList()
         };
 
-        var stepList = _steps.ToList();
-        for (int i = 0; i < stepList.Count; i++)
+        string? activeStep = null;
+        context.Status = PackingStatus.Running;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var step = stepList[i];
-            _logger.LogInformation("Executing step {StepNumber}/{TotalSteps}: {StepName}",
-                i + 1, stepList.Count, step.Name);
-
-            context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] Starting: {step.Name}");
-
-            var success = await step.ExecuteAsync(context, cancellationToken);
-
-            if (!success)
+            var stepList = _steps.ToList();
+            for (int i = 0; i < stepList.Count; i++)
             {
-                _logger.LogWarning("Step {StepName} failed. Aborting pipeline.", step.Name);
-                context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] FAILED: {step.Name}");
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var step = stepList[i];
+                activeStep = step.Name;
+                _logger.LogInformation("Executing step {StepNumber}/{TotalSteps}: {StepName}",
+                    i + 1, stepList.Count, step.Name);
+
+                context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] Starting: {step.Name}");
+
+                var success = await step.ExecuteAsync(context, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (!success || context.Errors.Count > 0)
+                {
+                    if (context.Errors.Count == 0) context.Errors.Add($"Packing step failed: {step.Name}.");
+                    context.Status = PackingStatus.Failed;
+                    _logger.LogWarning("Step {StepName} failed. Aborting pipeline.", step.Name);
+                    context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] FAILED: {step.Name}");
+                    return context;
+                }
+
+                context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] Completed: {step.Name}");
+
+                // Report overall progress based on step completion
+                progress?.Report((double)(i + 1) / stepList.Count);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!context.ArchiveCreated || string.IsNullOrEmpty(context.OutputArchivePath) || !File.Exists(context.OutputArchivePath))
+            {
+                context.Status = PackingStatus.Failed;
+                context.Errors.Add("Packing did not complete a new archive.");
                 return context;
             }
 
-            context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] Completed: {step.Name}");
-
-            // Report overall progress based on step completion
-            progress?.Report((double)(i + 1) / stepList.Count);
+            context.Status = PackingStatus.Succeeded;
+            _logger.LogInformation("Packing pipeline completed successfully.");
+            return context;
         }
-
-        _logger.LogInformation("Packing pipeline completed successfully.");
-        return context;
+        catch (OperationCanceledException)
+        {
+            context.Status = PackingStatus.Cancelled;
+            context.LogMessages.Add($"[{DateTime.Now:HH:mm:ss}] Packing cancelled.");
+            _logger.LogInformation("Packing cancelled during or before {StepName}", activeStep);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.Status = PackingStatus.Failed;
+            context.Errors.Add($"Packing failed during {activeStep ?? "initialization"}: {ex.Message}");
+            _logger.LogError(ex, "Packing failed during {StepName}", activeStep);
+            throw;
+        }
+        finally
+        {
+            if (!context.TryCleanupStaging())
+                _logger.LogWarning("{Warning}", context.Warnings.Last());
+        }
     }
 }

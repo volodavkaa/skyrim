@@ -31,30 +31,30 @@ public sealed class ArchiveStep : IPackStep
     /// <inheritdoc />
     public async Task<bool> ExecuteAsync(PackingContext context, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var ownsStagingDirectory = false;
+        context.ArchiveCreated = false;
+        context.ArchiveSizeBytes = 0;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!string.IsNullOrEmpty(context.StagingDirectory))
             {
-                PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
-                ownsStagingDirectory = true;
+                context.EnsureOwnsStagingDirectory();
             }
             PluginWriteGuard.EnsureOutsideGame(context.OutputArchivePath, context.Settings.SkyrimDataPath);
             IReadOnlyList<(string SourcePath, string EntryPath)> filesToArchive;
 
             if (!string.IsNullOrEmpty(context.StagingDirectory))
             {
-                PackingPathGuard.EnsureStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
+                context.EnsureOwnsStagingDirectory();
                 if (!Directory.Exists(context.StagingDirectory))
                     throw new DirectoryNotFoundException("The prepared staging directory is missing. Pack again.");
-                // Archive from staging directory
-                filesToArchive = EnumerateStagedFiles(context.StagingDirectory, cancellationToken)
-                    .Select(fullPath => (
-                        SourcePath: fullPath,
-                        EntryPath: Path.GetRelativePath(context.StagingDirectory, fullPath)))
-                    .ToList();
+                // Validate the whole staging tree, but publish only the selected resource set.
+                // ESL and other workspace services may leave persistent lock files beside a plugin.
+                _ = EnumerateStagedFiles(context.StagingDirectory, cancellationToken).ToList();
+                PackingPathGuard.ValidateEntries(context.SelectedFiles.Select(f => f.RelativePath));
+                filesToArchive = context.SelectedFiles.Select(f => (
+                    SourcePath: PackingPathGuard.ResolveUnderRoot(context.StagingDirectory, f.RelativePath),
+                    EntryPath: f.RelativePath)).ToList();
             }
             else
             {
@@ -96,6 +96,7 @@ public sealed class ArchiveStep : IPackStep
                     }, cancellationToken);
                 }
 
+                context.ArchiveCreated = true;
                 return true;
             }
 
@@ -113,23 +114,8 @@ public sealed class ArchiveStep : IPackStep
         }
         finally
         {
-            // Clean up staging directory if one was created
-            if (ownsStagingDirectory && !string.IsNullOrEmpty(context.StagingDirectory))
-            {
-                try
-                {
-                    if (Directory.Exists(context.StagingDirectory))
-                    {
-                        PackingPathGuard.DeleteStagingDirectory(context.StagingDirectory, context.Settings.SkyrimDataPath);
-                        _logger?.LogInformation("Cleaned up staging directory: '{StagingDir}'", context.StagingDirectory);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Failed to delete temporary staging directory '{StagingDir}'",
-                        context.StagingDirectory);
-                }
-            }
+            if (!context.TryCleanupStaging())
+                _logger?.LogWarning("{Warning}", context.Warnings.Last());
         }
     }
 

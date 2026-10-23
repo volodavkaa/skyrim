@@ -42,7 +42,7 @@ public class ModuleInfrastructureTests : IDisposable
         Assert.IsType<WeaponProjectService>(provider.GetRequiredService<IWeaponProjectService>());
         Assert.NotNull(provider.GetRequiredService<WeaponsViewModel>());
         Assert.NotNull(provider.GetRequiredService<PackingPipeline>());
-        Assert.Equal(new[] { typeof(ScanStep), typeof(FilterStep), typeof(ValidateStep), typeof(CopyStep), typeof(EslFlagStep), typeof(ArchiveStep) },
+        Assert.Equal(new[] { typeof(ScanStep), typeof(FilterStep), typeof(ValidateStep), typeof(PluginValidationStep), typeof(CopyStep), typeof(EslFlagStep), typeof(ArchiveStep) },
             provider.GetServices<IPackStep>().OrderBy(s => s.Order).Select(s => s.GetType()));
     }
 

@@ -22,7 +22,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
 
     public Task<Result<string>> CreateAsync(CreatePluginRequest request, CancellationToken cancellationToken = default)
     {
-        return RunAsync(() =>
+        return RunWriteAsync(transaction =>
         {
             ValidateDataPath(request.GameDataPath);
             ValidateFileName(request.PluginFileName, allowMaster: false);
@@ -58,9 +58,9 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             mod.ModHeader.Stats.NextFormID = 0x800;
             foreach (var master in masters)
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = master });
-            WritePlugin(mod, path, request.GameDataPath, replace: false, cancellationToken);
+            WritePlugin(transaction, mod, path, request.GameDataPath, replace: false, cancellationToken);
             return path;
-        }, cancellationToken);
+        }, () => CreatePluginPath(request), request.GameDataPath, cancellationToken);
     }
 
     public Task<Result<IReadOnlyList<SwordTemplate>>> GetSwordTemplatesAsync(string gameDataPath, CancellationToken cancellationToken = default)
@@ -92,7 +92,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
 
     public Task<Result<WeaponRecord>> CloneSwordAsync(CloneSwordRequest request, CancellationToken cancellationToken = default)
     {
-        return RunAsync(() =>
+        return RunWriteAsync(transaction =>
         {
             ValidateDataPath(request.GameDataPath);
             if (!Path.IsPathFullyQualified(request.PluginPath))
@@ -152,9 +152,9 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 Value = sword.BasicStats?.Value ?? 0,
                 Details = ToDetails(sword)
             };
-            WritePlugin(mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken);
+            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken);
             return result;
-        }, cancellationToken);
+        }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
     public Task<Result<IReadOnlyList<WeaponRecord>>> GetWeaponsAsync(string pluginPath, CancellationToken cancellationToken = default)
@@ -178,7 +178,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
 
     public Task<Result<WeaponRecord>> UpdateSwordAsync(UpdateSwordRequest request, CancellationToken cancellationToken = default)
     {
-        return RunAsync(() =>
+        return RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(request.PluginPath, request.GameDataPath);
             var sword = FindOwnedSword(mod, request.FormId);
@@ -200,14 +200,14 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 ApplyDetails(mod, sword, request.Details, request.GameDataPath);
             // Preserve the allocation high-water mark, including IDs of deleted records.
             var nextId = mod.ModHeader.Stats.NextFormID;
-            WritePlugin(mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken, nextId);
+            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken, nextId);
             return ToWeaponRecord(sword);
-        }, cancellationToken);
+        }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
     public async Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default)
     {
-        return await RunAsync(() =>
+        return await RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(pluginPath, gameDataPath);
             var sword = FindOwnedSword(mod, formId);
@@ -215,9 +215,9 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 throw new InvalidOperationException("This sword is referenced by another record in the plugin. Remove those references first.");
             var nextId = mod.ModHeader.Stats.NextFormID;
             mod.Weapons.Remove(sword.FormKey);
-            WritePlugin(mod, pluginPath, gameDataPath, replace: true, cancellationToken, nextId);
+            WritePlugin(transaction, mod, pluginPath, gameDataPath, replace: true, cancellationToken, nextId);
             return true;
-        }, cancellationToken);
+        }, () => pluginPath, gameDataPath, cancellationToken);
     }
 
     private static ISkyrimMod ReadWorkspaceForEditing(string pluginPath, string gameDataPath)
@@ -262,6 +262,14 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             .WithBsaFolder(gameDataPath).Construct();
     }
 
+    private static string CreatePluginPath(CreatePluginRequest request)
+    {
+        ValidateFileName(request.PluginFileName, allowMaster: false);
+        if (string.IsNullOrWhiteSpace(request.OutputDirectory) || !Path.IsPathFullyQualified(request.OutputDirectory))
+            throw new InvalidOperationException("Select an absolute workspace output directory.");
+        return Path.Combine(request.OutputDirectory, request.PluginFileName);
+    }
+
     private static void ValidateDataPath(string gameDataPath)
     {
         if (string.IsNullOrWhiteSpace(gameDataPath) || !Directory.Exists(gameDataPath))
@@ -278,19 +286,14 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             throw new InvalidOperationException(allowMaster ? "Select a master filename (ESP, ESM or ESL)." : "Use a plugin filename with an ESP or ESL extension.");
     }
 
-    private void WritePlugin(ISkyrimMod mod, string pluginPath, string gameDataPath, bool replace, CancellationToken cancellationToken, uint? preserveNextId = null)
+    private void WritePlugin(PluginFileTransaction transaction, ISkyrimMod mod, string pluginPath, string gameDataPath, bool replace, CancellationToken cancellationToken, uint? preserveNextId = null)
     {
         pluginPath = Path.GetFullPath(pluginPath);
         PluginWriteGuard.EnsureOutsideGame(pluginPath, gameDataPath);
         var backupPath = pluginPath + ".bak";
         PluginWriteGuard.EnsureOutsideGame(backupPath, gameDataPath);
-        var parent = Path.GetDirectoryName(pluginPath)!;
-        Directory.CreateDirectory(parent);
-        var temporaryDirectory = Path.Combine(parent, ".plugin-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(temporaryDirectory);
-        try
+        transaction.Write(mod, temporaryPath =>
         {
-            var temporaryPath = Path.Combine(temporaryDirectory, Path.GetFileName(pluginPath));
             var writer = mod.BeginWrite.ToPath(temporaryPath).WithLoadOrderFromHeaderMasters()
                 .WithDataFolder(gameDataPath).NoMastersListContentCheck().WithUtf8Encoding();
             if (preserveNextId.HasValue)
@@ -299,25 +302,27 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 writer = writer.NoNextFormIDProcessing();
             }
             writer.Write();
-            cancellationToken.ThrowIfCancellationRequested();
-            if (replace)
-                File.Copy(pluginPath, backupPath, overwrite: true);
-            File.Move(temporaryPath, pluginPath, overwrite: replace);
-            _logger?.LogInformation("Plugin saved: {Plugin}; backup: {Backup}", pluginPath, replace ? backupPath : "not needed for a new file");
-        }
-        finally
-        {
-            try { Directory.Delete(temporaryDirectory, recursive: true); }
-            catch (Exception ex) { _logger?.LogWarning(ex, "Failed to clean plugin builder temporary directory"); }
-        }
+        }, replace ? backupPath : null, replace, replaceBackup: true, cancellationToken, _logger);
+        _logger?.LogInformation("Plugin saved: {Plugin}; backup: {Backup}", pluginPath, replace ? backupPath : "not needed for a new file");
     }
 
-    private async Task<Result<T>> RunAsync<T>(Func<T> action, CancellationToken cancellationToken)
+    private Task<Result<T>> RunWriteAsync<T>(Func<PluginFileTransaction, T> action, Func<string> path, string gameDataPath, CancellationToken token) =>
+        RunOperationAsync(async () =>
+        {
+            ValidateFileName(Path.GetFileName(path()), allowMaster: false);
+            using var transaction = await PluginFileTransaction.AcquireAsync(path(), gameDataPath, token).ConfigureAwait(false);
+            return await Task.Run(() => action(transaction), token).ConfigureAwait(false);
+        }, token);
+
+    private Task<Result<T>> RunAsync<T>(Func<T> action, CancellationToken cancellationToken) =>
+        RunOperationAsync(() => Task.Run(action, cancellationToken), cancellationToken);
+
+    private async Task<Result<T>> RunOperationAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken)
     {
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() => Result<T>.Success(action()), cancellationToken);
+            return Result<T>.Success(await action().ConfigureAwait(false));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

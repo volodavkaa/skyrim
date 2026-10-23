@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Interfaces;
 using SkyrimModPacker.Core.Models;
 
@@ -15,35 +17,23 @@ public sealed class JsonSettingsRepository : ISettingsRepository
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly string _filePath;
+    private readonly AtomicJsonFile<AppSettings> _file;
 
-    public JsonSettingsRepository(string appDataDirectory)
+    public JsonSettingsRepository(string appDataDirectory, ILogger<JsonSettingsRepository>? logger = null)
     {
+        appDataDirectory = Path.GetFullPath(appDataDirectory);
+        PackingPathGuard.EnsureNoLinks(appDataDirectory);
         Directory.CreateDirectory(appDataDirectory);
-        _filePath = Path.Combine(appDataDirectory, "settings.json");
+        _file = new AtomicJsonFile<AppSettings>(Path.Combine(appDataDirectory, "settings.json"), CreateDefaults, JsonOptions, logger);
     }
 
     /// <inheritdoc />
-    public async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
-    {
-        if (!File.Exists(_filePath))
-        {
-            var defaults = CreateDefaults();
-            await SaveAsync(defaults, cancellationToken);
-            return defaults;
-        }
-
-        await using var stream = File.OpenRead(_filePath);
-        return await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions, cancellationToken)
-               ?? CreateDefaults();
-    }
+    public Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+        _file.LoadAsync(createIfMissing: true, token: cancellationToken);
 
     /// <inheritdoc />
-    public async Task SaveAsync(AppSettings settings, CancellationToken cancellationToken = default)
-    {
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions, cancellationToken);
-    }
+    public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken = default) =>
+        _file.UpdateAsync(_ => settings, cancellationToken);
 
     private static AppSettings CreateDefaults()
     {

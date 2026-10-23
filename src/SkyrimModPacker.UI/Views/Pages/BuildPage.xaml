@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:vm="clr-namespace:SkyrimModPacker.UI.ViewModels"
+    xmlns:controls="clr-namespace:SkyrimModPacker.UI.Controls"
     xmlns:models="clr-namespace:SkyrimModPacker.Core.Models;assembly=SkyrimModPacker.Core"
     d:DataContext="{d:DesignInstance vm:BuildViewModel, IsDesignTimeCreatable=False}"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -74,6 +75,7 @@
 
         <!-- Notification & Progress Area -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <controls:PluginDiagnosticsView Diagnostics="{Binding PluginDiagnostics}" />
             <ui:Button Content="{DynamicResource Esl_Analyze}"
                        Command="{Binding AnalyzeEslCommand}"
                        Margin="0,0,0,8"

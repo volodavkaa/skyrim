@@ -95,7 +95,7 @@ public sealed partial class PluginBuilderService
 
     public Task<Result<CraftingRecipe>> SaveRecipeAsync(SaveRecipeRequest request, CancellationToken cancellationToken = default)
     {
-        return RunAsync(() =>
+        return RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(request.PluginPath, request.GameDataPath);
             var data = request.Recipe;
@@ -143,14 +143,14 @@ public sealed partial class PluginBuilderService
                 conditionData.Perk.Link.SetTo(perk);
                 recipe.Conditions.Add(new ConditionFloat { CompareOperator = CompareOperator.EqualTo, ComparisonValue = 1, Data = conditionData });
             }
-            WritePlugin(mod, request.PluginPath, request.GameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
+            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
             return ToRecipe(recipe);
-        }, cancellationToken);
+        }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
     public async Task<Result> DeleteRecipeAsync(string pluginPath, string gameDataPath, uint recipeFormId, CancellationToken cancellationToken = default)
     {
-        return await RunAsync(() =>
+        return await RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(pluginPath, gameDataPath);
             var key = new FormKey(mod.ModKey, recipeFormId);
@@ -159,9 +159,9 @@ public sealed partial class PluginBuilderService
             if (mod.EnumerateMajorRecords().Any(r => r.FormKey != key && r.EnumerateFormLinks().Any(link => link.FormKey == key)))
                 throw new InvalidOperationException("The recipe is referenced by another record.");
             mod.ConstructibleObjects.Remove(key);
-            WritePlugin(mod, pluginPath, gameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
+            WritePlugin(transaction, mod, pluginPath, gameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
             return true;
-        }, cancellationToken);
+        }, () => pluginPath, gameDataPath, cancellationToken);
     }
 
     private static CraftingRecipe ToRecipe(IConstructibleObjectGetter recipe)
@@ -194,7 +194,7 @@ public sealed partial class PluginBuilderService
 
     private Task<Result<bool>> ChangeLeveledListAsync(LeveledListRequest request, bool remove, CancellationToken cancellationToken)
     {
-        return RunAsync(() =>
+        return RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(request.PluginPath, request.GameDataPath);
             var sword = FindOwnedSword(mod, request.WeaponFormId);
@@ -219,9 +219,9 @@ public sealed partial class PluginBuilderService
                 var index = list.Entries.TakeWhile(e => e.Data == null || e.Data.Level <= request.Level).Count();
                 list.Entries.Insert(index, entry);
             }
-            WritePlugin(mod, request.PluginPath, request.GameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
+            WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID);
             return true;
-        }, cancellationToken);
+        }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
     private static uint AllocateCompactId(ISkyrimMod mod)
