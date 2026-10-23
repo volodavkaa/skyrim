@@ -54,7 +54,9 @@ public sealed partial class WeaponProjectService
             string? vanillaError = null;
             try
             {
-                var master = Source(ModKey.FromNameAndExtension("Skyrim.esm"));
+                foreach (var sourceName in WeaponTypes.VanillaSources.Where(n => File.Exists(Path.Combine(gameDataPath, n))))
+                {
+                var master = Source(ModKey.FromNameAndExtension(sourceName));
                 foreach (var path in master.Weapons.Where(w => !w.IsDeleted).Select(w => w.Model?.File.GivenPath)
                     .Concat(master.Statics.Where(s => !s.IsDeleted).Select(s => s.Model?.File.GivenPath)))
                 {
@@ -62,6 +64,7 @@ public sealed partial class WeaponProjectService
                     if (!string.IsNullOrWhiteSpace(path))
                         try { vanillaPaths.Add(MeshPath(path)); }
                         catch (InvalidOperationException) { /* An unrelated malformed vanilla record is not a project assignment. */ }
+                }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { vanillaError = ex.Message; }

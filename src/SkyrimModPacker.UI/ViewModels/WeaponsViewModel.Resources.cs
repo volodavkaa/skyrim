@@ -28,11 +28,16 @@ public sealed partial class WeaponsViewModel
 
     partial void OnProjectFilePathChanged(string value)
     {
+        DraftFilePath = DraftSaveStatus = DraftSaveError = null;
         ProjectResources = [];
         ResourceCatalog = [];
         _savedResourceCatalog = null;
         ResourceCatalogError = ResourceCatalogDiagnostics = null;
         ResourceStatus = null;
+        SelectedResource = null;
+        ResourceVersions = [];
+        SelectedResourceVersion = null;
+        Variants = []; VariantError = null;
         SelectedPackingProfile = null;
         EnableProjectEsl = false;
         LastProjectArchivePath = null;
@@ -72,6 +77,8 @@ public sealed partial class WeaponsViewModel
         _savedResourceCatalog = result.Value;
         ProjectResources = new(result.Value.Entries.Where(e => e.IsRegistered).Select(e => e.RelativePath));
         RenderResourceCatalog();
+        await RefreshResourceVersionsAsync(token);
+        await RefreshVariantsAsync(token);
     }
 
     private void RenderResourceCatalog()
@@ -102,7 +109,7 @@ public sealed partial class WeaponsViewModel
             ModelPath = result.Value;
             await RefreshProjectResourcesAsync(token);
             ResourceStatus = Text("Weapons_ModelImported", "NIF copied and assigned to the editor. Save the sword on Summary to write this path to the plugin.");
-        });
+        }, write: true, resourceWrite: true);
     }
 
     [RelayCommand]
@@ -139,7 +146,7 @@ public sealed partial class WeaponsViewModel
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         await RefreshProjectResourcesAsync(token);
         ResourceStatus = Text("Weapons_TexturesImported", "DDS textures added. Check the paths below against the paths used by your NIF.");
-    });
+    }, write: true, resourceWrite: true);
 
     [RelayCommand]
     private Task CheckResourcesAsync() => RunOperationAsync(async token =>

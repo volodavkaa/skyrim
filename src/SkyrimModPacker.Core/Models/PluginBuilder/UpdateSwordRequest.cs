@@ -14,4 +14,5 @@ public sealed class UpdateSwordRequest
     public WeaponDetails? Details { get; init; }
     public string? ProjectFilePath { get; init; }
     public uint? VanillaTemplateFormId { get; init; }
+    public string VanillaTemplatePluginName { get; init; } = "Skyrim.esm";
 }

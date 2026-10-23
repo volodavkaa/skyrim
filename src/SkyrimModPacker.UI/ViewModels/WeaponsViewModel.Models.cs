@@ -13,6 +13,7 @@ public sealed partial class WeaponsViewModel
     [ObservableProperty] private string? _firstPersonModelStatus;
     [ObservableProperty] private SwordTemplate? _restorationTemplate;
     private uint? _restorationOrigin;
+    private string _restorationPluginName = "Skyrim.esm";
     private PluginRecordReference? _firstPersonReference;
     private bool _firstPersonEdited, _restoreFirstPerson, _fillingModel;
 
@@ -20,8 +21,9 @@ public sealed partial class WeaponsViewModel
     {
         FirstPersonModelStatus = null;
         if (_fillingModel) return;
-        _firstPersonEdited = true;
+        _firstPersonEdited = _savedWeaponDraft == null || value != _savedWeaponDraft.FirstPath;
         _restoreFirstPerson = false;
+        if (!_firstPersonEdited) _firstPersonReference = _savedWeaponDraft?.FirstReference;
         IsWizardSaved = false;
     }
 
@@ -32,6 +34,7 @@ public sealed partial class WeaponsViewModel
         _fillingModel = false;
         _firstPersonReference = details.FirstPersonModel;
         _restorationOrigin = null;
+        _restorationPluginName = "Skyrim.esm";
         _firstPersonEdited = _restoreFirstPerson = false;
         FirstPersonModelStatus = ThirdPersonModelStatus = null;
     }
@@ -41,7 +44,7 @@ public sealed partial class WeaponsViewModel
         if (_firstPersonEdited || _restoreFirstPerson) return;
         var form = SelectedWeapon?.FormId ?? SelectedTemplate?.FormId;
         if (form == null) return;
-        var plugin = SelectedWeapon == null ? Path.Combine(GameDataPath, "Skyrim.esm") : PluginPath;
+        var plugin = SelectedWeapon == null ? Path.Combine(GameDataPath, SelectedTemplate?.PluginName ?? "Skyrim.esm") : PluginPath;
         var result = await _builder.GetWeaponModelsAsync(plugin, GameDataPath, form.Value, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         if (result.Value.Error != null) throw new InvalidOperationException(result.Value.Error);
@@ -49,6 +52,8 @@ public sealed partial class WeaponsViewModel
         _fillingModel = true;
         FirstPersonModelPath = result.Value.FirstPersonPath ?? "";
         _fillingModel = false;
+        if (_savedWeaponDraft != null) _savedWeaponDraft = _savedWeaponDraft with { FirstPath = FirstPersonModelPath, FirstReference = _firstPersonReference };
+        UpdateUnsavedChanges();
     }
 
     [RelayCommand]
@@ -72,9 +77,10 @@ public sealed partial class WeaponsViewModel
             _firstPersonEdited = true;
             _restoreFirstPerson = false;
             IsWizardSaved = false;
+            UpdateUnsavedChanges();
             await RefreshProjectResourcesAsync(token);
             await InspectDraftModelsAsync(token);
-        });
+        }, write: true, resourceWrite: true);
     }
 
     private async Task<WeaponModels> OriginalModelsAsync(CancellationToken token)
@@ -89,16 +95,24 @@ public sealed partial class WeaponsViewModel
             {
                 var baseline = await _projects.GetOriginalModelsAsync(ProjectFilePath, GameDataPath, SelectedWeapon.FormId, token);
                 if (baseline.IsFailure) throw new InvalidOperationException(baseline.Error);
-                if (baseline.Value != null) { _restorationOrigin = template; return baseline.Value; }
+                if (baseline.Value != null)
+                {
+                    var reference = await _projects.GetTemplateReferenceAsync(ProjectFilePath, GameDataPath, SelectedWeapon.FormId, token);
+                    if (reference?.IsFailure == true) throw new InvalidOperationException(reference.Error);
+                    _restorationPluginName = reference?.Value?.PluginName ?? "Skyrim.esm";
+                    _restorationOrigin = template; return baseline.Value;
+                }
             }
         }
         // For legacy/imported projects the user explicitly chooses a template in the existing list.
         template ??= SelectedWeapon == null ? SelectedTemplate?.FormId : RestorationTemplate?.FormId;
         if (template == null) throw new InvalidOperationException(Text("Models_SelectOriginal", "Select a vanilla template to restore its model."));
-        var result = await _builder.GetWeaponModelsAsync(Path.Combine(GameDataPath, "Skyrim.esm"), GameDataPath, template.Value, token);
+        var source = (SelectedWeapon == null ? SelectedTemplate : RestorationTemplate)?.PluginName ?? "Skyrim.esm";
+        var result = await _builder.GetWeaponModelsAsync(Path.Combine(GameDataPath, source), GameDataPath, template.Value, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         if (result.Value.Error != null) throw new InvalidOperationException(result.Value.Error);
         _restorationOrigin = template;
+        _restorationPluginName = source;
         return result.Value;
     }
 
@@ -106,6 +120,7 @@ public sealed partial class WeaponsViewModel
     private Task RestoreThirdPersonModelAsync() => RunOperationAsync(async token =>
     {
         ModelPath = (await OriginalModelsAsync(token)).ThirdPersonPath;
+        UpdateUnsavedChanges();
         await InspectDraftModelsAsync(token);
     });
 
@@ -120,6 +135,7 @@ public sealed partial class WeaponsViewModel
         _firstPersonEdited = false;
         _restoreFirstPerson = true;
         IsWizardSaved = false;
+        UpdateUnsavedChanges();
         await InspectDraftModelsAsync(token);
     });
 
@@ -134,7 +150,7 @@ public sealed partial class WeaponsViewModel
         FirstPersonModelStatus = string.IsNullOrWhiteSpace(FirstPersonModelPath)
             ? Text("Models_NoFirst", "No separate first-person model")
             : await DescribeModelAsync(FirstPersonModelPath, !_firstPersonEdited &&
-                _firstPersonReference?.PluginName.Equals("Skyrim.esm", StringComparison.OrdinalIgnoreCase) == true, token);
+                (_firstPersonReference?.PluginName.Equals("Skyrim.esm", StringComparison.OrdinalIgnoreCase) == true || _firstPersonReference?.PluginName.Equals("Dawnguard.esm", StringComparison.OrdinalIgnoreCase) == true), token);
     }
 
     private async Task<string> DescribeModelAsync(string model, bool vanilla, CancellationToken token)

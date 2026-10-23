@@ -26,6 +26,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     private readonly ILogger<WeaponsViewModel>? _logger;
     private CancellationTokenSource? _operationCts;
     private string _templateGameDataPath = string.Empty;
+    private bool _synchronizingWeaponTemplate;
 
     public IReadOnlyList<string> PluginExtensions { get; } = [".esp", ".esl"];
 
@@ -52,23 +53,40 @@ public sealed partial class WeaponsViewModel : ViewModelBase
 
     public WeaponsViewModel(IPluginBuilderService pluginBuilderService, ISettingsRepository settingsRepository,
         IProfileRepository profileRepository, IWeaponProjectService projectService,
-        ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null, PackingPipeline? packingPipeline = null)
+        ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null, PackingPipeline? packingPipeline = null,
+        IUnsavedChangesPrompt? unsavedChangesPrompt = null, IWeaponDraftRepository? draftRepository = null,
+        IDraftAutosaveScheduler? draftAutosaveScheduler = null, IWorkspaceHistoryService? workspaceHistory = null,
+        IWorkspaceConflictPrompt? conflictPrompt = null, IWorkspaceFolderOpener? folderOpener = null)
     {
         _builder = pluginBuilderService;
         _settings = settingsRepository;
         _profiles = profileRepository;
         _projects = projectService;
         _packingPipeline = packingPipeline;
+        _unsavedChangesPrompt = unsavedChangesPrompt;
+        _drafts = draftRepository;
+        _draftScheduler = draftAutosaveScheduler;
+        _workspaceHistory = workspaceHistory;
+        _conflictPrompt = conflictPrompt;
+        _folderOpener = folderOpener;
         _localization = localizationService;
         if (_localization != null) _localization.LanguageChanged += RenderResourceCatalog;
+        if (_localization != null) _localization.LanguageChanged += RefreshStage4Texts;
         _logger = logger;
         PageTitle = "Weapons";
+        WeaponKeywords.CollectionChanged += OnDraftKeywordsChanged;
+        RecipeIngredients.CollectionChanged += DraftCollectionChanged;
+        AcceptWeaponDraft(); AcceptRecipeDraft();
+        OnPropertyChanged(nameof(TemplateSelection));
     }
 
     [RelayCommand]
     private Task InitializeAsync() => RunOperationAsync(async token =>
     {
-        GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        var configuredData = (await _settings.LoadAsync(token)).SkyrimDataPath;
+        if (HasUnsavedChanges && !string.Equals(configuredData, GameDataPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(Text("Unsaved_DataChanged", "Save or discard your edits before changing the Data folder."));
+        GameDataPath = configuredData;
         var selectedId = SelectedPackingProfile?.Id;
         PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
         SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == selectedId);
@@ -85,16 +103,17 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private Task LoadTemplatesAsync() => RunOperationAsync(async token =>
+    private Task LoadTemplatesAsync() => GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
     {
         var settings = await _settings.LoadAsync(token);
         GameDataPath = settings.SkyrimDataPath;
         await LoadTemplatesCoreAsync(token, selectFirst: SelectedWeapon == null);
+        if (SelectedWeapon != null) OnSelectedWeaponChanged(SelectedWeapon);
         StatusMessage = Text("Weapons_TemplatesLoaded", "Sword templates loaded.");
-    });
+    }));
 
     [RelayCommand]
-    private Task CreatePluginAsync() => RunOperationAsync(async token =>
+    private Task CreatePluginAsync() => GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
     {
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
         if (!ValidateProjectFields()) return;
@@ -111,8 +130,9 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         ShowCreationPanel = false;
         await RefreshWeaponsAsync(null, token);
         await RefreshProjectResourcesAsync(token);
+        await ConfirmedWorkspaceLoadedAsync(token);
         StatusMessage = Text("Weapons_PluginCreated", "Plugin created.");
-    });
+    }));
 
     [RelayCommand]
     private async Task OpenPluginAsync(string? path)
@@ -124,7 +144,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             if (dialog.ShowDialog() != true) return;
             path = dialog.FileName;
         }
-        await RunOperationAsync(async token =>
+        await GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
         {
             var selectedPath = Path.GetFullPath(path);
             GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
@@ -142,29 +162,46 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             Weapons = new ObservableCollection<WeaponRecord>(result.Value);
             SelectedWeapon = Weapons.FirstOrDefault();
             if (SelectedWeapon == null) ResetDraft();
+            await ConfirmedWorkspaceLoadedAsync(token);
             StatusMessage = Text("Weapons_PluginOpened", "Plugin opened.");
-        });
+        }));
     }
 
     partial void OnSelectedTemplateChanged(SwordTemplate? value)
     {
-        if (value == null) return;
+        if (value == null || _synchronizingWeaponTemplate) return;
+        SelectedWeaponKind = value.Kind;
+        BalanceTemplate = value;
         SelectedWeapon = null;
         FillEditor(SuggestEditorId(value.EditorId), value.Name, value.Damage, value.Weight, value.Value);
         FillDetails(value.Details);
         ResetRecipeEditor();
+        AcceptWeaponDraft(); AcceptRecipeDraft();
+        OnPropertyChanged(nameof(TemplateSelection));
     }
 
     partial void OnSelectedWeaponChanged(WeaponRecord? value)
     {
         if (value != null)
         {
+            SelectedWeaponKind = value.Kind;
+            _synchronizingWeaponTemplate = true;
+            try { SelectedTemplate = FilteredTemplates.FirstOrDefault(); }
+            finally { _synchronizingWeaponTemplate = false; }
+            OnPropertyChanged(nameof(TemplateSelection));
+            BalanceTemplate = FilteredTemplates.FirstOrDefault();
             FillEditor(value.EditorId, value.Name, value.Damage, value.Weight, value.Value);
             FillDetails(value.Details);
         }
-        Recipes.Clear();
-        SelectedRecipe = null;
-        ResetRecipeEditor();
+        if (!_preserveRecipeOnRefresh)
+        {
+            Recipes.Clear();
+            SelectedRecipe = null;
+            ResetRecipeEditor();
+            AcceptRecipeDraft();
+        }
+        AcceptWeaponDraft();
+        OnPropertyChanged(nameof(WeaponSelection));
     }
 
     private void FillEditor(string editorId, string name, ushort damage, float weight, uint value)
@@ -177,7 +214,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void NewSword()
+    private async Task NewSwordAsync()
     {
         if (IsLoading) return;
         if (SelectedTemplate == null)
@@ -185,7 +222,10 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             TemplateError = Text("Weapons_SelectTemplate", "Select a vanilla sword template first.");
             return;
         }
+        if (!await RequestLeaveEditorAsync()) return;
         OnSelectedTemplateChanged(SelectedTemplate);
+        _newWeaponPending = true; UpdateUnsavedChanges();
+        ResetEditorHistory();
     }
 
     [RelayCommand]
@@ -201,14 +241,15 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         var result = await _builder.CloneSwordAsync(new CloneSwordRequest
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, TemplateFormId = SelectedTemplate.FormId,
+            TemplatePluginName = SelectedTemplate.PluginName,
             ProjectFilePath = string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath,
             EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
             Details = ParseDetails()
         }, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
-        await RefreshWeaponsAsync(result.Value.FormId, token);
+        await RefreshWeaponsAsync(result.Value.FormId, token, preserveRecipe: true);
         StatusMessage = Text("Weapons_Cloned", "Sword cloned. A .bak copy was saved.");
-    });
+    }, write: true);
 
     [RelayCommand]
     private Task SaveSwordAsync() => RunOperationAsync(async token =>
@@ -222,32 +263,35 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         {
             PluginPath = PluginPath, GameDataPath = GameDataPath, FormId = SelectedWeapon.FormId,
             ProjectFilePath = string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath, VanillaTemplateFormId = _restorationOrigin,
+            VanillaTemplatePluginName = _restorationPluginName,
             EditorId = EditorId.Trim(), Name = WeaponName.Trim(), Damage = stats.Damage, Weight = stats.Weight, Value = stats.Value,
             Details = ParseDetails()
         }, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
-        await RefreshWeaponsAsync(result.Value.FormId, token);
+        await RefreshWeaponsAsync(result.Value.FormId, token, preserveRecipe: true);
         StatusMessage = Text("Weapons_Saved", "Changes saved. A .bak copy was saved.");
-    });
+    }, write: true);
 
     [RelayCommand]
-    private Task DeleteSwordAsync() => RunOperationAsync(async token =>
+    private Task DeleteSwordAsync() => GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
     {
         RequirePlugin();
         if (SelectedWeapon == null) throw new InvalidOperationException(Text("Weapons_SelectRecord", "Select a sword in the plugin first."));
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
-        var result = await _builder.DeleteSwordAsync(PluginPath, GameDataPath, SelectedWeapon.FormId, token);
+        var result = await _builder.DeleteSwordAsync(PluginPath, GameDataPath, SelectedWeapon.FormId, token, string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         await RefreshWeaponsAsync(null, token);
         StatusMessage = Text("Weapons_Deleted", "Sword deleted. A .bak copy was saved.");
-    });
+    }, write: true));
 
-    private async Task RefreshWeaponsAsync(uint? selectedId, CancellationToken token)
+    private async Task RefreshWeaponsAsync(uint? selectedId, CancellationToken token, bool preserveRecipe = false)
     {
         var result = await _builder.GetWeaponsAsync(PluginPath, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         Weapons = new ObservableCollection<WeaponRecord>(result.Value);
-        SelectedWeapon = Weapons.FirstOrDefault(w => w.FormId == selectedId);
+        _preserveRecipeOnRefresh = preserveRecipe;
+        try { SelectedWeapon = Weapons.FirstOrDefault(w => w.FormId == selectedId); }
+        finally { _preserveRecipeOnRefresh = false; }
         if (SelectedWeapon == null) ResetDraft();
         if (!string.IsNullOrWhiteSpace(ProjectFilePath)) await RefreshProjectResourcesAsync(token);
     }
@@ -259,6 +303,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         {
             FillEditor(string.Empty, string.Empty, 0, 0, 0);
             FillDetails(new WeaponDetails());
+            AcceptWeaponDraft(); AcceptRecipeDraft();
         }
     }
 
@@ -307,22 +352,73 @@ public sealed partial class WeaponsViewModel : ViewModelBase
     [RelayCommand]
     private void CancelOperation() => _operationCts?.Cancel();
 
-    private async Task RunOperationAsync(Func<CancellationToken, Task> action)
+    private async Task RunOperationAsync(Func<CancellationToken, Task> action, bool write = false, bool resourceWrite = false)
     {
         if (IsLoading) return;
+        _draftScheduler?.Cancel();
         IsLoading = true;
         ErrorMessage = null;
         StatusMessage = null;
         _operationCts?.Dispose();
         _operationCts = new CancellationTokenSource();
-        try { await action(_operationCts.Token); }
+        var draftGateAcquired = false;
+        WorkspaceWriteExpectation? expectation = null;
+        WorkspaceCheckpoint? beforeFiles = null;
+        EditorMemento? beforeEditor = null;
+        var historyEpoch = _historyEpoch;
+        var previousContext = Workspace;
+        try
+        {
+            await _draftIoGate.WaitAsync(_operationCts.Token);
+            draftGateAcquired = true;
+            beforeEditor = CaptureMemento();
+            if (write && _workspaceHistory != null && !string.IsNullOrEmpty(PluginPath))
+            {
+                await EnsureWorkspaceReviewedAsync(_operationCts.Token);
+                beforeEditor = CaptureMemento();
+                beforeFiles = await _workspaceHistory.CaptureAsync(Workspace, resourceWrite, EditorProgress, _operationCts.Token);
+                expectation = new WorkspaceWriteExpectation(_confirmedRevision!);
+            }
+            await action(_operationCts.Token);
+        }
         catch (OperationCanceledException) { StatusMessage = Text("Weapons_Cancelled", "Operation cancelled."); }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
+            foreach (var key in ex.Data.Keys.Cast<object>().Where(k => k.ToString()?.Contains("Rollback", StringComparison.OrdinalIgnoreCase) == true))
+                ErrorMessage += Environment.NewLine + key + ": " + ex.Data[key];
             _logger?.LogError(ex, "Weapons editor operation failed");
         }
-        finally { IsLoading = false; }
+        finally
+        {
+            var wrote = expectation?.HasWrites == true;
+            expectation?.Dispose();
+            if (wrote && _workspaceHistory != null && beforeFiles != null && beforeEditor != null)
+            {
+                try
+                {
+                    var after = await _workspaceHistory.CaptureAsync(Workspace, resourceWrite, EditorProgress, CancellationToken.None);
+                    _confirmedRevision = await _workspaceHistory.InspectAsync(Workspace, true, CancellationToken.None);
+                    if (!beforeFiles.Revision.Matches(after.Revision)) PushEditorHistory(new(beforeEditor, CaptureMemento(), beforeFiles, after));
+                }
+                catch (Exception ex) { ErrorMessage = Text("History_BackupFailed", "The write completed, but its history backup failed: ") + ex.Message; }
+            }
+            else if (!_replayingHistory && beforeEditor != null && historyEpoch == _historyEpoch && previousContext == Workspace &&
+                     MemoryKey(beforeEditor) != MemoryKey(CaptureMemento())) PushEditorHistory(new(beforeEditor, CaptureMemento()));
+            if (draftGateAcquired)
+            {
+                try
+                {
+                    if (EnableDraftAutosave || _draftRevisions.ContainsKey(PluginPath)) await PersistDraftUnderGateAsync();
+                }
+                finally { _draftIoGate.Release(); }
+            }
+            IsLoading = false;
+            _lastEditorMemento = CaptureMemento();
+            _replayingHistory = false;
+            OperationProgress = null;
+            OnPropertyChanged(nameof(WeaponSelection)); OnPropertyChanged(nameof(TemplateSelection)); OnPropertyChanged(nameof(RecipeSelection));
+        }
     }
 
     private string Text(string key, string fallback)

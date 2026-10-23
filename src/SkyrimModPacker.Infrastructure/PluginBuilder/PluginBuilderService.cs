@@ -64,20 +64,31 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
     }
 
     public Task<Result<IReadOnlyList<SwordTemplate>>> GetSwordTemplatesAsync(string gameDataPath, CancellationToken cancellationToken = default)
+        => GetTemplatesAsync(gameDataPath, true, cancellationToken);
+
+    public Task<Result<IReadOnlyList<SwordTemplate>>> GetWeaponTemplatesAsync(string gameDataPath, CancellationToken cancellationToken = default)
+        => GetTemplatesAsync(gameDataPath, false, cancellationToken);
+
+    private Task<Result<IReadOnlyList<SwordTemplate>>> GetTemplatesAsync(string gameDataPath, bool legacySwords, CancellationToken cancellationToken)
     {
         return RunAsync<IReadOnlyList<SwordTemplate>>(() =>
         {
             ValidateDataPath(gameDataPath);
-            using var source = ReadMaster(gameDataPath, "Skyrim.esm");
+            if (!File.Exists(Path.Combine(gameDataPath, "Skyrim.esm"))) throw new FileNotFoundException("Skyrim.esm is missing.");
             var templates = new List<SwordTemplate>();
+            foreach (var name in legacySwords ? new[] { "Skyrim.esm" } : WeaponTypes.VanillaSources.Where(n => File.Exists(Path.Combine(gameDataPath, n))))
+            {
+            using var source = ReadMaster(gameDataPath, name);
             foreach (var weapon in source.Weapons)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (weapon.Data?.AnimationType != WeaponAnimationType.OneHandSword || weapon.IsDeleted)
+                if (weapon.FormKey.ModKey != source.ModKey || !WeaponTypes.Supported(weapon.Data?.AnimationType) || (legacySwords && weapon.Data?.AnimationType != WeaponAnimationType.OneHandSword) || weapon.IsDeleted || (!legacySwords && !WeaponTypes.PlayerTemplate(weapon)))
                     continue;
                 templates.Add(new SwordTemplate
                 {
                     FormId = weapon.FormKey.ID,
+                    PluginName = name,
+                    Kind = WeaponTypes.Kind(weapon),
                     EditorId = weapon.EditorID ?? string.Empty,
                     Name = weapon.Name?.String ?? weapon.EditorID ?? string.Empty,
                     Damage = weapon.BasicStats?.Damage ?? 0,
@@ -85,6 +96,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                     Value = weapon.BasicStats?.Value ?? 0,
                     Details = ToDetails(weapon, source)
                 });
+            }
             }
             return templates.OrderBy(t => t.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
         }, cancellationToken);
@@ -112,6 +124,13 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             if (mod.UsingLocalization)
                 throw new InvalidOperationException("Editing localized output plugins is not supported in this stage.");
             var records = mod.EnumerateMajorRecords().ToList();
+            if (request.VariantParentFormId is { } parentId)
+            {
+                _ = FindOwnedSword(mod, parentId);
+                if (string.IsNullOrWhiteSpace(request.ProjectFilePath) || string.IsNullOrWhiteSpace(request.VariantLabel) || request.VariantLabel.Length > 256 ||
+                    request.VariantMaterialNotes.Length > 4096 || request.VariantLabel.Contains('\0') || request.VariantMaterialNotes.Contains('\0'))
+                    throw new InvalidOperationException("A variant requires project metadata and a valid label/material description.");
+            }
             if (records.Any(r => string.Equals(r.EditorID, request.EditorId, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("The EditorID already exists in the output plugin.");
             var ownedIds = records.Where(r => r.FormKey.ModKey == mod.ModKey).Select(r => r.FormKey.ID).ToList();
@@ -122,14 +141,16 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             if (nextId > 0xFFF)
                 throw new InvalidOperationException("The compact FormID range is exhausted.");
 
-            using var source = ReadMaster(request.GameDataPath, "Skyrim.esm");
-            var template = source.Weapons.FirstOrDefault(w => w.FormKey.ID == request.TemplateFormId);
-            if (template == null || template.IsDeleted || template.Data?.AnimationType != WeaponAnimationType.OneHandSword || template.BasicStats == null)
-                throw new InvalidOperationException("Select a one-handed sword from Skyrim.esm.");
+            if (!WeaponTypes.IsVanillaSource(request.TemplatePluginName)) throw new InvalidOperationException("Select a supported vanilla master template.");
+            using var source = ReadMaster(request.GameDataPath, request.TemplatePluginName);
+            var template = source.Weapons.FirstOrDefault(w => w.FormKey.ModKey == source.ModKey && w.FormKey.ID == request.TemplateFormId);
+            if (template == null || template.IsDeleted || !WeaponTypes.Supported(template.Data?.AnimationType) || !WeaponTypes.PlayerTemplate(template) || template.BasicStats == null || string.IsNullOrWhiteSpace(template.Model?.File.GivenPath))
+                throw new InvalidOperationException("Select a supported vanilla weapon template with basic statistics and a model.");
 
             var skyrimKey = ModKey.FromNameAndExtension("Skyrim.esm");
             if (mod.ModHeader.MasterReferences.All(m => m.Master != skyrimKey))
                 mod.ModHeader.MasterReferences.Insert(0, new MasterReference { Master = skyrimKey });
+            AddTemplateMasters(mod, source, request.GameDataPath, new HashSet<ModKey>());
             var sword = mod.Weapons.DuplicateInAsNewRecord(template, new FormKey(mod.ModKey, nextId));
             mod.ModHeader.Stats.NextFormID = nextId + 1;
             sword.EditorID = request.EditorId;
@@ -145,6 +166,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             var result = new WeaponRecord
             {
                 FormId = nextId,
+                Kind = WeaponTypes.Kind(sword),
                 EditorId = sword.EditorID,
                 Name = request.Name,
                 Damage = sword.BasicStats?.Damage ?? 0,
@@ -154,7 +176,8 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             };
             WeaponProjectService.WriteWithTemplateOrigin(request.ProjectFilePath, request.PluginPath, request.GameDataPath,
                 nextId, request.TemplateFormId, () => WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath,
-                    replace: true, cancellationToken, mod.ModHeader.Stats.NextFormID), cancellationToken);
+                    replace: true, cancellationToken, mod.ModHeader.Stats.NextFormID), cancellationToken, request.TemplatePluginName,
+                    request.VariantParentFormId is { } variantParent ? new WeaponVariant(nextId, variantParent, request.VariantLabel, request.VariantMaterialNotes) : null);
             return result;
         }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
@@ -171,7 +194,7 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             foreach (var weapon in mod.Weapons)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (weapon.FormKey.ModKey == mod.ModKey && !weapon.IsDeleted && weapon.Data?.AnimationType == WeaponAnimationType.OneHandSword)
+                if (weapon.FormKey.ModKey == mod.ModKey && !weapon.IsDeleted && WeaponTypes.Supported(weapon.Data?.AnimationType))
                     weapons.Add(ToWeaponRecord(weapon, mod));
             }
             return weapons.OrderBy(w => w.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
@@ -205,13 +228,13 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
             if (request.VanillaTemplateFormId is { } templateId)
                 WeaponProjectService.WriteWithTemplateOrigin(request.ProjectFilePath, request.PluginPath, request.GameDataPath,
                     sword.FormKey.ID, templateId, () => WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath,
-                        replace: true, cancellationToken, nextId), cancellationToken);
+                        replace: true, cancellationToken, nextId), cancellationToken, request.VanillaTemplatePluginName);
             else WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, replace: true, cancellationToken, nextId);
             return ToWeaponRecord(sword, mod);
         }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
-    public async Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default)
+    public async Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default, string? projectFilePath = null)
     {
         return await RunWriteAsync(transaction =>
         {
@@ -221,7 +244,8 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
                 throw new InvalidOperationException("This sword is referenced by another record in the plugin. Remove those references first.");
             var nextId = mod.ModHeader.Stats.NextFormID;
             mod.Weapons.Remove(sword.FormKey);
-            WritePlugin(transaction, mod, pluginPath, gameDataPath, replace: true, cancellationToken, nextId);
+            WeaponProjectService.WriteWithVariantDeletion(projectFilePath, pluginPath, gameDataPath, formId,
+                () => WritePlugin(transaction, mod, pluginPath, gameDataPath, replace: true, cancellationToken, nextId), cancellationToken);
             return true;
         }, () => pluginPath, gameDataPath, cancellationToken);
     }
@@ -242,14 +266,15 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
     private static IWeapon FindOwnedSword(ISkyrimMod mod, uint formId)
     {
         var sword = mod.Weapons.FirstOrDefault(w => w.FormKey.ModKey == mod.ModKey && w.FormKey.ID == formId);
-        if (sword == null || sword.IsDeleted || sword.Data?.AnimationType != WeaponAnimationType.OneHandSword || sword.BasicStats == null)
-            throw new InvalidOperationException("Select an owned one-handed sword in this plugin.");
+        if (sword == null || sword.IsDeleted || !WeaponTypes.Supported(sword.Data?.AnimationType) || sword.BasicStats == null)
+            throw new InvalidOperationException("Select an owned supported weapon in this plugin.");
         return sword;
     }
 
     private static WeaponRecord ToWeaponRecord(IWeaponGetter sword, ISkyrimModGetter? mod = null) => new()
     {
         FormId = sword.FormKey.ID,
+        Kind = WeaponTypes.Kind(sword),
         EditorId = sword.EditorID ?? string.Empty,
         Name = sword.Name?.String ?? string.Empty,
         Damage = sword.BasicStats?.Damage ?? 0,
@@ -266,6 +291,21 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
         return SkyrimMod.Create(SkyrimRelease.SkyrimSE).FromPath(path)
             .WithStringsFolder(Path.Combine(gameDataPath, "Strings"))
             .WithBsaFolder(gameDataPath).Construct();
+    }
+
+    private static void AddTemplateMasters(ISkyrimMod output, ISkyrimModGetter source, string dataPath, HashSet<ModKey> visiting)
+    {
+        if (!visiting.Add(source.ModKey)) throw new InvalidOperationException("Cyclic template master dependencies.");
+        foreach (var parent in source.ModHeader.MasterReferences)
+        {
+            if (output.ModHeader.MasterReferences.Any(m => m.Master == parent.Master)) continue;
+            ValidateFileName(parent.Master.FileName.String, true);
+            using var dependency = ReadMaster(dataPath, parent.Master.FileName.String);
+            AddTemplateMasters(output, dependency, dataPath, visiting);
+        }
+        if (source.ModKey == output.ModKey) throw new InvalidOperationException("A template cannot depend on the output plugin.");
+        if (output.ModHeader.MasterReferences.All(m => m.Master != source.ModKey)) output.ModHeader.MasterReferences.Add(new MasterReference { Master = source.ModKey });
+        visiting.Remove(source.ModKey);
     }
 
     private static string CreatePluginPath(CreatePluginRequest request)

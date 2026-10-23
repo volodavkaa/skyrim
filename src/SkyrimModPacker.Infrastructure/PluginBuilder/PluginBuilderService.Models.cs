@@ -12,7 +12,7 @@ public sealed partial class PluginBuilderService
         RunAsync(() =>
         {
             using var mod = SkyrimMod.CreateFromBinaryOverlay(pluginPath, SkyrimRelease.SkyrimSE);
-            var sword = mod.Weapons.FirstOrDefault(w => w.FormKey.ID == formId && !w.IsDeleted)
+            var sword = mod.Weapons.FirstOrDefault(w => w.FormKey.ModKey == mod.ModKey && w.FormKey.ID == formId && !w.IsDeleted)
                 ?? throw new InvalidOperationException("Weapon not found.");
             var reference = Reference(sword.FirstPersonModel.FormKey);
             if (reference == null) return new WeaponModels(sword.Model?.File.GivenPath ?? "", null, null);
@@ -67,8 +67,9 @@ public sealed partial class PluginBuilderService
         if (details.FirstPersonModelPath == null)
         {
             var original = resolver.Resolve<IStaticGetter>(details.FirstPersonModel!);
-            if (original.FormKey.ModKey != ModKey.FromNameAndExtension("Skyrim.esm"))
-                throw new InvalidOperationException("Select a vanilla first-person STAT from Skyrim.esm.");
+            if (original.FormKey.ModKey != mod.ModKey && !WeaponTypes.IsVanillaSource(original.FormKey.ModKey.FileName.String))
+                throw new InvalidOperationException("Select a first-person STAT owned by this plugin or a supported vanilla master.");
+            _ = NifPath(original.Model?.File.GivenPath ?? "");
             sword.FirstPersonModel.SetTo(original.FormKey);
             return;
         }

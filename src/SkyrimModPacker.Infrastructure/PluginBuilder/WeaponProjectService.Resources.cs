@@ -8,18 +8,27 @@ namespace SkyrimModPacker.Infrastructure.PluginBuilder;
 public sealed partial class WeaponProjectService
 {
     public Task<Result<string>> ImportModelAsync(string projectFilePath, string sourcePath, string gameDataPath, CancellationToken cancellationToken = default) =>
+        ImportModelCoreAsync(projectFilePath, sourcePath, gameDataPath, false, cancellationToken);
+
+    public Task<Result<string>> ImportModelCopyAsync(string projectFilePath, string sourcePath, string gameDataPath, CancellationToken cancellationToken = default) =>
+        ImportModelCoreAsync(projectFilePath, sourcePath, gameDataPath, true, cancellationToken);
+
+    private Task<Result<string>> ImportModelCoreAsync(string projectFilePath, string sourcePath, string gameDataPath, bool separateCopy, CancellationToken cancellationToken) =>
         RunAsync(async () =>
         {
             PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
             using var lease = await WorkspaceFileGate.AcquireAsync(projectFilePath, cancellationToken);
+            WorkspaceWriteExpectation.Check(projectFilePath);
             var original = new WorkspaceFileSnapshot(projectFilePath);
             var (folder, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             RequireSourceFile(sourcePath, ".nif");
             var relative = RelativeToAssetRoot(sourcePath, "meshes") ?? Path.Combine(document.Name, Path.GetFileName(sourcePath));
+            if (separateCopy) relative = Path.Combine(document.Name, "Versions", Guid.NewGuid().ToString("N"), Path.GetFileName(sourcePath));
             // A custom file must not shadow a vanilla mesh shared by unrelated game objects.
-            using (var master = Mutagen.Bethesda.Skyrim.SkyrimMod.CreateFromBinaryOverlay(
-                Path.Combine(gameDataPath, "Skyrim.esm"), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE))
+            foreach (var masterName in WeaponTypes.VanillaSources.Where(n => File.Exists(Path.Combine(gameDataPath, n))))
             {
+                using var master = Mutagen.Bethesda.Skyrim.SkyrimMod.CreateFromBinaryOverlay(
+                    Path.Combine(gameDataPath, masterName), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE);
                 var normalized = relative.Replace('\\', '/');
                 if (master.Weapons.Select(w => w.Model?.File.GivenPath).Concat(master.Statics.Select(s => s.Model?.File.GivenPath))
                     .Any(p => string.Equals(p?.Replace('\\', '/'), normalized, StringComparison.OrdinalIgnoreCase)))
@@ -36,6 +45,7 @@ public sealed partial class WeaponProjectService
         {
             PluginWriteGuard.EnsureOutsideGame(projectFilePath, gameDataPath);
             using var lease = await WorkspaceFileGate.AcquireAsync(projectFilePath, cancellationToken);
+            WorkspaceWriteExpectation.Check(projectFilePath);
             var original = new WorkspaceFileSnapshot(projectFilePath);
             var (folder, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             // Validate even an unused destination, so absolute and traversing paths never pass silently.

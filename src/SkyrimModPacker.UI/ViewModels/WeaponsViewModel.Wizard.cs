@@ -207,6 +207,15 @@ public sealed partial class WeaponsViewModel
     protected override void OnPropertyChanged(PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
+        if (e.PropertyName is nameof(Damage) or nameof(Weight) or nameof(Value) or nameof(Speed) or nameof(Reach)) RefreshBalance();
+        if (e.PropertyName is nameof(CurrentStep) or nameof(RestorationTemplate)) QueueDraftSave();
+        if (e.PropertyName is nameof(HasUnsavedWeaponChanges) or nameof(HasUnsavedRecipeChanges))
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+        if (e.PropertyName is nameof(IsLoading) or nameof(IsResolvingNavigation)) OnPropertyChanged(nameof(IsEditorBusy));
+        if (e.PropertyName is nameof(EditorId) or nameof(WeaponName) or nameof(Damage) or nameof(Weight) or nameof(Value) or
+            nameof(Description) or nameof(Speed) or nameof(Reach) or nameof(ModelPath) or nameof(FirstPersonModelPath) or
+            nameof(SelectedSound) or nameof(SelectedEnchantment) or nameof(EnchantmentCharge) or
+            nameof(RecipeEditorId) or nameof(RecipeOutputCount) or nameof(SelectedWorkbench) or nameof(SelectedPerk)) UpdateUnsavedChanges();
         switch (e.PropertyName)
         {
             case nameof(EditorId): EditorIdError = null; break;

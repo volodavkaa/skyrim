@@ -21,14 +21,14 @@ public sealed partial class WeaponsViewModel
             path = dialog.FileName;
         }
         var selectedPath = path;
-        await RunOperationAsync(async token =>
+        await GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
         {
             GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
             var result = await _projects.OpenAsync(selectedPath, GameDataPath, token);
             if (result.IsFailure) throw new InvalidOperationException(result.Error);
             await ActivateProjectAsync(result.Value, token);
             StatusMessage = Text("Weapons_ProjectOpened", "Workspace mod opened. Saved changes are loaded from its plugin.");
-        });
+        }));
     }
 
     [RelayCommand]
@@ -42,14 +42,14 @@ public sealed partial class WeaponsViewModel
             path = dialog.FileName;
         }
         var selectedPath = path;
-        await RunOperationAsync(async token =>
+        await GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
         {
             GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
             var result = await _projects.ImportAsync(selectedPath, OutputDirectory.Trim(), GameDataPath, token);
             if (result.IsFailure) throw new InvalidOperationException(result.Error);
             await ActivateProjectAsync(result.Value, token);
             StatusMessage = Text("Weapons_ProjectImported", "Working copy created. The source plugin was not changed.");
-        });
+        }));
     }
 
     private async Task ActivateProjectAsync(WeaponProject project, CancellationToken token)
@@ -64,5 +64,6 @@ public sealed partial class WeaponsViewModel
         SelectedWeapon = Weapons.FirstOrDefault();
         if (SelectedWeapon == null) ResetDraft();
         await RefreshProjectResourcesAsync(token);
+        await ConfirmedWorkspaceLoadedAsync(token);
     }
 }

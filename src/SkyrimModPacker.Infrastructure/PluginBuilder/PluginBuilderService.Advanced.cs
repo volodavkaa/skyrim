@@ -14,7 +14,11 @@ public sealed partial class PluginBuilderService
         return RunAsync(() =>
         {
             ValidateDataPath(gameDataPath);
-            using var source = ReadMaster(gameDataPath, "Skyrim.esm");
+            if (!File.Exists(Path.Combine(gameDataPath, "Skyrim.esm"))) throw new FileNotFoundException("Skyrim.esm is missing.");
+            var sources = new List<ISkyrimModDisposableGetter>();
+            try
+            {
+            foreach (var name in WeaponTypes.VanillaSources.Where(n => File.Exists(Path.Combine(gameDataPath, n)))) sources.Add(ReadMaster(gameDataPath, name));
             IReadOnlyList<RecordOption> Options(IEnumerable<IMajorRecordGetter> records) => records
                 .Where(r => !r.IsDeleted && !string.IsNullOrWhiteSpace(r.EditorID))
                 .Select(r =>
@@ -24,11 +28,13 @@ public sealed partial class PluginBuilderService
                 }).OrderBy(r => r.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
             return new WeaponOptions
             {
-                Keywords = Options(source.Keywords), Sounds = Options(source.SoundDescriptors),
-                Enchantments = Options(source.ObjectEffects.Where(IsWeaponEnchantment)),
-                Ingredients = Options(source.EnumerateMajorRecords<IItemGetter>().Where(r => r is not ILeveledItemGetter)),
-                Perks = Options(source.Perks), LeveledLists = Options(source.LeveledItems)
+                Keywords = Options(sources.SelectMany(s => s.Keywords).DistinctBy(r => r.FormKey)), Sounds = Options(sources.SelectMany(s => s.SoundDescriptors).DistinctBy(r => r.FormKey)),
+                Enchantments = Options(sources.SelectMany(s => s.ObjectEffects).Where(IsWeaponEnchantment).DistinctBy(r => r.FormKey)),
+                Ingredients = Options(sources.SelectMany(s => s.EnumerateMajorRecords<IItemGetter>()).Where(r => r is not ILeveledItemGetter).DistinctBy(r => r.FormKey)),
+                Perks = Options(sources.SelectMany(s => s.Perks).DistinctBy(r => r.FormKey)), LeveledLists = Options(sources.SelectMany(s => s.LeveledItems).DistinctBy(r => r.FormKey))
             };
+            }
+            finally { foreach (var source in sources) source.Dispose(); }
         }, cancellationToken);
     }
 
@@ -43,6 +49,7 @@ public sealed partial class PluginBuilderService
     {
         Description = sword.Description?.String ?? string.Empty,
         Speed = sword.Data?.Speed ?? 1, Reach = sword.Data?.Reach ?? 1,
+        RangeMin = sword.Data?.RangeMin ?? 0, RangeMax = sword.Data?.RangeMax ?? 0, Stagger = sword.Data?.Stagger ?? 0,
         ModelPath = sword.Model?.File.GivenPath ?? string.Empty,
         FirstPersonModel = Reference(sword.FirstPersonModel.FormKey),
         FirstPersonModelPath = source?.Statics.FirstOrDefault(s => s.FormKey == sword.FirstPersonModel.FormKey && !s.IsDeleted)?.Model?.File.GivenPath,
@@ -66,12 +73,47 @@ public sealed partial class PluginBuilderService
             throw new InvalidOperationException("Use a relative NIF path inside meshes, for example Weapons\\Iron\\LongSword.nif.");
         if (details.Enchantment != null && details.EnchantmentCharge == 0)
             throw new InvalidOperationException("A weapon enchantment requires a positive charge.");
+        if (details.Enchantment == null && details.EnchantmentCharge != 0)
+            throw new InvalidOperationException("Charge must be zero when no enchantment is assigned.");
         using var resolver = new RecordResolver(mod, gameDataPath);
-        var keywords = details.Keywords.Select(k => resolver.Resolve<IKeywordGetter>(k).FormKey).Distinct().ToList();
+        var keywordRecords = details.Keywords.Select(k => resolver.Resolve<IKeywordGetter>(k)).ToList();
+        var keywords = keywordRecords.Select(k => k.FormKey).ToList();
+        if (keywords.Distinct().Count() != keywords.Count) throw new InvalidOperationException("Duplicate keywords are not allowed.");
+        var knownTypes = new Dictionary<string, WeaponKind>(StringComparer.OrdinalIgnoreCase) {
+            ["WeapTypeSword"] = WeaponKind.OneHandSword, ["WeapTypeDagger"] = WeaponKind.Dagger, ["WeapTypeWarAxe"] = WeaponKind.WarAxe,
+            ["WeapTypeMace"] = WeaponKind.Mace, ["WeapTypeGreatsword"] = WeaponKind.Greatsword,
+            ["WeapTypeBattleaxe"] = WeaponKind.BattleaxeWarhammer, ["WeapTypeWarhammer"] = WeaponKind.BattleaxeWarhammer, ["WeapTypeBow"] = WeaponKind.Bow, ["WeapTypeCrossbow"] = WeaponKind.Crossbow };
+        foreach (var keyword in keywordRecords)
+            if (knownTypes.TryGetValue(keyword.EditorID ?? "", out var type) && type != WeaponTypes.Kind(sword) &&
+                !(WeaponTypes.Kind(sword) == WeaponKind.Crossbow && type == WeaponKind.Bow))
+                throw new InvalidOperationException("Weapon type keyword is incompatible with the inherited animation type: " + keyword.EditorID);
         var sound = details.AttackSound == null ? FormKey.Null : resolver.Resolve<ISoundDescriptorGetter>(details.AttackSound).FormKey;
         var enchantment = details.Enchantment == null ? null : resolver.Resolve<IObjectEffectGetter>(details.Enchantment);
         if (enchantment != null && !IsWeaponEnchantment(enchantment))
             throw new InvalidOperationException("Select a touch, fire-and-forget weapon enchantment, rather than an armor or staff enchantment.");
+        if (enchantment != null)
+        {
+            var visited = new HashSet<FormKey>();
+            var current = enchantment;
+            while (true)
+            {
+                if (!visited.Add(current.FormKey)) throw new InvalidOperationException("Cyclic base enchantment references.");
+                if (!IsWeaponEnchantment(current)) throw new InvalidOperationException("Incompatible base enchantment.");
+                foreach (var effect in current.Effects)
+                {
+                    var magic = resolver.Resolve<IMagicEffectGetter>(Reference(effect.BaseEffect.FormKey) ?? throw new InvalidOperationException("Enchantment effect is NULL."));
+                    if (magic.CastType != CastType.FireAndForget || magic.TargetType != TargetType.Touch) throw new InvalidOperationException("Enchantment contains an incompatible magic effect.");
+                }
+                if (current.WornRestrictions.FormKey != FormKey.Null)
+                {
+                    var restriction = resolver.Resolve<IFormListGetter>(Reference(current.WornRestrictions.FormKey)!);
+                    if (!restriction.Items.Any(i => i.FormKey == sword.FormKey || keywords.Contains(i.FormKey)))
+                        throw new InvalidOperationException("The weapon does not match the enchantment's restriction list.");
+                }
+                if (current.BaseEnchantment.FormKey == FormKey.Null) break;
+                current = resolver.Resolve<IObjectEffectGetter>(Reference(current.BaseEnchantment.FormKey)!);
+            }
+        }
         sword.Description = details.Description;
         sword.Data!.Speed = details.Speed;
         sword.Data.Reach = details.Reach;
@@ -91,7 +133,7 @@ public sealed partial class PluginBuilderService
         {
             using var mod = SkyrimMod.Create(SkyrimRelease.SkyrimSE).FromPath(pluginPath).WithUtf8Encoding().Construct();
             var weaponKey = new FormKey(mod.ModKey, weaponFormId);
-            return mod.ConstructibleObjects.Where(r => r.FormKey.ModKey == mod.ModKey && r.CreatedObject.FormKey == weaponKey)
+            return mod.ConstructibleObjects.Where(r => !r.IsDeleted && r.FormKey.ModKey == mod.ModKey && r.CreatedObject.FormKey == weaponKey)
                 .Select(r => { cancellationToken.ThrowIfCancellationRequested(); return ToRecipe(r); }).ToList();
         }, cancellationToken);
     }
@@ -111,17 +153,33 @@ public sealed partial class PluginBuilderService
             if (data.Ingredients.Select(i => i.Reference).Distinct().Count() != data.Ingredients.Count)
                 throw new InvalidOperationException("Combine duplicate ingredients into one row.");
             var recipe = data.FormId.HasValue ? mod.ConstructibleObjects.FirstOrDefault(r =>
-                r.FormKey.ModKey == mod.ModKey && r.FormKey.ID == data.FormId && r.CreatedObject.FormKey == sword.FormKey) : null;
+                !r.IsDeleted && r.FormKey.ModKey == mod.ModKey && r.FormKey.ID == data.FormId && r.CreatedObject.FormKey == sword.FormKey) : null;
             if (data.FormId.HasValue && recipe == null) throw new InvalidOperationException("Recipe not found for the selected sword.");
             if (recipe != null) _ = ToRecipe(recipe); // Reject unsupported conditions rather than discarding them.
             if (mod.EnumerateMajorRecords().Any(r => r.FormKey != recipe?.FormKey && string.Equals(r.EditorID, data.EditorId, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("The recipe EditorID already exists.");
             using var resolver = new RecordResolver(mod, request.GameDataPath);
-            var bench = resolver.Resolve<IKeywordGetter>(data.Workbench).FormKey;
-            var ingredients = data.Ingredients.Select(i => (Key: resolver.Resolve<IItemGetter>(i.Reference).FormKey, i.Count)).ToList();
+            var benchRecord = resolver.Resolve<IKeywordGetter>(data.Workbench);
+            var bench = benchRecord.FormKey;
+            var tempering = string.Equals(benchRecord.EditorID, "CraftingSmithingSharpeningWheel", StringComparison.OrdinalIgnoreCase);
+            if (tempering && data.OutputCount != 1) throw new InvalidOperationException("A tempering recipe must improve exactly one weapon.");
+            var ingredients = data.Ingredients.Select(i => {
+                var item = resolver.Resolve<IItemGetter>(i.Reference);
+                if (item is ILeveledItemGetter || item.FormKey == sword.FormKey) throw new InvalidOperationException("Recipe materials cannot be leveled lists or the output weapon itself.");
+                return (Key: item.FormKey, i.Count);
+            }).ToList();
             if (ingredients.Select(i => i.Key).Distinct().Count() != ingredients.Count)
                 throw new InvalidOperationException("Combine duplicate ingredients into one row.");
             var perk = data.RequiredPerk == null ? FormKey.Null : resolver.Resolve<IPerkGetter>(data.RequiredPerk).FormKey;
+            FormKey arcane = FormKey.Null;
+            if (tempering)
+            {
+                using var vanilla = ReadMaster(request.GameDataPath, "Skyrim.esm");
+                var arcaneRecord = vanilla.Perks.FirstOrDefault(p => !p.IsDeleted && p.EditorID == "ArcaneBlacksmith") ?? throw new InvalidOperationException("ArcaneBlacksmith perk is missing from Skyrim.esm.");
+                arcane = resolver.Resolve<IPerkGetter>(Reference(arcaneRecord.FormKey)!).FormKey;
+            }
+            if (recipe != null && ToRecipe(recipe).TemperingPerk is { } existingArcane && resolver.Resolve<IPerkGetter>(existingArcane).EditorID != "ArcaneBlacksmith")
+                throw new InvalidOperationException("The existing tempering condition has an unsupported perk.");
             if (recipe == null)
             {
                 var id = AllocateCompactId(mod);
@@ -140,6 +198,13 @@ public sealed partial class PluginBuilderService
                 recipe.Items.Add(entry);
             }
             recipe.Conditions.Clear();
+            if (tempering)
+            {
+                recipe.Conditions.Add(new ConditionFloat { CompareOperator = CompareOperator.NotEqualTo, ComparisonValue = 1,
+                    Flags = (Condition.Flag)1, Data = new EPTemperingItemIsEnchantedConditionData { RunOnType = Condition.RunOnType.Subject } });
+                var guard = new HasPerkConditionData { RunOnType = Condition.RunOnType.Subject }; guard.Perk.Link.SetTo(arcane);
+                recipe.Conditions.Add(new ConditionFloat { CompareOperator = CompareOperator.EqualTo, ComparisonValue = 1, Data = guard });
+            }
             if (perk != FormKey.Null)
             {
                 var conditionData = new HasPerkConditionData { RunOnType = Condition.RunOnType.Subject };
@@ -169,14 +234,21 @@ public sealed partial class PluginBuilderService
 
     private static CraftingRecipe ToRecipe(IConstructibleObjectGetter recipe)
     {
-        if (recipe.Conditions.Count > 1 || recipe.Conditions.Any(c =>
+        var conditions = recipe.Conditions.ToArray();
+        var tempering = conditions.Length >= 2 && conditions[0] is IConditionFloatGetter first && first.ComparisonValue == 1 &&
+            first.CompareOperator == CompareOperator.NotEqualTo && (int)first.Flags == 1 && first.Data is IEPTemperingItemIsEnchantedConditionDataGetter ep &&
+            ep.RunOnType == Condition.RunOnType.Subject && !ep.UseAliases && !ep.UsePackageData;
+        var perkConditions = tempering ? conditions.Skip(1).ToArray() : conditions;
+        if (perkConditions.Length > (tempering ? 2 : 1) || perkConditions.Any(c =>
             c is not IConditionFloatGetter value || value.ComparisonValue != 1 || c.CompareOperator != CompareOperator.EqualTo ||
             c.Flags != 0 || c.Data is not IHasPerkConditionDataGetter perk || perk.RunOnType != Condition.RunOnType.Subject ||
             perk.UseAliases || perk.UsePackageData || perk.Perk.Link.FormKey == FormKey.Null) ||
-            recipe.Items?.Any(i => i.Data != null || i.Item == null) == true)
+            recipe.Items?.Any(i => i.Data != null || i.Item == null || i.Item.Count <= 0 || i.Item.Item.FormKey == FormKey.Null) == true || recipe.CreatedObjectCount == 0)
             throw new InvalidOperationException("This recipe has advanced conditions or ingredient metadata that this editor cannot change.");
         return new CraftingRecipe
         {
+            IsTempering = tempering,
+            TemperingPerk = tempering ? Reference(((IHasPerkConditionDataGetter)perkConditions[0].Data).Perk.Link.FormKey) : null,
             FormId = recipe.FormKey.ID, WeaponFormId = recipe.CreatedObject.FormKey.ID, EditorId = recipe.EditorID ?? string.Empty,
             Workbench = Reference(recipe.WorkbenchKeyword.FormKey) ?? throw new InvalidOperationException("Recipe has no workbench keyword."),
             OutputCount = recipe.CreatedObjectCount ?? 1,
@@ -184,7 +256,7 @@ public sealed partial class PluginBuilderService
             {
                 Reference = Reference(i.Item.Item.FormKey) ?? throw new InvalidOperationException("Recipe has an invalid ingredient."), Count = i.Item.Count
             }).ToList() ?? [],
-            RequiredPerk = recipe.Conditions.Select(c => c.Data).OfType<IHasPerkConditionDataGetter>()
+            RequiredPerk = perkConditions.Skip(tempering ? 1 : 0).Select(c => c.Data).OfType<IHasPerkConditionDataGetter>()
                 .Select(c => Reference(c.Perk.Link.FormKey)).SingleOrDefault()
         };
     }
@@ -242,6 +314,7 @@ public sealed partial class PluginBuilderService
     private sealed class RecordResolver(ISkyrimMod mod, string dataPath) : IDisposable
     {
         private readonly Dictionary<ModKey, ISkyrimModDisposableGetter> _sources = [];
+        private readonly Dictionary<ModKey, Dictionary<FormKey, IMajorRecordGetter>> _overrides = [];
 
         public T Resolve<T>(PluginRecordReference reference) where T : class, IMajorRecordGetter
         {
@@ -264,7 +337,30 @@ public sealed partial class PluginBuilderService
                     mod.ModHeader.MasterReferences.Add(new MasterReference { Master = key });
                 }
             }
-            return source.EnumerateMajorRecords<T>().FirstOrDefault(r => r.FormKey == new FormKey(key, reference.FormId) && !r.IsDeleted)
+            var formKey = new FormKey(key, reference.FormId);
+            var local = mod.EnumerateMajorRecords().FirstOrDefault(r => r.FormKey == formKey);
+            if (local != null)
+                return local is T typed && !local.IsDeleted ? typed : throw new InvalidOperationException($"{reference} is deleted or has an incompatible local override.");
+            foreach (var dependency in mod.ModHeader.MasterReferences.AsEnumerable().Reverse())
+            {
+                if (!_sources.TryGetValue(dependency.Master, out var winnerSource))
+                {
+                    ValidateFileName(dependency.Master.FileName.String, true);
+                    winnerSource = ReadMaster(dataPath, dependency.Master.FileName.String); _sources.Add(dependency.Master, winnerSource);
+                }
+                // Typed enumeration visits only the relevant groups (e.g. KYWD rather than every CELL/REFR).
+                var typedWinner = winnerSource.EnumerateMajorRecords<T>().FirstOrDefault(r => r.FormKey == formKey);
+                if (typedWinner != null) return !typedWinner.IsDeleted ? typedWinner : throw new InvalidOperationException($"{reference} is deleted in its winning master.");
+                if (winnerSource.ModKey == formKey.ModKey)
+                    throw new InvalidOperationException($"{reference} is missing or has an incompatible record type.");
+                if (!_overrides.TryGetValue(winnerSource.ModKey, out var overrides))
+                {
+                    overrides = winnerSource.EnumerateMajorRecords().Where(r => r.FormKey.ModKey != winnerSource.ModKey).ToDictionary(r => r.FormKey);
+                    _overrides.Add(winnerSource.ModKey, overrides);
+                }
+                if (overrides.ContainsKey(formKey)) throw new InvalidOperationException($"{reference} has an incompatible winning master override.");
+            }
+            return source.EnumerateMajorRecords<T>().FirstOrDefault(r => r.FormKey == formKey && !r.IsDeleted)
                 ?? throw new InvalidOperationException($"{reference} is missing or is not a {typeof(T).Name} record.");
         }
 

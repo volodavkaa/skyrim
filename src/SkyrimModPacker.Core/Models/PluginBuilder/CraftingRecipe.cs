@@ -9,6 +9,8 @@ public sealed class RecipeIngredient
 /// <summary>A forge or tempering recipe for an owned weapon.</summary>
 public sealed class CraftingRecipe
 {
+    public bool IsTempering { get; init; }
+    public PluginRecordReference? TemperingPerk { get; init; }
     public uint? FormId { get; init; }
     public uint WeaponFormId { get; init; }
     public required string EditorId { get; init; }

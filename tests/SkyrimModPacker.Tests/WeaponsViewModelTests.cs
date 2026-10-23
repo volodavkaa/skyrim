@@ -385,7 +385,7 @@ public partial class WeaponsViewModelTests : IDisposable
     {
         var builder = Substitute.For<IPluginBuilderService>();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        builder.GetSwordTemplatesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(async call =>
+        builder.GetWeaponTemplatesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(async call =>
         {
             started.SetResult();
             await Task.Delay(Timeout.Infinite, call.ArgAt<CancellationToken>(1));

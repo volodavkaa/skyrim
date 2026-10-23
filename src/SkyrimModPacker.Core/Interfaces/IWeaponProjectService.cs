@@ -6,6 +6,15 @@ namespace SkyrimModPacker.Core.Interfaces;
 
 public interface IWeaponProjectService
 {
+    Task<Result<IReadOnlyList<WeaponVariant>>> GetVariantsAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<PluginRecordReference?>> GetTemplateReferenceAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<ResourceVersion>>> GetResourceVersionsAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<ResourceVersion>> BackupResourceAsync(string projectFilePath, string relativePath, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<string>> ImportModelVersionCopyAsync(string projectFilePath, Guid versionId, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<string>> ReplaceResourceAsync(string projectFilePath, string relativePath, string sourcePath, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<string>> RestoreResourceVersionAsync(string projectFilePath, Guid versionId, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<string>> DeleteResourceAsync(string projectFilePath, string relativePath, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<string>> ImportModelCopyAsync(string projectFilePath, string sourcePath, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<ProjectResourceCatalog>> GetResourceCatalogAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<uint?>> GetTemplateOriginAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<WeaponModels?>> GetOriginalModelsAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);

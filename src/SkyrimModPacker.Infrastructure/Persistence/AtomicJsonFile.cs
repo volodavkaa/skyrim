@@ -77,6 +77,7 @@ internal sealed class AtomicJsonFile<T>(string path, Func<T> createDefaults, Jso
             token.ThrowIfCancellationRequested();
             if (File.Exists(_path)) File.Replace(temporary, _path, backup);
             else File.Move(temporary, _path);
+            WorkspaceWriteExpectation.Written(_path);
             // Once committed, report success even if cancellation arrives immediately afterwards.
         }
         catch (Exception ex)

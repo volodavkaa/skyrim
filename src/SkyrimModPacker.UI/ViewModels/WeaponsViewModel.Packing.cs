@@ -13,7 +13,12 @@ public sealed partial class WeaponsViewModel
     [ObservableProperty] private string? _lastProjectArchivePath;
     [ObservableProperty] private bool _enableProjectEsl;
     [ObservableProperty] private ObservableCollection<PluginDiagnostic> _pluginDiagnostics = [];
-    partial void OnPluginPathChanged(string value) => PluginDiagnostics = [];
+    partial void OnPluginPathChanged(string value)
+    {
+        PluginDiagnostics = [];
+        _draftScheduler?.Cancel();
+        DraftFilePath = DraftSaveStatus = DraftSaveError = null;
+    }
 
     partial void OnSelectedPackingProfileChanged(ModProfile? value) => EnableProjectEsl = value?.EnableEsl ?? false;
 
@@ -22,9 +27,10 @@ public sealed partial class WeaponsViewModel
         if (oldValue != null) oldValue.CollectionChanged -= OnDraftKeywordsChanged;
         newValue.CollectionChanged += OnDraftKeywordsChanged;
         IsWizardSaved = false;
+        UpdateUnsavedChanges();
     }
 
-    private void OnDraftKeywordsChanged(object? sender, NotifyCollectionChangedEventArgs e) => IsWizardSaved = false;
+    private void OnDraftKeywordsChanged(object? sender, NotifyCollectionChangedEventArgs e) { IsWizardSaved = false; UpdateUnsavedChanges(); }
 
     [RelayCommand]
     private Task PackProjectAsync() => RunOperationAsync(async token =>
@@ -33,7 +39,7 @@ public sealed partial class WeaponsViewModel
         LastProjectArchivePath = null;
         RequireProject();
         RequirePlugin();
-        if (!IsSummaryStep || !IsWizardSaved)
+        if (!IsSummaryStep || !IsWizardSaved || HasUnsavedChanges)
             throw new InvalidOperationException(Text("Weapons_SaveBeforePacking", "Save the sword on Summary before packing. Unsaved changes are not included."));
         if (_packingPipeline == null) throw new InvalidOperationException("The packing pipeline is not available.");
         var settings = await _settings.LoadAsync(token);
@@ -55,7 +61,8 @@ public sealed partial class WeaponsViewModel
         await _profiles.SaveAsync(profile, token);
         PackingProfiles = new ObservableCollection<ModProfile>(await _profiles.LoadAllAsync(token));
         SelectedPackingProfile = PackingProfiles.FirstOrDefault(p => p.Id == profile.Id);
-        var result = await _packingPipeline.ExecuteAsync(profile, settings, cancellationToken: token);
+        var progress = new Progress<double>(p => OperationProgress = $"{Math.Clamp(p, 0, 1) * 100:0}%");
+        var result = await _packingPipeline.ExecuteAsync(profile, settings, progress, token);
         PluginDiagnostics = new ObservableCollection<PluginDiagnostic>(result.PluginDiagnostics);
         if (!result.IsSuccess) throw new InvalidOperationException(string.Join(Environment.NewLine, result.Errors));
         LastProjectArchivePath = result.OutputArchivePath;

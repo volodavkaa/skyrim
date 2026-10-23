@@ -6,6 +6,9 @@ public sealed class WeaponDetails
     public string Description { get; init; } = string.Empty;
     public float Speed { get; init; } = 1;
     public float Reach { get; init; } = 1;
+    public float RangeMin { get; init; }
+    public float RangeMax { get; init; }
+    public float Stagger { get; init; }
     public string ModelPath { get; init; } = string.Empty;
     // Null preserves the current WNAM; an explicit reference restores a vanilla STAT.
     public PluginRecordReference? FirstPersonModel { get; init; }

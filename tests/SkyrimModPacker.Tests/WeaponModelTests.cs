@@ -249,6 +249,12 @@ public partial class WeaponProjectTests
         if (scenario == 4) first = third;
         var source = File.ReadAllBytes(Path.Combine(Data, "Skyrim.esm"));
         Assert.True((await CloneModelAsync(p, first: first, third: third)).IsSuccess);
+        var originalPlugin = File.ReadAllBytes(p.PluginPath);
+        var originalMetadata = File.ReadAllBytes(p.ProjectFilePath);
+        // Reopen from a different folder: absolute asset paths must not leak into the saved project.
+        var moved = Path.Combine(_root, "reopened-models");
+        Directory.Move(Path.GetDirectoryName(p.ProjectFilePath)!, moved);
+        p = (await Service.OpenAsync(Path.Combine(moved, WeaponProjectService.ProjectFileName), Data)).Value;
         Assert.True((await Service.OpenAsync(p.ProjectFilePath, Data)).IsSuccess);
         var paths = (await _builder.GetWeaponModelsAsync(p.PluginPath, Data, 0x800)).Value;
         Assert.Equal(third ?? @"Weapons\Iron\Sword.nif", paths.ThirdPersonPath);
@@ -258,6 +264,10 @@ public partial class WeaponProjectTests
         { SkyrimDataPath = Data, OutputDirectory = Path.Combine(_root, "archives"), UseTempDirectory = staging });
         Assert.True(packed.IsSuccess, string.Join("; ", packed.Errors));
         using var zip = ZipFile.OpenRead(packed.OutputArchivePath);
+        var expectedEntries = new[] { "MySword.esp" }
+            .Concat(new[] { third, first }.Where(path => path != null).Select(path => "meshes/" + path!.Replace('\\', '/')))
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedEntries, zip.Entries.Select(entry => entry.FullName).OrderBy(path => path, StringComparer.Ordinal));
         Assert.Equal(1 + (scenario == 0 ? 0 : scenario == 3 ? 2 : 1), zip.Entries.Count);
         Assert.Equal(zip.Entries.Count, zip.Entries.Select(e => e.FullName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         foreach (var entry in zip.Entries.Where(e => e.FullName.EndsWith(".nif")))
@@ -266,6 +276,34 @@ public partial class WeaponProjectTests
             using var a = new MemoryStream(); using var b = new MemoryStream(); input.CopyTo(a); expected.CopyTo(b);
             Assert.Equal(b.ToArray(), a.ToArray());
         }
+        var unpacked = Path.Combine(_root, "verified-plugin", "MySword.esp");
+        Directory.CreateDirectory(Path.GetDirectoryName(unpacked)!);
+        zip.GetEntry("MySword.esp")!.ExtractToFile(unpacked);
+        using (var mod = SkyrimMod.CreateFromBinaryOverlay(unpacked, SkyrimRelease.SkyrimSE))
+        {
+            Assert.Equal(esl, mod.IsSmallMaster);
+            Assert.Equal(0x800u, Assert.Single(mod.Weapons).FormKey.ID);
+            Assert.Equal(first == null ? 0x801u : 0x802u, mod.ModHeader.Stats.NextFormID);
+            if (first == null)
+            {
+                Assert.Empty(mod.Statics);
+                Assert.Equal(new FormKey(ModKey.FromNameAndExtension("Skyrim.esm"), 0x12345), mod.Weapons.First().FirstPersonModel.FormKey);
+            }
+            else
+            {
+                var stat = Assert.Single(mod.Statics);
+                Assert.Equal(0x801u, stat.FormKey.ID);
+                Assert.Equal(stat.FormKey, mod.Weapons.First().FirstPersonModel.FormKey);
+                Assert.Equal(first, stat.Model!.File.GivenPath);
+            }
+        }
+        var archivedModels = await _builder.GetWeaponModelsAsync(unpacked, Data, 0x800);
+        Assert.True(archivedModels.IsSuccess, archivedModels.Error);
+        Assert.Null(archivedModels.Value.Error);
+        Assert.Equal(paths.ThirdPersonPath, archivedModels.Value.ThirdPersonPath);
+        Assert.Equal(paths.FirstPersonPath, archivedModels.Value.FirstPersonPath);
+        Assert.Equal(originalPlugin, File.ReadAllBytes(p.PluginPath));
+        Assert.Equal(originalMetadata, File.ReadAllBytes(p.ProjectFilePath));
         Assert.Equal(source, File.ReadAllBytes(Path.Combine(Data, "Skyrim.esm")));
     }
 

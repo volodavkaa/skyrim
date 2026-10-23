@@ -48,6 +48,10 @@ public partial class App : System.Windows.Application
 
             // Localization
             services.AddSingleton<ILocalizationService, LocalizationService>();
+            services.AddSingleton<IUnsavedChangesPrompt, UnsavedChangesPrompt>();
+            services.AddSingleton<IDraftAutosaveScheduler, DraftAutosaveScheduler>();
+            services.AddSingleton<IWorkspaceConflictPrompt, WorkspaceConflictPrompt>();
+            services.AddSingleton<IWorkspaceFolderOpener, WorkspaceFolderOpener>();
 
             // Main window
             services.AddSingleton<MainWindow>();
@@ -63,7 +67,7 @@ public partial class App : System.Windows.Application
             services.AddTransient<LogPage>();
             services.AddTransient<LogViewModel>();
             services.AddTransient<WeaponsPage>();
-            services.AddTransient<WeaponsViewModel>();
+            services.AddSingleton<WeaponsViewModel>();
 
             // Application layer
             services.AddApplicationServices();

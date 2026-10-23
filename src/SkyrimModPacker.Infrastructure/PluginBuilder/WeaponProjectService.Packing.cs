@@ -48,12 +48,12 @@ public sealed partial class WeaponProjectService
                     if (!resources.Contains(firstResource, StringComparer.OrdinalIgnoreCase))
                     {
                         if (File.Exists(ResourceTarget(folder, firstResource, gameDataPath)) ||
-                            !models.Value.FirstPersonReference.PluginName.Equals("Skyrim.esm", StringComparison.OrdinalIgnoreCase))
+                            !WeaponTypes.IsVanillaSource(models.Value.FirstPersonReference.PluginName))
                             throw new InvalidOperationException("Import and register the first-person NIF before packing: " + first);
                         // A Skyrim-owned FormKey alone does not establish a vanilla model: an override may change it.
                         using var originalMaster = Mutagen.Bethesda.Skyrim.SkyrimMod.CreateFromBinaryOverlay(
-                            Path.Combine(gameDataPath, "Skyrim.esm"), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE);
-                        var originalStatic = originalMaster.Statics.FirstOrDefault(s => s.FormKey.ID == models.Value.FirstPersonReference.FormId && !s.IsDeleted);
+                            Path.Combine(gameDataPath, models.Value.FirstPersonReference.PluginName), Mutagen.Bethesda.Skyrim.SkyrimRelease.SkyrimSE);
+                        var originalStatic = originalMaster.Statics.FirstOrDefault(s => s.FormKey.ModKey.FileName.String.Equals(models.Value.FirstPersonReference.PluginName, StringComparison.OrdinalIgnoreCase) && s.FormKey.ID == models.Value.FirstPersonReference.FormId && !s.IsDeleted);
                         if (!string.Equals(originalStatic?.Model?.File.GivenPath.Replace('\\', '/'), first.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
                             throw new InvalidOperationException("Unregistered custom first-person model: " + first);
                     }
@@ -67,7 +67,7 @@ public sealed partial class WeaponProjectService
                     throw new InvalidOperationException("Register the project's model using Import NIF before packing: " + model);
                 if (vanillaModels == null)
                 {
-                    var templates = await builder.GetSwordTemplatesAsync(gameDataPath, cancellationToken);
+                    var templates = await builder.GetWeaponTemplatesAsync(gameDataPath, cancellationToken);
                     if (templates.IsFailure) throw new InvalidOperationException(templates.Error);
                     vanillaModels = templates.Value.Select(t => t.Details.ModelPath.Replace('\\', '/'))
                         .Select(p => p.StartsWith("meshes/", StringComparison.OrdinalIgnoreCase) ? p[7..] : p).ToHashSet(StringComparer.OrdinalIgnoreCase);

@@ -13,6 +13,7 @@
     MinHeight="550"
     WindowStartupLocation="CenterScreen"
     SizeChanged="OnWindowSizeChanged"
+    Closing="OnWindowClosing"
     UseLayoutRounding="True"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica">

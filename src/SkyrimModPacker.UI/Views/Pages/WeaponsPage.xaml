@@ -38,6 +38,44 @@
                 <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding ErrorMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
                 <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="{Binding StatusMessage, Converter={StaticResource NotNullToVisibilityConverter}}" />
                 <layout:PluginDiagnosticsView Diagnostics="{Binding PluginDiagnostics}" />
+                <WrapPanel IsEnabled="{Binding IsEditorBusy, Converter={StaticResource InverseBooleanConverter}}" Margin="0,0,0,8">
+                    <ui:Button Content="{DynamicResource History_Undo}" Command="{Binding UndoCommand}" IsEnabled="{Binding CanUndo}" Margin="0,0,8,0" />
+                    <ui:Button Content="{DynamicResource History_Redo}" Command="{Binding RedoCommand}" IsEnabled="{Binding CanRedo}" Margin="0,0,8,0" />
+                    <ui:Button Content="{DynamicResource Recovery_Check}" Command="{Binding FindRecoveryCommand}" />
+                </WrapPanel>
+                <TextBlock Text="{Binding OperationProgress}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding RecoveryMessage}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                <StackPanel Visibility="{Binding SelectedRecoveryCandidate, Converter={StaticResource NotNullToVisibilityConverter}}" Margin="0,0,0,12">
+                    <TextBlock Text="{DynamicResource Recovery_Title}" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding RecoveryCandidates}" SelectedItem="{Binding SelectedRecoveryCandidate}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="{Binding SelectedRecoveryCandidate.Draft.ProjectFilePath}" TextWrapping="Wrap" />
+                    <WrapPanel IsEnabled="{Binding IsEditorBusy, Converter={StaticResource InverseBooleanConverter}}">
+                        <ui:Button Content="{DynamicResource Recovery_Restore}" Command="{Binding RestoreDraftCommand}" Margin="0,4,8,0" />
+                        <ui:Button Content="{DynamicResource Recovery_Discard}" Command="{Binding DiscardRecoveryCommand}" Margin="0,4,0,0" />
+                    </WrapPanel>
+                </StackPanel>
+                <StackPanel Margin="0,0,0,12">
+                    <WrapPanel>
+                        <CheckBox Content="{DynamicResource Draft_Autosave}" IsChecked="{Binding EnableDraftAutosave}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <ui:Button Content="{DynamicResource Draft_Save}" Command="{Binding SaveEditorDraftCommand}"
+                                   IsEnabled="{Binding IsEditorBusy, Converter={StaticResource InverseBooleanConverter}}" />
+                    </WrapPanel>
+                    <TextBlock Text="{DynamicResource Draft_Hint}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding DraftSaveStatus}" TextWrapping="Wrap" Visibility="{Binding DraftSaveStatus, Converter={StaticResource NotNullToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding DraftSaveError}" TextWrapping="Wrap" Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                               Visibility="{Binding DraftSaveError, Converter={StaticResource NotNullToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding DraftFilePath}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <Border Padding="12" Margin="0,0,0,12" BorderThickness="2" CornerRadius="8"
+                        BorderBrush="{DynamicResource SystemAccentColorPrimaryBrush}"
+                        Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Unsaved_Indicator}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{DynamicResource Unsaved_Hint}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                        <ui:Button Content="{DynamicResource Unsaved_Save}" Command="{Binding SaveAllChangesCommand}"
+                                   IsEnabled="{Binding IsEditorBusy, Converter={StaticResource InverseBooleanConverter}}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
                 <Grid Margin="0,0,0,12" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -46,7 +84,7 @@
                     <ProgressBar IsIndeterminate="True" Height="4" VerticalAlignment="Center" Margin="0,0,12,0" />
                     <ui:Button Grid.Column="1" Content="{DynamicResource Build_Cancel}" Command="{Binding CancelOperationCommand}" />
                 </Grid>
-                <StackPanel IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}">
+                <StackPanel IsEnabled="{Binding IsEditorBusy, Converter={StaticResource InverseBooleanConverter}}">
                     <layout:ResponsiveColumnsPanel MinColumnWidth="110" MaxColumns="5" Gap="8" Margin="0,0,0,24">
                         <Border>
                             <Border.Style>
@@ -210,13 +248,18 @@
                                     </WrapPanel>
                                     <TextBlock Text="{DynamicResource Weapons_TemplateSearch}" Margin="0,0,0,6" />
                                     <ui:TextBox Text="{Binding TemplateSearch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
-                                    <ComboBox ItemsSource="{Binding FilteredTemplates}" SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}" Margin="0,0,0,12">
+                                    <TextBlock Text="{DynamicResource Stage4_WeaponType}" Margin="0,0,0,6" />
+                                    <ComboBox ItemsSource="{Binding WeaponTypes}" SelectedValuePath="Kind" DisplayMemberPath="Name" SelectedValue="{Binding WeaponTypeSelection, Mode=TwoWay}" Margin="0,0,0,12" />
+                                    <TextBlock Text="{Binding TemplateAvailability}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <ComboBox ItemsSource="{Binding FilteredTemplates}" SelectedItem="{Binding TemplateSelection, Mode=TwoWay}" Margin="0,0,0,12">
                                         <ComboBox.ItemTemplate>
                                             <DataTemplate>
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                                         <Run Text="{Binding EditorId}" />
+                                                        <Run Text=" · " />
+                                                        <Run Text="{Binding PluginName}" />
                                                         <Run Text=" · " />
                                                         <Run Text="{Binding FormId, StringFormat={}{0:X6}}" />
                                                     </TextBlock>
@@ -231,7 +274,7 @@
                             <ui:Card Margin="0">
                                 <StackPanel>
                                     <TextBlock Text="{DynamicResource Weapons_InPlugin}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" TextWrapping="Wrap" />
-                                    <DataGrid ItemsSource="{Binding Weapons}" SelectedItem="{Binding SelectedWeapon, Mode=TwoWay}" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Single" SelectionUnit="FullRow" Height="265" Margin="0,0,0,12" RowHeight="40" ColumnHeaderHeight="36" AlternationCount="2" AlternatingRowBackground="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                                    <DataGrid ItemsSource="{Binding Weapons}" SelectedItem="{Binding WeaponSelection, Mode=TwoWay}" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Single" SelectionUnit="FullRow" Height="265" Margin="0,0,0,12" RowHeight="40" ColumnHeaderHeight="36" AlternationCount="2" AlternatingRowBackground="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="{DynamicResource Weapons_Name}" Binding="{Binding Name}" Width="2*" MinWidth="100" />
                                             <DataGridTextColumn Header="FormID" Binding="{Binding FormId, StringFormat={}{0:X6}}" Width="75" />
@@ -292,6 +335,24 @@
                             <StackPanel>
                                 <TextBlock Text="{DynamicResource Resources_Title}" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8" />
                                 <TextBlock Text="{DynamicResource Resources_SavedHint}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <TextBlock Text="{DynamicResource ResourceEdit_Hint}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <WrapPanel>
+                                    <ui:Button Content="{DynamicResource ResourceEdit_Third}" Command="{Binding ReplaceThirdPersonModelCommand}" Margin="0,0,8,8" />
+                                    <ui:Button Content="{DynamicResource ResourceEdit_First}" Command="{Binding ReplaceFirstPersonModelCommand}" Margin="0,0,8,8" />
+                                    <ui:Button Content="{DynamicResource ResourceEdit_Folder}" Command="{Binding OpenProjectFolderCommand}" Margin="0,0,8,8" />
+                                </WrapPanel>
+                                <ComboBox ItemsSource="{Binding ResourceCatalog}" SelectedItem="{Binding SelectedResource}" DisplayMemberPath="RelativePath" Margin="0,0,0,8" />
+                                <TextBlock Text="{Binding SelectedResource.UsageText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <WrapPanel>
+                                    <ui:Button Content="{DynamicResource ResourceEdit_Replace}" Command="{Binding ReplaceResourceCommand}" Margin="0,0,8,8" />
+                                    <ui:Button Content="{DynamicResource ResourceEdit_Delete}" Command="{Binding DeleteResourceCommand}" Margin="0,0,8,8" />
+                                </WrapPanel>
+                                <ComboBox ItemsSource="{Binding ResourceVersions}" SelectedItem="{Binding SelectedResourceVersion}" DisplayMemberPath="DisplayName" Margin="0,0,0,8" />
+                                <ui:Button Content="{DynamicResource ResourceEdit_Restore}" Command="{Binding RestoreResourceVersionCommand}" HorizontalAlignment="Left" Margin="0,0,0,8" />
+                                <WrapPanel>
+                                    <ui:Button Content="{DynamicResource ResourceEdit_RestoreThird}" Command="{Binding RestoreThirdPersonVersionCommand}" Margin="0,0,8,8" />
+                                    <ui:Button Content="{DynamicResource ResourceEdit_RestoreFirst}" Command="{Binding RestoreFirstPersonVersionCommand}" Margin="0,0,8,8" />
+                                </WrapPanel>
                                 <ui:Button Content="{DynamicResource Resources_Refresh}" Command="{Binding RefreshResourceCatalogCommand}" HorizontalAlignment="Left" Margin="0,0,0,12" />
                                 <TextBlock Text="{Binding ResourceCatalogError}" Style="{StaticResource FieldError}" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding ResourceCatalogDiagnostics}" Style="{StaticResource FieldError}" TextWrapping="Wrap" />
@@ -378,12 +439,14 @@
                                             </StackPanel>
                                         </layout:ResponsiveColumnsPanel>
                                         <TextBlock Text="{DynamicResource Weapons_Keywords}" Margin="0,0,0,6" />
-                                        <ComboBox ItemsSource="{Binding Options.Keywords}" DisplayMemberPath="DisplayName" SelectedItem="{Binding KeywordToAdd, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
+                                        <TextBox Text="{Binding KeywordSearch, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource Stage4_KeywordSearch}" Margin="0,0,0,6" />
+                                        <ComboBox ItemsSource="{Binding FilteredKeywords}" DisplayMemberPath="DisplayName" SelectedItem="{Binding KeywordToAdd, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
                                         <WrapPanel Margin="0,0,0,6">
                                             <ui:Button Content="{DynamicResource Weapons_Add}" Command="{Binding AddKeywordCommand}" Margin="0,0,8,0" />
                                             <ui:Button Content="{DynamicResource Weapons_Remove}" Command="{Binding RemoveKeywordCommand}" />
                                         </WrapPanel>
                                         <ListBox ItemsSource="{Binding WeaponKeywords}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedKeyword, Mode=TwoWay}" Height="90" Margin="0,0,0,12" />
+                                        <TextBlock Text="{Binding CompatibilityWarnings}" Style="{StaticResource FieldError}" />
                                         <TextBlock Text="{DynamicResource Weapons_Sound}" Margin="0,0,0,6" />
                                         <ComboBox ItemsSource="{Binding SoundChoices}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedSound, Mode=TwoWay}" IsTextSearchEnabled="True" Margin="0,0,0,6" />
                                         <ui:Button Content="{DynamicResource Weapons_Clear}" Command="{Binding ClearSoundCommand}" Margin="0,0,0,12" />
@@ -456,6 +519,40 @@
                                 </StackPanel>
                             </ui:Card>
                         </layout:ResponsiveColumnsPanel>
+                        <ui:Card Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Stage4_Balance}" FontSize="20" FontWeight="SemiBold" />
+                                <TextBlock Text="{DynamicResource Stage4_BalanceHint}" TextWrapping="Wrap" Margin="0,8,0,8" />
+                                <ComboBox ItemsSource="{Binding FilteredTemplates}" SelectedItem="{Binding BalanceTemplate}" DisplayMemberPath="DisplayName" Margin="0,0,0,8" />
+                                <ui:Button Content="{DynamicResource Stage4_LoadOrigin}" Command="{Binding LoadBalanceOriginCommand}" HorizontalAlignment="Left" Margin="0,0,0,8" />
+                                <DataGrid ItemsSource="{Binding BalanceRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="{DynamicResource Stage4_Parameter}" Binding="{Binding Label}" Width="*" />
+                                        <DataGridTextColumn Header="{DynamicResource Stage4_Vanilla}" Binding="{Binding Vanilla}" Width="*" />
+                                        <DataGridTextColumn Header="{DynamicResource Stage4_Custom}" Binding="{Binding Custom}" Width="*" />
+                                        <DataGridTextColumn Header="{DynamicResource Stage4_Difference}" Binding="{Binding Difference}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </ui:Card>
+                        <ui:Card Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Stage4_Variants}" FontSize="20" FontWeight="SemiBold" />
+                                <TextBlock Text="{DynamicResource Stage4_VariantHint}" TextWrapping="Wrap" Margin="0,8,0,8" />
+                                <TextBlock Text="{DynamicResource Stage4_VariantTemplate}" />
+                                <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding VariantTemplate}" DisplayMemberPath="DisplayName" Margin="0,0,0,8" />
+                                <TextBlock Text="{DynamicResource Stage4_VariantLabel}" />
+                                <TextBox Text="{Binding VariantLabel, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                                <TextBlock Text="{DynamicResource Stage4_Material}" />
+                                <ComboBox ItemsSource="{Binding VariantMaterials}" SelectedItem="{Binding VariantMaterialKeyword}" DisplayMemberPath="DisplayName" Margin="0,0,0,8" />
+                                <TextBlock Text="{DynamicResource Stage4_MaterialNotes}" />
+                                <TextBox Text="{Binding VariantMaterialNotes, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                                <CheckBox Content="{DynamicResource Stage4_ShareModels}" IsChecked="{Binding ShareVariantModels}" Margin="0,0,0,8" />
+                                <ui:Button Content="{DynamicResource Stage4_CreateVariant}" Command="{Binding CreateVariantCommand}" IsEnabled="{Binding HasSelectedWeapon}" HorizontalAlignment="Left" />
+                                <TextBlock Text="{Binding VariantError}" Style="{StaticResource FieldError}" />
+                                <ItemsControl ItemsSource="{Binding Variants}" DisplayMemberPath="DisplayName" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </ui:Card>
                         <Expander Header="{DynamicResource Wizard_Acquisition}" Margin="0,0,0,16">
                             <StackPanel>
                                 <TextBlock Text="{DynamicResource Wizard_AcquisitionHint}" TextWrapping="Wrap" Margin="0,8,0,12" />
@@ -466,8 +563,10 @@
                                                 <WrapPanel Margin="0,0,0,8">
                                                     <ui:Button Content="{DynamicResource Weapons_LoadRecipes}" Command="{Binding LoadRecipesCommand}" Margin="0,0,8,0" />
                                                     <ui:Button Content="{DynamicResource Weapons_NewRecipe}" Command="{Binding NewRecipeCommand}" />
+                                                    <ui:Button Content="{DynamicResource Stage4_NewTempering}" Command="{Binding NewTemperingRecipeCommand}" Margin="8,0,0,0" />
                                                 </WrapPanel>
-                                                <ComboBox ItemsSource="{Binding Recipes}" DisplayMemberPath="EditorId" SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}" Margin="0,0,0,12" />
+                                                <ComboBox ItemsSource="{Binding Recipes}" DisplayMemberPath="EditorId" SelectedItem="{Binding RecipeSelection, Mode=TwoWay}" Margin="0,0,0,12" />
+                                                <TextBlock Text="{DynamicResource Stage4_TemperingHint}" TextWrapping="Wrap" Margin="0,0,0,12" />
                                                 <TextBlock Text="{DynamicResource Weapons_RecipeId}" Margin="0,0,0,6" />
                                                 <ui:TextBox Text="{Binding RecipeEditorId, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
                                                 <TextBlock Text="{DynamicResource Weapons_Workbench}" Margin="0,0,0,6" />

@@ -20,16 +20,19 @@ public sealed partial class WeaponProjectService
     // Metadata is published first, under its lease while the caller holds the plugin lease.
     // A failed plugin commit restores the prior metadata; no successful plugin lacks its origin.
     internal static void WriteWithTemplateOrigin(string? projectPath, string pluginPath, string gameDataPath,
-        uint weaponId, uint templateId, Action writePlugin, CancellationToken token)
+        uint weaponId, uint templateId, Action writePlugin, CancellationToken token, string templatePlugin = "Skyrim.esm", WeaponVariant? variant = null)
     {
         if (string.IsNullOrWhiteSpace(projectPath)) { writePlugin(); return; }
         PluginWriteGuard.EnsureOutsideGame(projectPath, gameDataPath);
         using var lease = WorkspaceFileGate.AcquireAsync(projectPath, token).GetAwaiter().GetResult();
+        WorkspaceWriteExpectation.Check(projectPath);
         var snapshot = new WorkspaceFileSnapshot(projectPath);
         var original = JsonSerializer.Deserialize<ProjectDocument>(File.ReadAllText(projectPath))
             ?? throw new InvalidOperationException("Invalid project metadata.");
         ValidatePluginName(original.PluginFileName);
-        var baseline = ReadOriginalModels(gameDataPath, templateId);
+        var origin = original.VanillaTemplateReferences?.GetValueOrDefault(weaponId) ??
+            (original.VanillaTemplates?.TryGetValue(weaponId, out var existingId) == true ? new PluginRecordReference("Skyrim.esm", existingId) : new PluginRecordReference(templatePlugin, templateId));
+        var baseline = ReadOriginalModels(gameDataPath, origin.FormId, origin.PluginName);
         if (original.Version != 1 || !Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath)!, original.PluginFileName))
                 .Equals(Path.GetFullPath(pluginPath), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Template metadata must belong to the edited plugin.");
@@ -37,6 +40,14 @@ public sealed partial class WeaponProjectService
         updated.VanillaTemplates ??= [];
         // Once recorded, the original template must survive later template-list selections.
         updated.VanillaTemplates.TryAdd(weaponId, templateId);
+        updated.VanillaTemplateReferences ??= [];
+        updated.VanillaTemplateReferences.TryAdd(weaponId, origin);
+        if (variant != null)
+        {
+            updated.Variants ??= [];
+            if (updated.Variants.Any(v => v == null || v.FormId == variant.FormId)) throw new InvalidOperationException("Variant metadata already occupies the new record identity or is invalid.");
+            updated.Variants.Add(variant);
+        }
         updated.VanillaModels ??= [];
         if (updated.VanillaTemplates[weaponId] == templateId) updated.VanillaModels.TryAdd(weaponId, baseline);
         var json = new AtomicJsonFile<ProjectDocument>(projectPath, () => new ProjectDocument(), JsonOptions);
@@ -56,7 +67,8 @@ public sealed partial class WeaponProjectService
         {
             var (_, document) = await ReadResourceProjectAsync(projectFilePath, gameDataPath, cancellationToken);
             if (document.VanillaTemplates == null || !document.VanillaTemplates.TryGetValue(weaponFormId, out var templateId)) return null;
-            var current = ReadOriginalModels(gameDataPath, templateId);
+            var source = document.VanillaTemplateReferences?.GetValueOrDefault(weaponFormId)?.PluginName ?? "Skyrim.esm";
+            var current = ReadOriginalModels(gameDataPath, templateId, source);
             if (document.VanillaModels != null && document.VanillaModels.TryGetValue(weaponFormId, out var original))
             {
                 if (original != current) throw new InvalidOperationException("The vanilla template models changed externally. Restore the original master before restoring these models.");
@@ -65,15 +77,20 @@ public sealed partial class WeaponProjectService
             return current;
         }, cancellationToken);
 
-    private static WeaponModels ReadOriginalModels(string gameDataPath, uint templateId)
+    private static WeaponModels ReadOriginalModels(string gameDataPath, uint templateId, string source = "Skyrim.esm")
     {
-        using var master = SkyrimMod.CreateFromBinaryOverlay(Path.Combine(gameDataPath, "Skyrim.esm"), SkyrimRelease.SkyrimSE);
-        var weapon = master.Weapons.FirstOrDefault(w => w.FormKey.ID == templateId && !w.IsDeleted && w.Data?.AnimationType == WeaponAnimationType.OneHandSword)
+        if (!WeaponTypes.IsVanillaSource(source)) throw new InvalidOperationException("Unsupported vanilla template source.");
+        using var master = SkyrimMod.CreateFromBinaryOverlay(Path.Combine(gameDataPath, source), SkyrimRelease.SkyrimSE);
+        var weapon = master.Weapons.FirstOrDefault(w => w.FormKey.ModKey == master.ModKey && w.FormKey.ID == templateId && !w.IsDeleted && WeaponTypes.Supported(w.Data?.AnimationType))
             ?? throw new InvalidOperationException("Template origin must be a vanilla one-handed sword.");
         var key = weapon.FirstPersonModel.FormKey;
-        var first = (key == Mutagen.Bethesda.Plugins.FormKey.Null) ? null : master.Statics.FirstOrDefault(s => s.FormKey == key && !s.IsDeleted)
-            ?? throw new InvalidOperationException("The vanilla first-person STAT is missing.");
-        return new WeaponModels(weapon.Model?.File.GivenPath ?? "", (key == Mutagen.Bethesda.Plugins.FormKey.Null) ? null : new PluginRecordReference(key.ModKey.FileName.String, key.ID), first?.Model?.File.GivenPath);
+        if (key == Mutagen.Bethesda.Plugins.FormKey.Null) return new(weapon.Model?.File.GivenPath ?? "", null, null);
+        var first = master.Statics.FirstOrDefault(s => s.FormKey == key && !s.IsDeleted);
+        if (first != null) return new(weapon.Model?.File.GivenPath ?? "", new(key.ModKey.FileName.String, key.ID), first.Model?.File.GivenPath);
+        if (!WeaponTypes.IsVanillaSource(key.ModKey.FileName.String)) throw new InvalidOperationException("Unsupported first-person template source.");
+        using var dependency = SkyrimMod.CreateFromBinaryOverlay(Path.Combine(gameDataPath, key.ModKey.FileName.String), SkyrimRelease.SkyrimSE);
+        first = dependency.Statics.FirstOrDefault(s => s.FormKey == key && !s.IsDeleted) ?? throw new InvalidOperationException("The vanilla first-person STAT is missing.");
+        return new(weapon.Model?.File.GivenPath ?? "", new(key.ModKey.FileName.String, key.ID), first.Model?.File.GivenPath);
     }
 
     public Task<Result<ModelResourceInfo>> InspectModelAsync(string projectFilePath, string modelPath, string gameDataPath,
@@ -105,7 +122,7 @@ public sealed partial class WeaponProjectService
             var loose = PackingPathGuard.ResolveUnderRoot(gameDataPath, resource.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(loose) && new FileInfo(loose).Length > 0)
                 return new(resource, ModelOrigin.Vanilla, ModelAvailability.Found, false, "Data loose file");
-            foreach (var path in Directory.EnumerateFiles(gameDataPath, "Skyrim*.bsa").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            foreach (var path in Directory.EnumerateFiles(gameDataPath, "*.bsa").Where(p => Path.GetFileName(p).StartsWith("Skyrim", StringComparison.OrdinalIgnoreCase) || Path.GetFileName(p).StartsWith("Dawnguard", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
             {
                 token.ThrowIfCancellationRequested();
                 try

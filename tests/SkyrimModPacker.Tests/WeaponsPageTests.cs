@@ -11,6 +11,9 @@ using SkyrimModPacker.Core.Models;
 using SkyrimModPacker.Core.Models.PluginBuilder;
 using SkyrimModPacker.UI.ViewModels;
 using SkyrimModPacker.UI.Views.Pages;
+using SkyrimModPacker.UI.Views;
+using SkyrimModPacker.UI.Services;
+using Wpf.Ui;
 using Xunit;
 
 namespace SkyrimModPacker.Tests;
@@ -145,7 +148,7 @@ public class WeaponsPageTests
                             Assert.Contains(texts, box => box.Text == @"C:\Mods\MySwords.esp");
                             break;
                         case 1:
-                            Assert.Single(Assert.Single(Descendants<DataGrid>(page)).Items);
+                            Assert.Single(Assert.Single(Descendants<DataGrid>(page), grid => ReferenceEquals(grid.ItemsSource, vm.Weapons)).Items);
                             break;
                         case 2:
                             Assert.Contains(texts, box => box.Text == @"Weapons\Custom\blade.nif");
@@ -175,6 +178,42 @@ public class WeaponsPageTests
                         using var file = File.Create(Path.Combine(previewDirectory, $"weapons-step{step}-{width}{zoomSuffix}.png"));
                         encoder.Save(file);
                     }
+                }
+                // Exercise the real asynchronous Closing handler without showing a desktop window.
+                var prompt = Substitute.For<IUnsavedChangesPrompt>();
+                prompt.ShowAsync().Returns(UnsavedChangesChoice.ContinueEditing);
+                var closeEditor = new WeaponsViewModel(Substitute.For<IPluginBuilderService>(), settings, profiles,
+                    Substitute.For<IWeaponProjectService>(), unsavedChangesPrompt: prompt);
+                closeEditor.WeaponName = "Pending edit";
+                var main = new MainWindow(new MainWindowViewModel(), Substitute.For<INavigationService>(), closeEditor);
+                var closed = false;
+                main.Closed += (_, _) => closed = true;
+                void PumpClose()
+                {
+                    var frame = new DispatcherFrame();
+                    var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+                    timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+                    timer.Start(); Dispatcher.PushFrame(frame);
+                }
+                main.Close(); main.Close();
+                PumpClose();
+                Assert.False(closed);
+                Assert.True(closeEditor.HasUnsavedChanges);
+                prompt.Received(1).ShowAsync();
+                prompt.ShowAsync().Returns(UnsavedChangesChoice.Discard);
+                main.Close(); PumpClose();
+                Assert.True(closed);
+                prompt.Received(2).ShowAsync();
+                using (var scheduler = new DraftAutosaveScheduler(TimeSpan.FromMilliseconds(20)))
+                {
+                    var saves = 0;
+                    scheduler.Schedule(() => { saves += 100; return Task.CompletedTask; });
+                    scheduler.Schedule(() => { saves++; return Task.CompletedTask; });
+                    PumpClose();
+                    Assert.Equal(1, saves); // The real dispatcher timer debounces to the newest callback.
+                    scheduler.Schedule(() => { saves++; return Task.CompletedTask; });
+                    scheduler.Cancel(); PumpClose();
+                    Assert.Equal(1, saves);
                 }
                 completion.SetResult();
             }

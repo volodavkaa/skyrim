@@ -52,6 +52,8 @@ public sealed partial class WeaponsViewModel
         var workbench = SelectedWorkbench?.Reference;
         var perk = SelectedPerk?.Reference;
         Options = result.Value;
+        FilterKeywords();
+        OnPropertyChanged(nameof(VariantMaterials));
         _optionsGameDataPath = GameDataPath;
         SoundChoices = new ObservableCollection<RecordOption>(Options.Sounds);
         EnchantmentChoices = new ObservableCollection<RecordOption>(Options.Enchantments);
@@ -146,14 +148,29 @@ public sealed partial class WeaponsViewModel
         SelectedWorkbench = SelectOption(WorkbenchChoices, value.Workbench);
         SelectedPerk = SelectOption(PerkChoices, value.RequiredPerk);
         RecipeIngredients = new ObservableCollection<RecipeIngredientRow>(value.Ingredients.Select(i => new RecipeIngredientRow(Option(Options.Ingredients, i.Reference), i.Count)));
+        AcceptRecipeDraft();
+        OnPropertyChanged(nameof(RecipeSelection));
     }
 
     [RelayCommand]
-    private void NewRecipe()
+    private async Task NewRecipeAsync()
     {
         if (IsLoading) return;
-        SelectedRecipe = null;
-        ResetRecipeEditor();
+        if (!await RequestLeaveEditorAsync(recipeOnly: true)) return;
+        var before = CaptureMemento();
+        _applyingEditorState = true;
+        try
+        {
+            SelectedRecipe = null;
+            ResetRecipeEditor();
+            AcceptRecipeDraft();
+            _newRecipePending = true; UpdateUnsavedChanges();
+            OnPropertyChanged(nameof(RecipeSelection));
+        }
+        finally { _applyingEditorState = false; }
+        var after = CaptureMemento();
+        if (MemoryKey(before) != MemoryKey(after)) PushEditorHistory(new(before, after));
+        _lastEditorMemento = after;
     }
 
     [RelayCommand]
@@ -187,7 +204,7 @@ public sealed partial class WeaponsViewModel
     }
 
     [RelayCommand]
-    private Task LoadRecipesAsync() => RunOperationAsync(token => RefreshRecipesCoreAsync(null, token));
+    private Task LoadRecipesAsync() => GuardEditorReplacementAsync(() => RunOperationAsync(token => RefreshRecipesCoreAsync(null, token)), recipeOnly: true);
 
     private async Task RefreshRecipesCoreAsync(uint? selectedId, CancellationToken token)
     {
@@ -196,6 +213,8 @@ public sealed partial class WeaponsViewModel
         Recipes = new ObservableCollection<CraftingRecipe>(result.Value);
         SelectedRecipe = Recipes.FirstOrDefault(r => r.FormId == selectedId) ?? Recipes.FirstOrDefault();
         if (SelectedRecipe == null) ResetRecipeEditor();
+        AcceptRecipeDraft();
+        OnPropertyChanged(nameof(RecipeSelection));
     }
 
     [RelayCommand]
@@ -218,10 +237,10 @@ public sealed partial class WeaponsViewModel
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         await RefreshRecipesCoreAsync(result.Value.FormId, token);
         StatusMessage = Text("Weapons_RecipeSaved", "Recipe saved. A .bak copy was saved.");
-    });
+    }, write: true);
 
     [RelayCommand]
-    private Task DeleteRecipeAsync() => RunOperationAsync(async token =>
+    private Task DeleteRecipeAsync() => GuardEditorReplacementAsync(() => RunOperationAsync(async token =>
     {
         RequireSelectedSword();
         if (SelectedRecipe?.FormId is not { } id) throw new InvalidOperationException(Text("Weapons_SelectRecipe", "Select a saved recipe first."));
@@ -230,7 +249,7 @@ public sealed partial class WeaponsViewModel
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         await RefreshRecipesCoreAsync(null, token);
         StatusMessage = Text("Weapons_RecipeDeleted", "Recipe deleted. A .bak copy was saved.");
-    });
+    }, write: true), recipeOnly: true);
 
     [RelayCommand]
     private Task AddToListAsync() => ChangeListAsync(remove: false);
@@ -250,7 +269,7 @@ public sealed partial class WeaponsViewModel
         var result = remove ? await _builder.RemoveFromLeveledListAsync(request, token) : await _builder.AddToLeveledListAsync(request, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         StatusMessage = Text("Weapons_ListSaved", "Leveled list saved in your plugin. A .bak copy was saved.");
-    });
+    }, write: true);
 }
 
 public sealed record RecipeIngredientRow(RecordOption Item, int Count)

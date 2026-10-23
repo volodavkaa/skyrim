@@ -19,6 +19,7 @@ internal sealed class PluginFileTransaction : IDisposable
         _lease = lease;
         _path = path;
         _gameDataPath = gameDataPath;
+        WorkspaceWriteExpectation.Check(path);
         _original = new WorkspaceFileSnapshot(path);
     }
 
@@ -85,6 +86,7 @@ internal sealed class PluginFileTransaction : IDisposable
             token.ThrowIfCancellationRequested();
             if (replace) File.Replace(temporary, _path, replaceBackup ? backupPath : null);
             else File.Move(temporary, _path);
+            WorkspaceWriteExpectation.Written(_path);
             // No cancellation after commit: the new plugin is already the published result.
         }
         catch (Exception ex) { failure = ex; throw; }

@@ -38,6 +38,8 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
                     foreach (var condition in recipe.Conditions)
                         if (condition.Data is IHasPerkConditionDataGetter perk)
                             Check(record, "COBJ.HasPerk", perk.Perk.Link, required: true);
+                        else if (condition.Data is IEPTemperingItemIsEnchantedConditionDataGetter ep && ep.RunOnType == Condition.RunOnType.Subject && !ep.UseAliases && !ep.UsePackageData)
+                        { /* No record parameters; supported tempering guard. */ }
                         else Add("REFERENCE_CONDITION_UNSUPPORTED", DiagnosticSeverity.Unsupported, record, "COBJ.Conditions",
                             "This condition's references and execution context are not validated.");
                     break;

@@ -21,7 +21,10 @@ public sealed partial class WeaponProjectService(IPluginBuilderService builder, 
         public string PluginFileName { get; set; } = string.Empty;
         public List<string> Resources { get; set; } = [];
         public Dictionary<uint, uint> VanillaTemplates { get; set; } = [];
+        public Dictionary<uint, PluginRecordReference> VanillaTemplateReferences { get; set; } = [];
         public Dictionary<uint, WeaponModels> VanillaModels { get; set; } = [];
+        public List<ResourceVersion> ResourceVersions { get; set; } = [];
+        public List<WeaponVariant> Variants { get; set; } = [];
     }
 
     public Task<Result<WeaponProject>> CreateAsync(CreatePluginRequest request, CancellationToken cancellationToken = default) =>
@@ -138,7 +141,10 @@ public sealed partial class WeaponProjectService(IPluginBuilderService builder, 
         catch (Exception ex)
         {
             logger?.LogError(ex, "Weapon project operation failed");
-            return Result<T>.Failure(ex.Message);
+            var details = ex.Message;
+            foreach (var key in ex.Data.Keys.Cast<object>().Where(k => k.ToString()?.Contains("Rollback", StringComparison.OrdinalIgnoreCase) == true))
+                details += Environment.NewLine + key + ": " + ex.Data[key];
+            return Result<T>.Failure(details);
         }
         finally { _gate.Release(); }
     }

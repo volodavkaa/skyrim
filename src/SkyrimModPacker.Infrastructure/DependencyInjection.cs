@@ -27,6 +27,8 @@ public static class DependencyInjection
         services.AddSingleton<IPluginValidationService, PluginBuilder.PluginValidationService>();
         services.AddSingleton<IPluginBuilderService, PluginBuilder.PluginBuilderService>();
         services.AddSingleton<IWeaponProjectService, PluginBuilder.WeaponProjectService>();
+        services.AddSingleton<IWeaponDraftRepository>(_ => new JsonWeaponDraftRepository(appDataDirectory));
+        services.AddSingleton<IWorkspaceHistoryService>(_ => new WorkspaceHistoryService(appDataDirectory));
 
         var logSink = inMemoryLogSink ?? new InMemoryLogSink();
         services.AddSingleton<ILogEventService>(logSink);
