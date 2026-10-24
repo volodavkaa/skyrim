@@ -25,8 +25,11 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     private readonly ILocalizationService? _localization;
     private readonly IWorkspaceFolderOpener? _opener;
     private readonly IModelThumbnailService? _thumbnails;
+    private readonly ISmartRecipePresetRepository? _recipePresets;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _lifetime = new();
+    private CancellationTokenSource? _operationCancellation;
+    public void CancelOperation() => _operationCancellation?.Cancel();
     private readonly DraftAutosaveScheduler _autosave = new();
     private SmartModDraft _document = new();
     private bool _applying, _disposed, _writeBlocked;
@@ -52,7 +55,7 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     [ObservableProperty] private string _outputDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyrimModPacker", "Plugins");
     [ObservableProperty] private bool _enableEsl;
     [ObservableProperty] private bool _isBusy;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowSetup), nameof(CanCreateProject))] private bool _hasProject;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowSetup), nameof(CanCreateProject), nameof(ShowTemplateSetup))] private bool _hasProject;
     public bool ShowSetup => !HasProject;
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private string _error = "";
@@ -88,10 +91,11 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     public SmartModViewModel(IPluginBuilderService builder, IWeaponProjectService projects, ISettingsRepository settings,
         ISmartModDraftRepository drafts, IPluginValidationService validator, PackingPipeline? pipeline = null,
         IWorkspaceHistoryService? history = null, ILocalizationService? localization = null,
-        IWorkspaceFolderOpener? opener = null, IModelThumbnailService? thumbnails = null)
+        IWorkspaceFolderOpener? opener = null, IModelThumbnailService? thumbnails = null, ISmartRecipePresetRepository? recipePresets = null)
     {
         _builder = builder; _projects = projects; _settings = settings; _drafts = drafts; _validator = validator;
         _pipeline = pipeline; _history = history; _localization = localization; _opener = opener; _thumbnails = thumbnails;
+        _recipePresets = recipePresets;
         if (_localization != null) _localization.LanguageChanged += RefreshTexts;
         Items.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(RecipeLinks)); OnPropertyChanged(nameof(Summary)); };
     }
@@ -101,6 +105,8 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     private static T Require<T>(Result<T> result) => result.IsSuccess ? result.Value : throw new InvalidOperationException(result.Error);
     private void NotifyStep()
     {
+        foreach (var name in new[] { nameof(RecipeSourceChoices), nameof(PersonalRecipeChoices), nameof(CanSaveRecipePreset), nameof(CanApplyRecipeSource), nameof(CanApplyRecipePreset), nameof(ReferenceChoices), nameof(CanApplyReference) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(MaterialChoices), nameof(CurrentSubtype), nameof(CanUseBalance), nameof(MaterialAvailabilityText), nameof(TuningSummary), nameof(BalanceComparison), nameof(CanUndoTuning), nameof(DefaultCrafting), nameof(DefaultTempering) }) OnPropertyChanged(name);
         OnPropertyChanged(nameof(IdentifierNotice));
         OnPropertyChanged(nameof(LeveledListPurpose)); OnPropertyChanged(nameof(LeveledListSummary));
         foreach (var name in new[] { nameof(HasSelectedRecipe), nameof(HasCraftingRecipe), nameof(HasTemperingRecipe), nameof(HasRecipeConflict), nameof(CraftingAction), nameof(TemperingAction), nameof(RecipeWorkbenchText), nameof(RecipeConflictDetails) }) OnPropertyChanged(name);
@@ -118,7 +124,8 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
         if (SelectedLeveledList != null) _ = RefreshSelectedListAsync();
         RefreshListChoices();
     }
-    partial void OnNameChanged(string value) => Changed();
+    partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanStartFromResources)); Changed(); }
+    partial void OnOutputDirectoryChanged(string value) => OnPropertyChanged(nameof(CanStartFromResources));
     partial void OnEnableEslChanged(bool value) => Changed();
     partial void OnSectionChanged(SmartModSection value) { NotifyStep(); Changed(false); }
     partial void OnSelectedItemChanged(SmartModItemRow? value)
@@ -126,6 +133,10 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
         SelectedRecipe = value?.Recipes.FirstOrDefault();
         SelectedTemplate = Templates.FirstOrDefault(t => t.FormId == value?.Template?.FormId && t.PluginName == value.Template.PluginName);
         if (value != null && !_applying) Section = SmartModSection.Weapons;
+        SelectedMaterialPreset = MaterialChoices.FirstOrDefault(p => p.Id == value?.Tuning?.PresetId) ?? MaterialChoices.FirstOrDefault(p => p.Available);
+        SelectedRecipeMaterial = MaterialChoices.FirstOrDefault(p => p.Available);
+        SelectedReference = ReferenceChoices.FirstOrDefault(t => t.FormId == value?.Tuning?.Reference?.FormId && t.PluginName == value.Tuning.Reference.PluginName);
+        SelectedRecipeSource = null; SelectedRecipePreset = null;
         NotifyStep(); Changed(false); PreviewChanged?.Invoke();
     }
     partial void OnSelectedRecipeChanged(SmartModRecipeRow? value) { Changed(false); NotifyStep(); }
@@ -143,10 +154,11 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     private void Attach(SmartModItemRow row)
     {
         row.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(SmartModItemRow.StateText)) OnPropertyChanged(nameof(ProgressText)); };
-        row.Changed += () => { Changed(); PreviewChanged?.Invoke(); };
+        row.Changed += () => { if (!_applying) _tuningUndo.Remove(row.Id); Changed(); PreviewChanged?.Invoke(); };
         row.NavigationChanged += () => { Changed(false); NotifyStep(); };
         row.Recipes.CollectionChanged += (_, args) =>
         {
+            if (!_applying && !row.IsAutomating) _tuningUndo.Remove(row.Id);
             if (args.NewItems != null) foreach (SmartModRecipeRow recipe in args.NewItems) AttachRecipe(row, recipe);
             Changed();
         };
@@ -155,7 +167,8 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     }
     private void AttachRecipe(SmartModItemRow owner, SmartModRecipeRow recipe)
     {
-        recipe.PropertyChanged += (_, _) => { owner.SetState(SmartModItemState.InProgress); Changed(); };
+        void Edited() { if (!owner.IsAutomating && !_applying) { owner.MarkManual(recipe.IsTempering ? "Tempering" : "Crafting"); _tuningUndo.Remove(owner.Id); } owner.SetState(SmartModItemState.InProgress); Changed(); }
+        recipe.PropertyChanged += (_, _) => Edited();
         void AttachIngredient(SmartModIngredientRow ingredient)
         {
             void Name()
@@ -168,25 +181,26 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
             {
                 if (args.PropertyName is nameof(SmartModIngredientRow.DisplayName) or nameof(SmartModIngredientRow.QuantityError)) return;
                 Name();
-                owner.SetState(SmartModItemState.InProgress); Changed();
+                Edited();
             };
         }
         foreach (var ingredient in recipe.Ingredients) AttachIngredient(ingredient);
         recipe.Ingredients.CollectionChanged += (_, args) =>
         {
             if (args.NewItems != null) foreach (SmartModIngredientRow ingredient in args.NewItems) AttachIngredient(ingredient);
-            owner.SetState(SmartModItemState.InProgress); Changed();
+            Edited();
         };
     }
     private async Task RunAsync(Func<CancellationToken, Task> action)
     {
         if (_disposed || IsBusy) return;
         IsBusy = true;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token); _operationCancellation = operation;
         await _gate.WaitAsync();
-        try { Error = ""; await action(_lifetime.Token); }
+        try { Error = ""; await action(operation.Token); }
         catch (OperationCanceledException) { Status = Label("Preview_Cancelled"); }
         catch (Exception ex) { Error = ex.Message; }
-        finally { _gate.Release(); IsBusy = false; }
+        finally { _operationCancellation = null; _gate.Release(); IsBusy = false; }
     }
     public void Dispose()
     {

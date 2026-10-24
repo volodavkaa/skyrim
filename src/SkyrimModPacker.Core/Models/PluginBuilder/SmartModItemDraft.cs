@@ -11,6 +11,10 @@ public sealed record SmartModItemDraft
     public SmartModItemState State { get; init; }
     public uint? ConfirmedFormId { get; init; }
     public PluginRecordReference? Template { get; init; }
+    // Optional: legacy drafts remain manual until an explicit preview/apply action.
+    public SmartWeaponTuning? Tuning { get; init; }
+    public Guid? LastFolderPlanId { get; init; }
+    public bool ValidateFolderDependencies { get; init; }
     [JsonRequired] public WeaponDraftFields Weapon { get; init; } = new();
     [JsonRequired] public IReadOnlyList<SmartModRecipeDraft> Recipes { get; init; } = [];
 }

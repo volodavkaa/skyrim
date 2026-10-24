@@ -7,6 +7,7 @@ using SkyrimModPacker.Core.Models.PluginBuilder;
 using SkyrimModPacker.UI.Controls;
 using SkyrimModPacker.UI.Services;
 using SkyrimModPacker.UI.ViewModels;
+using SkyrimModPacker.Infrastructure.PluginBuilder;
 
 namespace SkyrimModPacker.UI.Views;
 
@@ -35,6 +36,7 @@ public partial class SmartModWindow : Window
         };
     }
     private async void OnLoaded(object sender, RoutedEventArgs e) { await ViewModel.InitializeAsync(_initialProject); QueuePreview(); }
+    private void OnCancelOperation(object sender, RoutedEventArgs e) => ViewModel.CancelOperation();
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SmartModViewModel.IsBusy)) { WorkArea.IsEnabled = !ViewModel.IsBusy; ItemList.IsEnabled = !ViewModel.IsBusy; }
@@ -104,6 +106,88 @@ public partial class SmartModWindow : Window
     }
     private async void OnImportThird(object sender, RoutedEventArgs e) => await ImportModelAsync(false);
     private async void OnImportFirst(object sender, RoutedEventArgs e) => await ImportModelAsync(true);
+    private async void OnMaterialPreset(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || ViewModel.SelectedMaterialPreset is not { Available: true } preset) return;
+        var dialog = new SmartTuningWindow((keep, _, _) => ViewModel.PreviewMaterialStats(preset, keep), ViewModel.Label, false, false, false) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.Preview != null) await ViewModel.ApplyTuningAsync(dialog.Preview);
+    }
+    private async void OnBalance(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || sender is not System.Windows.Controls.Button button || !Enum.TryParse<SmartBalanceMode>(button.Tag as string, out var mode)) return;
+        var dialog = new SmartTuningWindow((keep, _, _) => ViewModel.PreviewBalance(mode, keep), ViewModel.Label, false, false, false) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.Preview != null) await ViewModel.ApplyTuningAsync(dialog.Preview);
+    }
+    private async void OnUndoTuning(object sender, RoutedEventArgs e) => await ViewModel.UndoTuningAsync();
+    private async Task ShowTuningAsync(Func<bool, SmartTuningPreview> calculate, bool keepManual = true, bool recipeOnly = false)
+    {
+        if (ViewModel.IsBusy || ViewModel.SelectedItem == null) return;
+        var dialog = new SmartTuningWindow((keep, _, _) => calculate(keep), ViewModel.Label, false, false, false, keepManual, recipeOnly ? ViewModel.Label("Smart_RecipeKeepManual") : null) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.Preview != null) await ViewModel.ApplyTuningAsync(dialog.Preview);
+    }
+    private async void OnHandling(object sender, RoutedEventArgs e)
+    { if (sender is System.Windows.Controls.Button b && Enum.TryParse<SmartHandlingMode>(b.Tag as string, out var mode)) await ShowTuningAsync(keep => ViewModel.PreviewHandling(mode, keep)); }
+    private async void OnReference(object sender, RoutedEventArgs e) => await ShowTuningAsync(ViewModel.PreviewReference);
+    private async void OnRecipePreset(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button b) return;
+        await ShowTuningAsync((string?)b.Tag switch { "standard" => ViewModel.PreviewStandardRecipe, "donor" => ViewModel.PreviewDonorRecipe, "personal" => ViewModel.PreviewPersonalRecipe, _ => _ => ViewModel.PreviewEmptyRecipe() }, keepManual: false, recipeOnly: true);
+    }
+    private async void OnSaveRecipePreset(object sender, RoutedEventArgs e) => await ViewModel.SaveRecipePresetAsync();
+    private async void OnDeleteRecipePreset(object sender, RoutedEventArgs e)
+    { if (!ViewModel.IsBusy && ViewModel.SelectedRecipePreset != null && Confirm("Smart_RecipePresetDeleteQuestion")) await ViewModel.DeleteRecipePresetAsync(); }
+    private async void OnReloadMaterials(object sender, RoutedEventArgs e) => await ViewModel.RefreshMaterialPresetsAsync();
+    private async Task OpenWeaponFolderAsync(string folder, bool createNew, string? sourceDisplayName = null)
+    {
+        if (ViewModel.IsBusy) return;
+        var starting = !ViewModel.HasProject;
+        if (starting && !ViewModel.CanStartFromResources) { ViewModel.Error = ViewModel.Label("Smart_StartNeedsName"); ViewModel.Section = SmartModSection.Overview; return; }
+        var dialog = new WeaponFolderWindow(folder, starting ? ViewModel.ProposedProjectPath : ViewModel.ProjectPath, ViewModel.ScanWeaponFolderAsync, ViewModel.PreviewWeaponFolderAsync,
+            ViewModel.Types, ViewModel.Label, starting || createNew, ViewModel.SelectedItem?.Kind ?? WeaponKind.OneHandSword, starting ? ViewModel.Name.Trim() + ".esp" : null, sourceDisplayName) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (dialog.TextureOnly)
+        {
+            if (starting) { ViewModel.Error = ViewModel.Label("Smart_FolderNoNif"); return; }
+            var textures = new TextureFolderWindow(folder, mapping => ViewModel.PreviewTextureFolderAsync(folder, mapping),
+                async () => ViewModel.SelectedItem is { ModelPath.Length: > 0 } item ? await _previewService.LoadAsync(ViewModel.ProjectDirectory, item.ModelPath, ViewModel.GameDataPath) : null, ViewModel.Label) { Owner = this };
+            if (textures.ShowDialog() == true && textures.Plan != null) await ViewModel.ImportTextureFolderAsync(textures.Plan);
+        }
+        else if (dialog.Plan != null)
+        {
+            if (starting) await ViewModel.CreateFromWeaponFolderAsync(dialog.Plan, dialog.Kind);
+            else await ViewModel.ImportWeaponFolderAsync(dialog.Plan, dialog.CreateNew, dialog.Kind);
+        }
+    }
+    private async Task OpenWeaponArchiveAsync(string path)
+    {
+        if (ViewModel.IsBusy) return;
+        try { await using var source = await ViewModel.ExtractWeaponArchiveAsync(path); if (source != null) await OpenWeaponFolderAsync(source.Root, true, System.IO.Path.GetFileName(path)); }
+        catch (Exception ex) { ViewModel.Error = ex.Message; }
+    }
+    private async void OnWeaponArchive(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy) return;
+        var dialog = new OpenFileDialog { Filter = "ZIP (*.zip)|*.zip" };
+        if (dialog.ShowDialog(this) == true) await OpenWeaponArchiveAsync(dialog.FileName);
+    }
+    private async void OnWeaponFolder(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy) return; var folder = new OpenFolderDialog();
+        if (folder.ShowDialog(this) == true) await OpenWeaponFolderAsync(folder.FolderName, (sender as System.Windows.Controls.Button)?.Tag as string != "existing");
+    }
+    private void OnFolderDragOver(object sender, DragEventArgs e)
+    { e.Effects = !ViewModel.IsBusy && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: 1 } paths && (System.IO.Directory.Exists(paths[0]) || System.IO.Path.GetExtension(paths[0]).Equals(".zip", StringComparison.OrdinalIgnoreCase)) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; }
+    private async void OnFolderDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: 1 } paths && System.IO.Directory.Exists(paths[0])) await OpenWeaponFolderAsync(paths[0], true);
+        else if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: 1 } files && System.IO.Path.GetExtension(files[0]).Equals(".zip", StringComparison.OrdinalIgnoreCase)) await OpenWeaponArchiveAsync(files[0]);
+        else ViewModel.Error = ViewModel.Label("Smart_FolderDropOne");
+    }
+    private async void OnManualTuning(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.IsBusy && ViewModel.SelectedItem != null) await ViewModel.ApplyTuningAsync(ViewModel.PreviewManualTuning());
+    }
     private async void OnTextures(object sender, RoutedEventArgs e)
     {
         if (ViewModel.IsBusy) return;

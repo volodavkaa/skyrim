@@ -26,7 +26,7 @@ public sealed partial class SmartModViewModel
         var ordinal = Items.Count(i => i.Kind == kind) + 1;
         var fields = Fields("SMP_" + draft.Id.ToString("N"), Label("WeaponType_" + kind) + " " + ordinal,
             template.Damage, template.Weight, template.Value, template.Details);
-        var row = new SmartModItemRow(draft with { Weapon = fields }, Label);
+        var row = new SmartModItemRow(draft with { Weapon = fields, Tuning = TuningForTemplate(template) }, Label);
         Attach(row); Changed(); return row;
     }
     public Task AddItemAsync(WeaponKind kind) => RunAsync(async token =>
@@ -75,7 +75,7 @@ public sealed partial class SmartModViewModel
             };
         }
         if (fresh.UseSharedModel) fresh = fresh with { FirstPersonPath = fresh.ModelPath, FirstPersonEdited = true, RestoreFirstPerson = false };
-        item.Replace(item.Capture() with { Template = new(template.PluginName, template.FormId), Weapon = fresh, State = SmartModItemState.InProgress });
+        item.Replace(item.Capture() with { Template = new(template.PluginName, template.FormId), Weapon = fresh, State = SmartModItemState.InProgress, Tuning = TuningForTemplate(template, keepCustom) });
         await ResolveFirstPersonAsync(item, token); await PersistAsync(token);
     });
     private static bool SameSounds(IReadOnlyDictionary<string, PluginRecordReference?>? a, IReadOnlyDictionary<string, PluginRecordReference?>? b) =>
@@ -116,7 +116,8 @@ public sealed partial class SmartModViewModel
         if (SelectedItem is not { } item) return;
         if (copyRecipes && item.Recipes.GroupBy(r => r.IsTempering).Any(g => g.Count() > 1))
             throw new InvalidOperationException(Label("Smart_RecipeConflict"));
-        var copy = item.Capture() with { Id = Guid.NewGuid(), ConfirmedFormId = null, State = SmartModItemState.InProgress };
+        var copy = item.Capture() with { Id = Guid.NewGuid(), ConfirmedFormId = null, State = SmartModItemState.InProgress, LastFolderPlanId = null,
+            Tuning = item.Tuning == null ? null : item.Tuning with { PendingRecipeRemovals = [] } };
         copy = copy with
         {
             Weapon = copy.Weapon with { EditorId = "SMP_" + copy.Id.ToString("N"), Name = item.Name + " " + Label("Smart_Copy"),
@@ -161,6 +162,7 @@ public sealed partial class SmartModViewModel
         if (bench == null) { Error = Label("Smart_NoWorkbench"); return; }
         var recipe = new SmartModRecipeRow(new() { Id = id, EditorId = "SMP_Recipe_" + id.ToString("N"), IsTempering = tempering, Workbench = bench.Reference }, Label);
         item.Recipes.Add(recipe); SelectedRecipe = recipe; item.Step = SmartModItemStep.Acquisition;
+        item.SetRecipeIntent(tempering, SmartRecipeIntent.Enabled); item.MarkManual(tempering ? "Tempering" : "Crafting");
     }
     [RelayCommand] private void AddIngredient() { if (!IsBusy && SelectedRecipe != null) SelectedRecipe.Ingredients.Add(new(new(null, "1"))); }
     [RelayCommand] private void RemoveIngredient(SmartModIngredientRow? ingredient) { if (!IsBusy && ingredient != null) SelectedRecipe?.Ingredients.Remove(ingredient); }
@@ -179,7 +181,7 @@ public sealed partial class SmartModViewModel
                 await RefreshBaselineAsync(token);
             }
         }
-        item.Recipes.Remove(recipe); SelectedRecipe = item.Recipes.FirstOrDefault(); await PersistAsync(token);
+        item.Recipes.Remove(recipe); item.SetRecipeIntent(recipe.IsTempering, SmartRecipeIntent.Disabled); SelectedRecipe = item.Recipes.FirstOrDefault(); await PersistAsync(token);
     });
 
     [RelayCommand]

@@ -13,13 +13,23 @@ public sealed partial class SmartModViewModel
         var templates = Require(await _builder.GetWeaponTemplatesAsync(_gameData, token));
         Templates.Clear(); foreach (var template in templates) Templates.Add(template);
         _options = Require(await _builder.GetWeaponOptionsAsync(_gameData, token));
+        var materials = await _builder.GetSmartMaterialPresetsAsync(_gameData, token);
+        MaterialPresets.Clear(); if (materials is { IsSuccess: true }) foreach (var preset in materials.Value) MaterialPresets.Add(preset);
+        var recipeSources = await _builder.GetSmartRecipeSourcesAsync(_gameData, token);
+        RecipeSources.Clear(); if (recipeSources is { IsSuccess: true }) foreach (var source in recipeSources.Value) RecipeSources.Add(source);
+        if (_recipePresets != null)
+        {
+            PersonalRecipePresets.Clear();
+            try { foreach (var preset in await _recipePresets.LoadAsync(token)) PersonalRecipePresets.Add(preset); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { Error = Text("Не вдалося прочитати особисті шаблони рецептів. Файл залишено без змін: ", "Could not load personal recipe templates. The file was preserved: ") + ex.Message; }
+        }
         OnPropertyChanged(nameof(Options)); OnPropertyChanged(nameof(Workbenches));
         OnPropertyChanged(nameof(FilteredLeveledLists));
         Types.Clear();
         foreach (var kind in templates.Select(t => t.Kind).Distinct())
         {
             var choice = new SmartModTypeRow(kind, Label("WeaponType_" + kind));
-            choice.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(CanCreateProject)); OnPropertyChanged(nameof(SetupCountText)); };
+            choice.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(CanCreateProject)); OnPropertyChanged(nameof(SetupCountText)); OnPropertyChanged(nameof(ShowTemplateSetup)); };
             Types.Add(choice);
         }
         if (!string.IsNullOrWhiteSpace(projectPath)) await OpenCoreAsync(projectPath, token);
@@ -27,17 +37,18 @@ public sealed partial class SmartModViewModel
     });
 
     [RelayCommand]
-    private Task CreateProjectAsync() => RunAsync(async token =>
+    private Task CreateProjectAsync() => RunAsync(token => CreateProjectCoreAsync(false, token));
+    private async Task CreateProjectCoreAsync(bool empty, CancellationToken token)
     {
         if (HasProject) throw new InvalidOperationException(Label("Smart_ProjectAlreadyOpen"));
         var planned = new List<(WeaponKind Kind, int Count)>();
-        foreach (var row in Types)
+        foreach (var row in empty ? [] : Types.ToArray())
         {
             if (!int.TryParse(row.Count, out var count) || count < 0 || count > 100)
                 throw new InvalidOperationException(Label("Smart_InvalidQuantity"));
             planned.Add((row.Kind, count));
         }
-        if (planned.Sum(p => p.Count) is 0 or > 100) throw new InvalidOperationException(Label("Smart_InvalidQuantity"));
+        if (!empty && planned.Sum(p => p.Count) is 0 or > 100) throw new InvalidOperationException(Label("Smart_InvalidQuantity"));
         var project = Require(await _projects.CreateAsync(new()
         {
             PluginFileName = Name.Trim() + ".esp", OutputDirectory = OutputDirectory.Trim(), GameDataPath = _gameData
@@ -49,14 +60,14 @@ public sealed partial class SmartModViewModel
         {
             foreach (var (kind, count) in planned)
                 for (var i = 0; i < count; i++) await ResolveFirstPersonAsync(AddItemCore(kind), token);
-            SelectedItem = Items.First(); Section = SmartModSection.Weapons;
+            SelectedItem = Items.FirstOrDefault(); Section = empty ? SmartModSection.Overview : SmartModSection.Weapons;
         }
         finally { _applying = false; }
         await RefreshBaselineAsync(token);
         await PersistAsync(token);
         OnPropertyChanged(nameof(ProjectPath)); OnPropertyChanged(nameof(PluginPath)); OnPropertyChanged(nameof(ProjectDirectory));
         NotifyStep(); PreviewChanged?.Invoke();
-    });
+    }
 
     public Task OpenAsync(string path) => RunAsync(token => OpenCoreAsync(path, token));
     private async Task OpenCoreAsync(string path, CancellationToken token)
@@ -94,6 +105,7 @@ public sealed partial class SmartModViewModel
                 var mergedRecipes = item.Recipes.ToList();
                 foreach (var recipe in recipes)
                 {
+                    if (recipe.FormId is { } removed && item.Tuning?.PendingRecipeRemovals.Contains(removed) == true) continue;
                     var index = mergedRecipes.FindIndex(r => r.ConfirmedFormId == recipe.FormId || r.ConfirmedFormId == null &&
                         r.EditorId == "SMP_Recipe_" + r.Id.ToString("N") && r.EditorId.Equals(recipe.EditorId, StringComparison.OrdinalIgnoreCase));
                     if (index >= 0) mergedRecipes[index] = mergedRecipes[index] with { ConfirmedFormId = recipe.FormId };

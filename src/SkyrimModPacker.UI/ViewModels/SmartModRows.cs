@@ -55,6 +55,28 @@ public sealed partial class SmartModRecipeRow : ObservableObject
 public sealed partial class SmartModItemRow : ObservableObject, IDataErrorInfo
 {
     private SmartModItemDraft _draft;
+    public bool IsAutomating { get; private set; }
+    public SmartWeaponTuning? Tuning => _draft.Tuning;
+    private SmartWeaponTuning LegacyTuning() => new() { Mode = SmartBalanceMode.Custom, ManualFields = SmartWeaponBalance.Fields,
+        CraftingIntent = Recipes.Any(r => !r.IsTempering) ? SmartRecipeIntent.Enabled : SmartRecipeIntent.Disabled,
+        TemperingIntent = Recipes.Any(r => r.IsTempering) ? SmartRecipeIntent.Enabled : SmartRecipeIntent.Disabled };
+    public void MarkManual(string field)
+    {
+        if (IsAutomating) return;
+        var tuning = _draft.Tuning ?? LegacyTuning();
+        _draft = _draft with { Tuning = tuning with { ManualFields = tuning.ManualFields.Append(field).Distinct().ToArray() } };
+    }
+    public void SetRecipeIntent(bool tempering, SmartRecipeIntent intent)
+    {
+        var tuning = _draft.Tuning ?? LegacyTuning();
+        _draft = _draft with { Tuning = tempering ? tuning with { TemperingIntent = intent } : tuning with { CraftingIntent = intent } };
+    }
+    public void ApplyAutomation(SmartModItemDraft draft)
+    {
+        IsAutomating = true;
+        try { Recipes.Clear(); foreach (var recipe in draft.Recipes) Recipes.Add(new(recipe, _label)); Replace(draft); }
+        finally { IsAutomating = false; }
+    }
     private readonly Func<string, string> _label;
     public Guid Id => _draft.Id;
     public WeaponKind Kind => _draft.Kind;
@@ -90,6 +112,7 @@ public sealed partial class SmartModItemRow : ObservableObject, IDataErrorInfo
     }
     private void Edit(WeaponDraftFields fields, string property)
     {
+        if (SmartWeaponBalance.Fields.Contains(property)) MarkManual(property);
         _draft = _draft with { Weapon = fields, State = SmartModItemState.InProgress };
         Errors.Remove(property); OnPropertyChanged(property); OnPropertyChanged(nameof(Fields));
         OnPropertyChanged(nameof(StateText)); OnPropertyChanged(nameof(Errors)); Changed?.Invoke();

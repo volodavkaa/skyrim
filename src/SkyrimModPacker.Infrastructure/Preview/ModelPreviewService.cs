@@ -9,6 +9,17 @@ namespace SkyrimModPacker.Infrastructure.Preview;
 
 public sealed class ModelPreviewService : IModelPreviewService
 {
+    public static ModelPreview Inspect(string projectDirectory, string modelPath, string gameDataPath, CancellationToken token = default)
+    {
+        var scene = SseNifReader.Read(ReadResource(projectDirectory, Resource(modelPath, "meshes", ".nif"), gameDataPath, SseNifReader.MaxFileBytes, token), token);
+        return scene with { TextureDependencies = scene.TexturePaths.Select(p => ProbeTexture(projectDirectory, p, gameDataPath, token)).ToArray() };
+    }
+    public static PreviewTextureDependency ProbeTexture(string projectDirectory, string texturePath, string gameDataPath, CancellationToken token = default)
+    {
+        try { ReadResource(projectDirectory, Resource(texturePath, "textures", ".dds"), gameDataPath, 32 * 1024 * 1024, token, probe: true); return new(texturePath, true); }
+        catch (FileNotFoundException ex) { return new(texturePath, false, ex.Message); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return new(texturePath, null, ex.Message); }
+    }
     public Task<ModelPreview> LoadAsync(string projectDirectory, string modelPath, string gameDataPath, CancellationToken token = default) => Task.Run(() =>
     {
         var path = Resource(modelPath, "meshes", ".nif");

@@ -6,6 +6,10 @@ namespace SkyrimModPacker.Core.Interfaces;
 
 public interface IWeaponProjectService
 {
+    Task<Result<WeaponFolderScan>> ScanWeaponFolderAsync(string sourceFolder, CancellationToken cancellationToken = default);
+    Task<Result<WeaponFolderPlan>> PreviewWeaponFolderAsync(WeaponFolderRequest request, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<WeaponFolderImport>> ImportWeaponFolderAsync(WeaponFolderPlan plan, string gameDataPath, Func<WeaponFolderImport, CancellationToken, Task>? saveDraft = null, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<string>>> ValidateWeaponFolderAssetsAsync(string projectFilePath, IReadOnlyList<string> models, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<TextureFolderPlan>> PreviewTextureFolderAsync(string projectFilePath, string sourceFolder, string targetSubdirectory, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<string>>> ImportTextureFolderAsync(TextureFolderPlan plan, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<BatchResourcePlan>> PreviewBatchImportAsync(string projectFilePath, IReadOnlyList<string> sourcePaths, string gameDataPath, CancellationToken cancellationToken = default);

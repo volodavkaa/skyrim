@@ -79,6 +79,16 @@ public sealed class JsonSmartModDraftRepository : ISmartModDraftRepository
                 !Enum.IsDefined(item.Step) || !Enum.IsDefined(item.State) || item.Weapon == null || item.Recipes == null)
                 throw new InvalidDataException("Некоректний або повторний ідентифікатор предмета чернетки.");
             var w = item.Weapon;
+            if (item.Tuning is { } tuning)
+            {
+                if (tuning.Version != 1 || tuning.PresetVersion != 1 || !Enum.IsDefined(tuning.Mode) || !Enum.IsDefined(tuning.Handling) || !Enum.IsDefined(tuning.CraftingIntent) || !Enum.IsDefined(tuning.TemperingIntent) ||
+                    tuning.ManualFields == null || tuning.ManualFields.Any(f => !SmartWeaponBalance.Fields.Concat(new[] { "Crafting", "Tempering" }).Contains(f)) ||
+                    tuning.SourceFingerprint == null || tuning.ReferenceEditorId == null || tuning.PendingRecipeRemovals == null || tuning.PendingRecipeRemovals.Count > 128 ||
+                    tuning.PendingRecipeRemovals.Any(id => id == 0 || id > 0xFFFFFF) || tuning.PendingRecipeRemovals.Distinct().Count() != tuning.PendingRecipeRemovals.Count)
+                    throw new InvalidDataException("Invalid wizard material/balance metadata.");
+                tuning.Base?.Validate();
+            }
+            if (item.LastFolderPlanId == Guid.Empty) throw new InvalidDataException("Invalid folder import identity.");
             if (w.Keywords == null || w.Keywords.Any(k => k == null) || new[] { w.EditorId, w.Name, w.Damage, w.Weight, w.Value, w.Description,
                 w.Speed, w.Reach, w.ModelPath, w.FirstPersonPath, w.EnchantmentCharge }.Any(s => s == null))
                 throw new InvalidDataException("Некоректна структура полів предмета чернетки.");

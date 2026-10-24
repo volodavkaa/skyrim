@@ -58,6 +58,11 @@ public sealed partial class SmartModViewModel
             if (info.Origin == ModelOrigin.Project && !info.IncludedInZip) throw new IOException(model + ": " + Label("Smart_ModelUnregistered"));
         }
         if (item.Fields.FirstPersonEdited && string.IsNullOrWhiteSpace(item.FirstPersonPath)) throw new IOException(Label("Smart_FirstPersonRequired"));
+        if (item.Capture().ValidateFolderDependencies)
+        {
+            var dependencies = Require(await _projects.ValidateWeaponFolderAssetsAsync(ProjectPath, [item.ModelPath, item.FirstPersonPath], _gameData, token));
+            if (dependencies.Count > 0) throw new IOException(Label("Smart_FolderDependenciesPending") + Environment.NewLine + string.Join(Environment.NewLine, dependencies));
+        }
     }
 
     [RelayCommand] private Task SaveItemAsync() => RunAsync(async token => { if (SelectedItem != null) await SaveItemCoreAsync(SelectedItem, token); });
@@ -103,6 +108,13 @@ public sealed partial class SmartModViewModel
             item.Replace(item.Capture() with { ConfirmedFormId = weapon.FormId });
             await RecordSuccessfulWriteAsync(token);
             var savedRecipes = Require(await _builder.GetRecipesAsync(PluginPath, weapon.FormId, token));
+            foreach (var removed in item.Tuning?.PendingRecipeRemovals ?? [])
+                if (savedRecipes.Any(r => r.FormId == removed))
+                {
+                    var deleted = await _builder.DeleteRecipeAsync(PluginPath, _gameData, removed, token);
+                    if (deleted.IsFailure) throw new IOException(deleted.Error);
+                    await RecordSuccessfulWriteAsync(token);
+                }
             foreach (var recipe in item.Recipes)
             {
                 var data = recipe.Capture();
@@ -122,6 +134,7 @@ public sealed partial class SmartModViewModel
                 recipe.ConfirmedFormId = saved.FormId;
                 await RecordSuccessfulWriteAsync(token);
             }
+            if (item.Tuning != null) item.Replace(item.Capture() with { Tuning = item.Tuning with { PendingRecipeRemovals = [] } });
             item.SetState(SmartModItemState.Ready); await PersistAsync(token); await RefreshResourcesAsync(token);
             Status = Label("Smart_ItemSaved");
         }

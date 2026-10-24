@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddSingleton<IWeaponDraftRepository>(_ => new JsonWeaponDraftRepository(appDataDirectory));
         services.AddSingleton<ISmartModDraftRepository, JsonSmartModDraftRepository>();
         services.AddSingleton<IWeaponPresetRepository>(_ => new JsonWeaponPresetRepository(appDataDirectory));
+        services.AddSingleton<ISmartRecipePresetRepository>(_ => new JsonSmartRecipePresetRepository(appDataDirectory));
         services.AddSingleton<IWorkspaceHistoryService>(_ => new WorkspaceHistoryService(appDataDirectory));
 
         var logSink = inMemoryLogSink ?? new InMemoryLogSink();

@@ -17,9 +17,9 @@ namespace SkyrimModPacker.Tests;
 
 public partial class WeaponsViewModelTests
 {
-    private SmartModViewModel SmartEditor(PackingPipeline? pipeline = null) => new(_builder, new WeaponProjectService(_builder), _settings,
+    private SmartModViewModel SmartEditor(PackingPipeline? pipeline = null, SkyrimModPacker.Core.Interfaces.ISmartRecipePresetRepository? recipePresets = null) => new(_builder, new WeaponProjectService(_builder), _settings,
         new JsonSmartModDraftRepository(), new PluginValidationService(), pipeline,
-        new WorkspaceHistoryService(Path.Combine(_root, "smart-history")));
+        new WorkspaceHistoryService(Path.Combine(_root, "smart-history")), recipePresets: recipePresets);
 
     private async Task<SmartModViewModel> PrepareSmartAsync(PackingPipeline? pipeline = null)
     {

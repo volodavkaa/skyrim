@@ -12,7 +12,7 @@ internal static class PreviewFixtures
         BitConverter.GetBytes(dxgi).CopyTo(bytes, 128); BitConverter.GetBytes(3u).CopyTo(bytes, 132); BitConverter.GetBytes(1u).CopyTo(bytes, 140);
         bytes[148] = 64; return bytes; // Valid mode 6, constant black endpoints and zero indices.
     }
-    public static byte[] Nif(string scenario = "valid", string diffuse = "textures/test.dds")
+    public static byte[] Nif(string scenario = "valid", string diffuse = "textures/test.dds", string[]? extraTextures = null)
     {
         byte[] Block(Action<BinaryWriter> write) { using var memory = new MemoryStream(); using var w = new BinaryWriter(memory); write(w); return memory.ToArray(); }
         void Net(BinaryWriter w, int name) { w.Write(name); w.Write(0u); w.Write(scenario == "animated" ? 0 : -1); }
@@ -36,7 +36,7 @@ internal static class PreviewFixtures
                 w.Write((ushort)0); w.Write((ushort)1); w.Write((ushort)(scenario == "index" ? 3 : 2)); w.Write(0u);
             }),
             Block(w => { w.Write(0u); Net(w, -1); w.Write(0u); w.Write(0u); w.Write(0f); w.Write(0f); w.Write(1f); w.Write(1f); w.Write(3); }),
-            Block(w => { w.Write(1u); Text(w, diffuse); })
+            Block(w => { w.Write((uint)(1 + (extraTextures?.Length ?? 0))); Text(w, diffuse); foreach (var texture in extraTextures ?? []) Text(w, texture); })
         };
         var types = new[] { "BSFadeNode", scenario == "unsupported" ? "BSDynamicTriShape" : "BSTriShape", "BSLightingShaderProperty", "BSShaderTextureSet" };
         return Block(w => {

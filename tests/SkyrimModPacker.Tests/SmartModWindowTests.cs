@@ -18,13 +18,15 @@ using Xunit;
 namespace SkyrimModPacker.Tests;
 
 [Collection("WPF page")]
-public sealed class SmartModWindowTests
+public sealed partial class SmartModWindowTests
 {
     private static async Task Sta(Func<Task> action)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(System.Windows.Application).TypeHandle);
+            _ = System.IO.Packaging.PackUriHelper.Create(new Uri("http://localhost/"));
             var dispatcher = Dispatcher.CurrentDispatcher;
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
             dispatcher.BeginInvoke(async () =>
@@ -88,8 +90,10 @@ public sealed class SmartModWindowTests
         localization.CurrentLanguage.Returns(_ => languageCode);
         localization.GetString(Arg.Any<string>()).Returns(c => strings[c.Arg<string>()] as string ?? c.Arg<string>());
         var source = new SwordTemplate { FormId = 0x12EB7, Name = "Iron sword", EditorId = "IronSword", Damage = 7, Weight = 9, Value = 25,
-            Details = new() { ModelPath = "third.nif", FirstPersonModelPath = "first.nif" } };
+            Details = new() { ModelPath = "third.nif", FirstPersonModelPath = "first.nif", Speed = 1, Reach = 1 } };
         builder.GetWeaponTemplatesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<SwordTemplate>>.Success([source]));
+        builder.GetSmartMaterialPresetsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<SmartMaterialPreset>>.Success([
+            new("Steel:Sword", "Steel", SmartWeaponSubtype.Sword, WeaponKind.OneHandSword, new("Skyrim.esm", 0x13989), "SteelSword", new(8, 10, 45, 1, 1), [], null, null, "", null)]));
         builder.GetWeaponOptionsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<WeaponOptions>.Success(new()
         { Keywords = [new() { Reference = new("Skyrim.esm", 1), EditorId = "CraftingSmithingForge" }, new() { Reference = new("Skyrim.esm", 2), EditorId = "CraftingSmithingSharpeningWheel" }],
             LeveledLists = [new() { Reference = new("Skyrim.esm", 3), EditorId = "ExampleEquipment", Name = "Стражник / Guard", ListUsages = [new("Equipment", "Стражник / Guard", "ExampleGuard", new("Skyrim.esm", 4)) { Kind = "Npc" }] },
@@ -178,8 +182,16 @@ public sealed class SmartModWindowTests
             var option = new RecordOption { Reference = new("Skyrim.esm", 1), EditorId = "IngotIron", Name = "Залізний злиток / Iron ingot", MaterialCategory = "Metal" };
             var index = new MaterialSearchIndex([option]);
             var plan = new TextureFolderPlan("project", "hash", @"C:\Textures", "weapons/custom", [new(@"C:\Textures\base.dds", "textures/weapons/custom/base.dds", 1024, "hash", false, null)], 1);
+            var before = new SmartModItemDraft { Weapon = new() { Damage = "7", Weight = "9", Value = "25", Speed = "1", Reach = "1" } };
+            var request = new WeaponFolderRequest(Guid.NewGuid(), "project", @"C:\ModAssets", @"C:\ModAssets\blade.nif", null, true);
+            var folderPlan = new WeaponFolderPlan(request, "hash", [new(request.ThirdPersonSource, "meshes/Custom/blade.nif", "hash", 1024, false, null)],
+                @"Custom\blade.nif", @"Custom\blade.nif", [new("textures/Custom/blade.dds", "Existing", [])], [], 2, false);
             foreach (var window in new Window[] { new MaterialPickerWindow(index, Label, option),
-                new TextureFolderWindow(plan.SourceFolder, _ => Task.FromResult(plan), () => Task.FromResult<ModelPreview?>(Scene()), Label) })
+                new TextureFolderWindow(plan.SourceFolder, _ => Task.FromResult(plan), () => Task.FromResult<ModelPreview?>(Scene()), Label),
+                new SmartTuningWindow((_, _, _) => new(before, before, Label("Weapons_Damage") + ": 7 → 8\n" + Label("Weapons_Weight") + ": 9 → 10\n" + Label("Smart_Crafting") + ": IngotSteel × 2, LeatherStrips × 1\nSteelSmithing\n\n" + Label("Smart_TuningSnapshotOnly")), Label, true, true, true),
+                new WeaponFolderWindow(request.SourceFolder, request.ProjectPath, (_, _) => Task.FromResult(new WeaponFolderScan(request.SourceFolder,
+                    [new(request.ThirdPersonSource, "blade.nif", 1024, "SSE", null), new(@"C:\ModAssets\blade.dds", "blade.dds", 1024, "BC7", null)], 2)),
+                    (_, _) => Task.FromResult(folderPlan), [new(WeaponKind.OneHandSword, Label("WeaponType_OneHandSword"))], Label, true, WeaponKind.OneHandSword) })
             {
                 window.ShowInTaskbar = false; window.ShowActivated = false; window.Left = -10000; window.Top = -10000;
                 window.Show(); await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
