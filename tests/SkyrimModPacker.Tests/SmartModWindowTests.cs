@@ -214,16 +214,17 @@ public sealed partial class SmartModWindowTests
     public Task AvailableRealLeModelRendersInSharedViewportAndThumbnail() => Sta(async () =>
     {
         var root = Environment.GetEnvironmentVariable("SKYRIM_LE_PROJECT"); if (string.IsNullOrEmpty(root)) return;
-        var service = new ModelPreviewService(); var scene = await service.LoadAsync(root, @"Stage21\third.nif", root);
-        Assert.All(scene.TextureDependencies, d => Assert.True(d.Available));
+        var game = Environment.GetEnvironmentVariable("SKYRIM_SE_DATA") ?? root;
+        var service = new ModelPreviewService(); var scene = await service.LoadAsync(root, @"Stage21\third.nif", game);
+        Assert.All(scene.TextureDependencies.Where(d => game != root || File.Exists(Path.Combine(root, d.Path))), d => Assert.True(d.Available));
         Assert.NotEmpty(scene.Textures); Assert.DoesNotContain(scene.Warnings, warning => warning.Contains("BC7"));
         Assert.All(scene.Meshes.Where(m => !string.IsNullOrEmpty(m.DiffuseTexture)), mesh => Assert.Contains(scene.Textures, t => t.Path == mesh.DiffuseTexture));
-        var thumbnail = await new ModelThumbnailService(service).CreateAsync(root, @"Stage21\third.nif", root);
+        var thumbnail = await new ModelThumbnailService(service).CreateAsync(root, @"Stage21\third.nif", game);
         Assert.Null(thumbnail.Error); Assert.NotNull(thumbnail.Image);
         using var control = new ModelPreviewControl(service);
         foreach (var resource in new[] { "SmartModTheme.xaml", "Strings.uk.xaml" })
             control.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/SkyrimModPacker.UI;component/Resources/" + resource) });
-        await control.LoadAsync(new(root, @"Stage21\third.nif", @"Stage21\first.nif", root)); Assert.True(control.HasScene);
+        await control.LoadAsync(new(root, @"Stage21\third.nif", @"Stage21\first.nif", game)); Assert.True(control.HasScene);
         var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/ui-smart-mod")); Directory.CreateDirectory(output);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create((BitmapSource)thumbnail.Image));
         using (var file = File.Create(Path.Combine(output, "real-le-dagger-thumbnail.png"))) encoder.Save(file);

@@ -9,3 +9,4 @@ packages/
 TestResults/
 artifacts/
 publish/
+*_wpftmp.csproj

@@ -703,7 +703,7 @@
     <system:String x:Key="Smart_FolderHint">Choose models and review exact texture paths. Thumbnails show geometry; textures appear after import. Multiple models require explicit assignment.</system:String>
     <system:String x:Key="Smart_FolderScanning">Finding models and textures… You can cancel.</system:String>
     <system:String x:Key="Smart_FolderBuildingPlan">Checking references and import plan…</system:String>
-    <system:String x:Key="Smart_FolderNewItem">Create a new queued item</system:String>
+    <system:String x:Key="Smart_FolderNewItem">Create new items in this project</system:String>
     <system:String x:Key="Smart_FolderConfirm">Import this plan</system:String>
     <system:String x:Key="Smart_FolderTexturesOnly">Import textures only</system:String>
     <system:String x:Key="Smart_FolderNoNif">No NIF found. You can import the textures separately.</system:String>
@@ -770,4 +770,24 @@
     <system:String x:Key="Smart_RecipeBefore">Before</system:String>
     <system:String x:Key="Smart_RecipeAfter">After</system:String>
     <system:String x:Key="Smart_RecipeOutputShort">Output count</system:String>
+    <system:String x:Key="Smart_FolderQueueHint">Each row below is a separate item in one plugin. Add the weapon types you need and assign a NIF to each. One model can also serve several items. Extra NIFs never become items automatically.</system:String>
+    <system:String x:Key="Smart_FolderQueueTitle">Items to create from this archive or folder</system:String>
+    <system:String x:Key="Smart_FolderAddItem">Add item</system:String>
+    <system:String x:Key="Smart_FolderCopyItem">Create another variant</system:String>
+    <system:String x:Key="Smart_FolderRemoveItem">Remove from queue</system:String>
+    <system:String x:Key="Smart_FolderItemDefault">Weapon</system:String>
+    <system:String x:Key="Smart_FolderItemKind">Selected item's weapon type</system:String>
+    <system:String x:Key="Smart_FolderQueueFirstHint">For a new item, select a separate first-person model or use the main model for both views.</system:String>
+    <system:String x:Key="Smart_FolderQueueInvalid">Each item needs a name, type and main NIF. Assign a first-person model or enable sharing. Add at least one item.</system:String>
+    <system:String x:Key="Smart_FolderQueueLimit">One import supports up to 100 items.</system:String>
+    <system:String x:Key="Smart_FolderPreviewAll">Preview all items</system:String>
+    <system:String x:Key="Smart_FolderQueueSummary">Items in this import: {0}. All will use one plugin.</system:String>
+    <system:String x:Key="Smart_FolderPlugin">Plugin</system:String>
+    <system:String x:Key="Smart_FolderProjectName">New mod / plugin name (without .esp)</system:String>
+    <system:String x:Key="Smart_FolderAvailableName">Suggest available name</system:String>
+    <system:String x:Key="Smart_FolderDestinationExists">This destination already exists. Change the name or output directory above, or click Suggest available name. Existing files will not be overwritten.</system:String>
+    <system:String x:Key="Smart_FolderDestinationReady">Output location. The plugin is created after import confirmation:</system:String>
+    <system:String x:Key="Smart_FolderDestinationSuggested">The original destination is occupied, so an available name was suggested. You can edit it here without closing the import.</system:String>
+    <system:String x:Key="Smart_FolderPlanFailed">The plan is not ready. Review the reason below, correct the settings and preview again.</system:String>
+    <system:String x:Key="Smart_FolderCurrentPlugin">Current project plugin</system:String>
 </ResourceDictionary>

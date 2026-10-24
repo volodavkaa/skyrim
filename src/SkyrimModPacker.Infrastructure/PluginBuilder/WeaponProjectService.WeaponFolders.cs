@@ -53,8 +53,10 @@ public sealed partial class WeaponProjectService
             PluginWriteGuard.EnsureOutsideGame(request.ProjectPath, game);
             folder = Path.GetDirectoryName(Path.GetFullPath(request.ProjectPath))!;
             var name = Path.GetFileNameWithoutExtension(request.NewProjectPluginName);
-            if (Path.GetFileName(request.ProjectPath) != ProjectFileName || !Path.GetFileName(folder).Equals(name, StringComparison.OrdinalIgnoreCase) || Directory.Exists(folder) || File.Exists(folder))
-                throw new IOException("A project with this name already exists or the destination is invalid. Choose another name or location.");
+            if (Path.GetFileName(request.ProjectPath) != ProjectFileName || !Path.GetFileName(folder).Equals(name, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Некоректна папка призначення проєкту / Invalid project destination: " + folder);
+            if (Directory.Exists(folder) || File.Exists(folder))
+                throw new IOException("Ця папка вже існує. Зміни назву моду або папку збереження у цьому вікні / Destination already exists: " + folder);
             document = new ProjectDocument { Name = name, PluginFileName = request.NewProjectPluginName! };
         }
         else (folder, document) = await ReadResourceProjectAsync(request.ProjectPath, game, token);
@@ -68,9 +70,15 @@ public sealed partial class WeaponProjectService
             if (!sources.TryGetValue(Path.GetFullPath(path), out var file) || !path.EndsWith(".nif", StringComparison.OrdinalIgnoreCase)) throw new IOException("Choose a NIF from the scanned folder.");
             if (file.Error != null) throw new IOException(file.SourcePath + ": " + file.Error); return file;
         }
-        var third = Model(request.ThirdPersonSource);
-        var first = request.ShareModel ? third : string.IsNullOrWhiteSpace(request.FirstPersonSource) ? null : Model(request.FirstPersonSource);
-        var selectedModels = new[] { third, first }.Where(f => f != null).Cast<WeaponFolderSource>().DistinctBy(f => f.SourcePath, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (request.Items == null || request.Items.Count > 100 || request.Items.Any(i => i == null || i.Id == Guid.Empty || string.IsNullOrWhiteSpace(i.Name) || i.Name.Length > 100 || i.Name.Any(char.IsControl) || !Enum.IsDefined(i.Kind) ||
+            !i.ShareModel && string.IsNullOrWhiteSpace(i.FirstPersonSource)) || request.Items.Select(i => i.Id).Distinct().Count() != request.Items.Count)
+            throw new InvalidDataException("Перевір назви, типи та моделі всіх предметів (до 100) / Invalid import item queue.");
+        var assignments = (request.Items.Count == 0
+            ? new[] { (Item: (WeaponFolderItemRequest?)null, Third: Model(request.ThirdPersonSource), FirstSource: request.FirstPersonSource, Share: request.ShareModel) }
+            : request.Items.Select(i => (Item: (WeaponFolderItemRequest?)i, Third: Model(i.ThirdPersonSource), FirstSource: i.FirstPersonSource, Share: i.ShareModel)).ToArray())
+            .Select(a => (a.Item, a.Third, First: a.Share ? a.Third : string.IsNullOrWhiteSpace(a.FirstSource) ? null : Model(a.FirstSource))).ToArray();
+        var third = assignments[0].Third; var first = assignments[0].First;
+        var selectedModels = assignments.SelectMany(a => new[] { a.Third, a.First }).Where(f => f != null).Cast<WeaponFolderSource>().DistinctBy(f => f.SourcePath, StringComparer.OrdinalIgnoreCase).ToArray();
         var expectedTextures = new HashSet<string>(StringComparer.OrdinalIgnoreCase); var warnings = new List<string>(); var incomplete = false;
         foreach (var model in selectedModels)
         {
@@ -135,7 +143,8 @@ public sealed partial class WeaponProjectService
         }
         var canonical = files.GroupBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).Select(g => g.Select(f => f.Sha256).Distinct().Count() > 1 ? g.First() with { Conflict = "Multiple different sources target this path." } : g.First()).OrderBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
         var skipped = inventory.SkippedFiles + inventory.Files.Count(f => !pending.Any(p => p.File.SourcePath.Equals(f.SourcePath, StringComparison.OrdinalIgnoreCase)));
-        return new(request, newProject ? "NEW" : await BatchHashAsync(request.ProjectPath, token), canonical, thirdPath[7..].Replace('/', '\\'), firstPath?[7..].Replace('/', '\\'), dependencies, warnings, skipped, incomplete);
+        return new(request, newProject ? "NEW" : await BatchHashAsync(request.ProjectPath, token), canonical, thirdPath[7..].Replace('/', '\\'), firstPath?[7..].Replace('/', '\\'), dependencies, warnings, skipped, incomplete)
+        { Items = assignments.Where(a => a.Item != null).Select(a => new WeaponFolderItemPlan(a.Item!.Id, a.Item.Name, a.Item.Kind, MeshDestination(a.Third)[7..].Replace('/', '\\'), a.First == null ? null : MeshDestination(a.First)[7..].Replace('/', '\\'))).ToArray() };
     }
     public Task<Result<WeaponFolderImport>> ImportWeaponFolderAsync(WeaponFolderPlan plan, string gameDataPath, Func<WeaponFolderImport, CancellationToken, Task>? saveDraft = null, CancellationToken cancellationToken = default) =>
         RunAsync(async () =>
@@ -158,7 +167,7 @@ public sealed partial class WeaponProjectService
                 current.Files.ToDictionary(f => f.RelativePath, f => f.Sha256, StringComparer.OrdinalIgnoreCase));
             var committed = new WorkspaceFileSnapshot(project);
             var committedBackup = new WorkspaceFileSnapshot(backupPath);
-            var result = new WeaponFolderImport(plan.Request.Id, current.ThirdPersonPath, current.FirstPersonPath, current.Incomplete);
+            var result = new WeaponFolderImport(plan.Request.Id, current.ThirdPersonPath, current.FirstPersonPath, current.Incomplete) { Items = current.Items };
             try { if (saveDraft != null) await saveDraft(result, cancellationToken); }
             catch (Exception failure)
             {

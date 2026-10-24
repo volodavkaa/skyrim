@@ -703,7 +703,7 @@
     <system:String x:Key="Smart_FolderHint">Обери моделі й перевір точні шляхи текстур. Мініатюри показують геометрію; текстури будуть у перегляді після імпорту. Якщо моделей кілька, їх потрібно призначити явно.</system:String>
     <system:String x:Key="Smart_FolderScanning">Пошук моделей і текстур… Можна скасувати.</system:String>
     <system:String x:Key="Smart_FolderBuildingPlan">Перевірка посилань і плану імпорту…</system:String>
-    <system:String x:Key="Smart_FolderNewItem">Створити новий предмет у черзі</system:String>
+    <system:String x:Key="Smart_FolderNewItem">Додати нові предмети до проєкту</system:String>
     <system:String x:Key="Smart_FolderConfirm">Імпортувати за цим планом</system:String>
     <system:String x:Key="Smart_FolderTexturesOnly">Імпортувати тільки текстури до проєкту</system:String>
     <system:String x:Key="Smart_FolderNoNif">У папці немає NIF. Можна імпортувати текстури окремо.</system:String>
@@ -770,4 +770,24 @@
     <system:String x:Key="Smart_RecipeBefore">Було</system:String>
     <system:String x:Key="Smart_RecipeAfter">Стане</system:String>
     <system:String x:Key="Smart_RecipeOutputShort">Вихід предметів</system:String>
+    <system:String x:Key="Smart_FolderQueueHint">Кожний рядок у списку нижче — окремий предмет у спільному плагіні. Додай потрібні типи зброї та признач кожному свою NIF. Одну модель також можна використати для кількох предметів. Зайві NIF автоматично не стають предметами.</system:String>
+    <system:String x:Key="Smart_FolderQueueTitle">Предмети, які будуть створені з цього архіву або папки</system:String>
+    <system:String x:Key="Smart_FolderAddItem">Додати предмет</system:String>
+    <system:String x:Key="Smart_FolderCopyItem">Зробити ще один варіант</system:String>
+    <system:String x:Key="Smart_FolderRemoveItem">Прибрати зі списку</system:String>
+    <system:String x:Key="Smart_FolderItemDefault">Зброя</system:String>
+    <system:String x:Key="Smart_FolderItemKind">Тип вибраного предмета</system:String>
+    <system:String x:Key="Smart_FolderQueueFirstHint">Для нового предмета обери окрему модель першої особи або ввімкни використання основної моделі для обох видів.</system:String>
+    <system:String x:Key="Smart_FolderQueueInvalid">Для кожного предмета вкажи назву, тип і основну NIF. Також признач першу особу або спільну модель. Додай хоча б один предмет.</system:String>
+    <system:String x:Key="Smart_FolderQueueLimit">За один імпорт можна додати до 100 предметів.</system:String>
+    <system:String x:Key="Smart_FolderPreviewAll">Переглянути план усіх предметів</system:String>
+    <system:String x:Key="Smart_FolderQueueSummary">Предметів у цьому імпорті: {0}. Усі потраплять в один плагін.</system:String>
+    <system:String x:Key="Smart_FolderPlugin">Плагін</system:String>
+    <system:String x:Key="Smart_FolderProjectName">Назва нового моду / плагіна (без .esp)</system:String>
+    <system:String x:Key="Smart_FolderAvailableName">Запропонувати вільну назву</system:String>
+    <system:String x:Key="Smart_FolderDestinationExists">Ця папка вже існує. Зміни назву або папку збереження вище, чи натисни «Запропонувати вільну назву». Існуючі файли не будуть перезаписані.</system:String>
+    <system:String x:Key="Smart_FolderDestinationReady">Місце збереження. Плагін створиться після підтвердження імпорту:</system:String>
+    <system:String x:Key="Smart_FolderDestinationSuggested">Початкова папка вже зайнята, тому запропоновано вільну назву. Можеш змінити її тут, не закриваючи імпорт.</system:String>
+    <system:String x:Key="Smart_FolderPlanFailed">План ще не готовий. Причина нижче; виправ налаштування й переглянь план повторно.</system:String>
+    <system:String x:Key="Smart_FolderCurrentPlugin">Поточний плагін проєкту</system:String>
 </ResourceDictionary>

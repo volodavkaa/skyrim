@@ -1,5 +1,11 @@
 {
     "dotnet.defaultSolution": "SkyrimModPacker.sln",
     "dotnet.projects.enableFileBasedPrograms": false,
-    "dotnet.server.sourceGeneratorExecution": "Automatic"
+    "dotnet.server.sourceGeneratorExecution": "Automatic",
+    "files.exclude": {
+        "**/*_wpftmp.csproj": true
+    },
+    "files.watcherExclude": {
+        "**/*_wpftmp.csproj": true
+    }
 }

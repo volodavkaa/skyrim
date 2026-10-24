@@ -57,19 +57,22 @@ public partial class WeaponsViewModelTests
         repository.LoadAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(c => inner.LoadAsync(c.ArgAt<string>(0), c.ArgAt<string>(1), c.Arg<CancellationToken>()));
         repository.SaveAsync(Arg.Any<SmartModDraft>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(c =>
         {
-            if (armed && c.Arg<SmartModDraft>().Items.Any(i => i.LastFolderPlanId != null)) { armed = false; return Task.FromResult(Result<DraftWriteReceipt>.Failure("Injected folder draft failure")); }
+            if (armed && c.Arg<SmartModDraft>().Items.Count(i => i.LastFolderPlanId != null) == 2) { armed = false; return Task.FromResult(Result<DraftWriteReceipt>.Failure("Injected folder draft failure")); }
             return inner.SaveAsync(c.Arg<SmartModDraft>(), c.Arg<string>(), c.Arg<long>(), c.Arg<CancellationToken>());
         });
         await using var vm = new SmartModViewModel(_builder, new WeaponProjectService(_builder), _settings, repository, new PluginValidationService(),
             history: new WorkspaceHistoryService(Path.Combine(_root, "folder-failure-history")));
         await vm.InitializeAsync(original.ProjectPath); Assert.Equal("", vm.Error);
         var root = Path.Combine(_root, "folder-failure-assets"); Directory.CreateDirectory(root); var model = Path.Combine(root, "new.nif"); File.WriteAllBytes(model, PreviewFixtures.Nif(diffuse: ""));
-        var plan = await vm.PreviewWeaponFolderAsync(new(Guid.NewGuid(), vm.ProjectPath, root, model, null, true));
+        var plan = await vm.PreviewWeaponFolderAsync(new(Guid.NewGuid(), vm.ProjectPath, root, model, null, true) { Items = [
+            new(Guid.NewGuid(), "Sword", WeaponKind.OneHandSword, model, null, true), new(Guid.NewGuid(), "Greatsword", WeaponKind.Greatsword, model, null, true)] });
         var before = File.ReadAllBytes(vm.ProjectPath); var plugin = File.ReadAllBytes(vm.PluginPath); var count = vm.Items.Count; var selected = vm.SelectedItem!.Id;
+        var draftFile = Path.Combine(vm.ProjectDirectory, JsonSmartModDraftRepository.FileName); var beforeDraft = File.ReadAllBytes(draftFile);
         armed = true; await vm.ImportWeaponFolderAsync(plan, true, WeaponKind.OneHandSword); Assert.NotEmpty(vm.Error);
         Assert.Equal(count, vm.Items.Count); Assert.Equal(selected, vm.SelectedItem!.Id); Assert.Equal(before, File.ReadAllBytes(vm.ProjectPath)); Assert.Equal(plugin, File.ReadAllBytes(vm.PluginPath));
+        Assert.Equal(beforeDraft, File.ReadAllBytes(draftFile));
         foreach (var file in plan.Files) Assert.False(File.Exists(Path.Combine(vm.ProjectDirectory, file.RelativePath)));
-        await vm.ImportWeaponFolderAsync(plan, true, WeaponKind.OneHandSword); Assert.Equal("", vm.Error); Assert.Equal(count + 1, vm.Items.Count);
+        await vm.ImportWeaponFolderAsync(plan, true, WeaponKind.OneHandSword); Assert.Equal("", vm.Error); Assert.Equal(count + 2, vm.Items.Count);
     }
 
     [Fact]

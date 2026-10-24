@@ -143,7 +143,7 @@ public partial class SmartModWindow : Window
         var starting = !ViewModel.HasProject;
         if (starting && !ViewModel.CanStartFromResources) { ViewModel.Error = ViewModel.Label("Smart_StartNeedsName"); ViewModel.Section = SmartModSection.Overview; return; }
         var dialog = new WeaponFolderWindow(folder, starting ? ViewModel.ProposedProjectPath : ViewModel.ProjectPath, ViewModel.ScanWeaponFolderAsync, ViewModel.PreviewWeaponFolderAsync,
-            ViewModel.Types, ViewModel.Label, starting || createNew, ViewModel.SelectedItem?.Kind ?? WeaponKind.OneHandSword, starting ? ViewModel.Name.Trim() + ".esp" : null, sourceDisplayName) { Owner = this };
+            ViewModel.Types, ViewModel.Label, starting || createNew, ViewModel.SelectedItem?.Kind ?? WeaponKind.OneHandSword, starting ? ViewModel.Name.Trim() + ".esp" : null, sourceDisplayName, starting ? null : System.IO.Path.GetFileName(ViewModel.PluginPath)) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         if (dialog.TextureOnly)
         {
@@ -154,7 +154,12 @@ public partial class SmartModWindow : Window
         }
         else if (dialog.Plan != null)
         {
-            if (starting) await ViewModel.CreateFromWeaponFolderAsync(dialog.Plan, dialog.Kind);
+            if (starting)
+            {
+                ViewModel.Name = System.IO.Path.GetFileNameWithoutExtension(dialog.Plan.Request.NewProjectPluginName!);
+                ViewModel.OutputDirectory = System.IO.Directory.GetParent(System.IO.Path.GetDirectoryName(dialog.Plan.Request.ProjectPath)!)!.FullName;
+                await ViewModel.CreateFromWeaponFolderAsync(dialog.Plan, dialog.Kind);
+            }
             else await ViewModel.ImportWeaponFolderAsync(dialog.Plan, dialog.CreateNew, dialog.Kind);
         }
     }

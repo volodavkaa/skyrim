@@ -32,4 +32,10 @@
     <ProjectReference Include="..\SkyrimModPacker.Infrastructure\SkyrimModPacker.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Roslyn editors can request CoreCompile without the Visual Studio WPF build hooks. -->
+  <Target Name="PrepareWpfEditorMarkup"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="MarkupCompilePass1"
+          Condition="'$(DesignTimeBuild)' == 'true'" />
+
 </Project>

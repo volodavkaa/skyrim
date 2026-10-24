@@ -24,7 +24,7 @@ internal static class PreviewFixtures
             w.Write(root ? 1f : 2f); w.Write(-1);
         }
         var blocks = new[] {
-            Block(w => { Av(w, 0, true); w.Write(1u); w.Write(scenario == "cycle" ? 0 : 1); w.Write(0u); }),
+            Block(w => { Av(w, 0, true); w.Write(scenario.StartsWith("hidden") ? 2u : 1u); w.Write(scenario == "cycle" ? 0 : 1); if (scenario.StartsWith("hidden")) w.Write(4); w.Write(0u); }),
             Block(w => {
                 Av(w, 1, false); foreach(var f in new[] {0f,0,0,1}) w.Write(f);
                 w.Write(scenario == "skin" ? 0 : -1); w.Write(2); w.Write(-1);
@@ -39,11 +39,20 @@ internal static class PreviewFixtures
             Block(w => { w.Write((uint)(1 + (extraTextures?.Length ?? 0))); Text(w, diffuse); foreach (var texture in extraTextures ?? []) Text(w, texture); })
         };
         var types = new[] { "BSFadeNode", scenario == "unsupported" ? "BSDynamicTriShape" : "BSTriShape", "BSLightingShaderProperty", "BSShaderTextureSet" };
+        var ids = new ushort[] { 0, 1, 2, 3 };
+        if (scenario.StartsWith("hidden"))
+        {
+            var hidden = (byte[])blocks[1].Clone(); BitConverter.GetBytes(15u).CopyTo(hidden, 12); BitConverter.GetBytes(5).CopyTo(hidden, 92);
+            var shader = (byte[])blocks[2].Clone(); BitConverter.GetBytes(6).CopyTo(shader, shader.Length - 4);
+            var texture = Block(w => { w.Write(scenario == "hiddenCorrupt" ? uint.MaxValue : 1u); Text(w, "textures/hidden.dds"); });
+            blocks = blocks.Concat(new[] { hidden, shader, texture }).ToArray(); ids = [0, 1, 2, 3, 1, (ushort)(scenario == "hiddenUnknown" ? 4 : 2), 3];
+            if (scenario == "hiddenUnknown") types = types.Append("UnknownShaderProperty").ToArray();
+        }
         return Block(w => {
-            w.Write(Encoding.ASCII.GetBytes("Gamebryo File Format, Version 20.2.0.7\n")); w.Write(0x14020007u); w.Write((byte)1); w.Write(12u); w.Write(4u);
-            w.Write(scenario == "LE" ? 83u : 100u); w.Write(new byte[3]); w.Write((ushort)4);
+            w.Write(Encoding.ASCII.GetBytes("Gamebryo File Format, Version 20.2.0.7\n")); w.Write(0x14020007u); w.Write((byte)1); w.Write(12u); w.Write((uint)blocks.Length);
+            w.Write(scenario == "LE" ? 83u : 100u); w.Write(new byte[3]); w.Write((ushort)types.Length);
             foreach (var type in types) Text(w, type);
-            for (ushort i = 0; i < 4; i++) w.Write(i);
+            foreach (var id in ids) w.Write(id);
             foreach (var block in blocks) w.Write((uint)block.Length);
             w.Write(2u); w.Write(5u); Text(w, "Scene"); Text(w, "Blade"); w.Write(0u);
             foreach (var block in blocks) w.Write(block);

@@ -25,6 +25,7 @@ public sealed partial class SmartModViewModel
     {
         if (HasProject || plan.Request.NewProjectPluginName != Name.Trim() + ".esp" || !Path.GetFullPath(plan.Request.ProjectPath).Equals(Path.GetFullPath(ProposedProjectPath), StringComparison.OrdinalIgnoreCase))
             throw new IOException(Label("Smart_TuningStale"));
+        if (plan.Items.Any(i => Templates.All(t => t.Kind != i.Kind))) throw new IOException(Label("Smart_SelectTemplate"));
         var fresh = Require(await _projects.PreviewWeaponFolderAsync(plan.Request, _gameData, token));
         if (!fresh.CanImport || JsonSerializer.Serialize(fresh) != JsonSerializer.Serialize(plan)) throw new IOException(Label("Smart_TuningStale"));
         await CreateProjectCoreAsync(true, token);
@@ -38,6 +39,7 @@ public sealed partial class SmartModViewModel
         if (!HasProject || !Path.GetFullPath(plan.Request.ProjectPath).Equals(Path.GetFullPath(ProjectPath), StringComparison.OrdinalIgnoreCase)) throw new IOException(Label("Smart_TuningStale"));
         if (Items.Any(i => i.Capture().LastFolderPlanId == plan.Request.Id)) { Status = Label("Smart_FolderAlreadyImported"); return; }
         if (!createNew && SelectedItem == null) throw new IOException(Label("Smart_SelectTemplate"));
+        if (plan.Items.Count > 0 && (!createNew || plan.Items.Any(i => Templates.All(t => t.Kind != i.Kind)))) throw new IOException(Label("Smart_SelectTemplate"));
         var before = Capture(); var revision = await CheckWorkspaceAsync(token); using var expectation = revision == null ? null : new WorkspaceWriteExpectation(revision);
         var target = SelectedItem;
         try
@@ -47,16 +49,27 @@ public sealed partial class SmartModViewModel
                 _applying = true;
                 try
                 {
-                    if (createNew) { target = AddItemCore(kind); await ResolveFirstPersonAsync(target, ct); }
-                    var item = target ?? throw new IOException(Label("Smart_SelectTemplate"));
+                    var selected = new List<SmartModItemRow>();
+                    async Task Assign(SmartModItemRow item, string third, string? first, string? name)
+                    {
+                    ct.ThrowIfCancellationRequested();
                     item.Replace(item.Capture() with { LastFolderPlanId = imported.PlanId, ValidateFolderDependencies = true,
                         State = imported.Incomplete ? SmartModItemState.NeedsCorrection : SmartModItemState.InProgress,
-                        Weapon = item.Fields with { ModelPath = imported.ThirdPersonPath,
-                            FirstPersonPath = imported.FirstPersonPath ?? item.FirstPersonPath, FirstPersonEdited = imported.FirstPersonPath != null || item.Fields.FirstPersonEdited,
-                            UseSharedModel = imported.FirstPersonPath != null && imported.FirstPersonPath.Equals(imported.ThirdPersonPath, StringComparison.OrdinalIgnoreCase),
-                            RestoreFirstPerson = imported.FirstPersonPath == null && item.Fields.RestoreFirstPerson } });
-                    SelectedItem = item; SelectedRecipe = item.Recipes.FirstOrDefault(); Section = SmartModSection.Weapons; item.Step = SmartModItemStep.Appearance;
-                    _tuningUndo.Remove(item.Id); await RecordSuccessfulWriteAsync(ct);
+                        Weapon = item.Fields with { Name = name ?? item.Name, ModelPath = third,
+                            FirstPersonPath = first ?? item.FirstPersonPath, FirstPersonEdited = first != null || item.Fields.FirstPersonEdited,
+                            UseSharedModel = first != null && first.Equals(third, StringComparison.OrdinalIgnoreCase),
+                            RestoreFirstPerson = first == null && item.Fields.RestoreFirstPerson } });
+                    await ResolveFirstPersonAsync(item, ct); item.Step = SmartModItemStep.Appearance; _tuningUndo.Remove(item.Id); selected.Add(item);
+                    }
+                    if (imported.Items.Count > 0)
+                        foreach (var entry in imported.Items) await Assign(AddItemCore(entry.Kind), entry.ThirdPersonPath, entry.FirstPersonPath, entry.Name);
+                    else
+                    {
+                        if (createNew) target = AddItemCore(kind);
+                        await Assign(target ?? throw new IOException(Label("Smart_SelectTemplate")), imported.ThirdPersonPath, imported.FirstPersonPath, null);
+                    }
+                    SelectedItem = selected[0]; SelectedRecipe = SelectedItem.Recipes.FirstOrDefault(); Section = SmartModSection.Weapons;
+                    await RecordSuccessfulWriteAsync(ct);
                 }
                 finally { _applying = false; }
             }, token);

@@ -20,6 +20,7 @@ public sealed partial class SseNifReader
     private uint _stream;
     private readonly HashSet<string> _texturePaths = new(StringComparer.OrdinalIgnoreCase);
     private bool _textureDependenciesComplete = true;
+    private readonly HashSet<string> _dependencyWarnings = [];
 
     public static ModelPreview Read(byte[] data, CancellationToken token = default) => new SseNifReader().Parse(data, token);
     private ModelPreview Parse(byte[] data, CancellationToken token)
@@ -53,9 +54,11 @@ public sealed partial class SseNifReader
         var roots = Count(r, 128); if (roots == 0) throw new InvalidDataException("The NIF has no scene roots.");
         var rootIds = Enumerable.Range(0, roots).Select(_ => Link(r, false)).ToArray();
         if (r.BaseStream.Position != r.BaseStream.Length) throw new InvalidDataException("Unexpected data after the NIF footer.");
+        // Texture dependencies include hidden/scabbard geometry, not only rendered meshes.
+        InspectTextureBlocks();
         foreach (var id in rootIds) Visit(id, Matrix4x4.Identity, 0);
         if (_meshes.Count == 0) throw new NotSupportedException("No visible supported static geometry was found.");
-        return new(_meshes, [], ["Static geometry and diffuse texture only. Skyrim shaders, collision, animation and plugin texture overrides are not reproduced."])
+        return new(_meshes, [], new[] { "Static geometry and diffuse texture only. Skyrim shaders, collision, animation and plugin texture overrides are not reproduced." }.Concat(_dependencyWarnings).ToArray())
         { TexturePaths = _texturePaths.Order(StringComparer.OrdinalIgnoreCase).ToArray(), TextureDependenciesComplete = _textureDependenciesComplete };
     }
 
@@ -77,7 +80,7 @@ public sealed partial class SseNifReader
             var rotation = new Matrix4x4(a[0], a[3], a[6], 0, a[1], a[4], a[7], 0, a[2], a[5], a[8], 0, 0, 0, 0, 1);
             var transform = Matrix4x4.CreateScale(scale) * rotation * Matrix4x4.CreateTranslation(translation) * parent;
             Link(r); // Collision is intentionally not displayed.
-            if ((flags & 1) != 0) { _textureDependenciesComplete = false; return; }
+            if ((flags & 1) != 0) return; // Dependencies were inspected independently above.
             if (!geometry)
             {
                 var children = Count(r, _blocks.Length); var links = Enumerable.Range(0, children).Select(_ => Link(r)).ToArray();
@@ -151,6 +154,27 @@ public sealed partial class SseNifReader
         var values = Enumerable.Range(0, count).Select(_ => Text(t)).ToArray(); End(t);
         foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v))) _texturePaths.Add(value);
         return values.Length > 0 && !string.IsNullOrWhiteSpace(values[0]) ? values[0] : null;
+    }
+    private void InspectTextureBlocks()
+    {
+        for (var index = 0; index < _blocks.Length; index++)
+        {
+            _token.ThrowIfCancellationRequested(); var block = _blocks[index];
+            try
+            {
+                if (block.Type == "BSShaderTextureSet")
+                {
+                    using var reader = Reader(block.Bytes); var count = Count(reader, 16);
+                    for (var slot = 0; slot < count; slot++) { var path = Text(reader); if (!string.IsNullOrWhiteSpace(path)) _texturePaths.Add(path); }
+                    End(reader);
+                }
+                else if (block.Type is "BSLightingShaderProperty" or "BSEffectShaderProperty") _ = Texture(index);
+                else if (block.Type.Contains("Textur", StringComparison.Ordinal) || block.Type.Contains("Shader", StringComparison.Ordinal))
+                    throw new NotSupportedException("Unknown texture/shader block.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { _textureDependenciesComplete = false; _dependencyWarnings.Add(block.Type + ": " + ex.Message); }
+        }
     }
 
     private string ObjectNet(BinaryReader r)
