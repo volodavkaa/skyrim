@@ -79,6 +79,7 @@ public sealed partial class WeaponsViewModel
 
     private void FillDetails(WeaponDetails details)
     {
+        _draftSounds = details.Sounds;
         Description = details.Description;
         Speed = details.Speed.ToString(CultureInfo.CurrentCulture);
         Reach = details.Reach.ToString(CultureInfo.CurrentCulture);
@@ -107,6 +108,7 @@ public sealed partial class WeaponsViewModel
             ClearFirstPersonModel = _restoreFirstPerson && _firstPersonReference == null,
             FirstPersonModelPath = _firstPersonEdited ? FirstPersonModelPath : null,
             Keywords = WeaponKeywords.Select(k => k.Reference).ToList(), AttackSound = SelectedSound?.Reference,
+            Sounds = _draftSounds,
             Enchantment = SelectedEnchantment?.Reference, EnchantmentCharge = charge
         };
     }
@@ -211,6 +213,8 @@ public sealed partial class WeaponsViewModel
         var result = await _builder.GetRecipesAsync(PluginPath, RequireSelectedSword(), token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         Recipes = new ObservableCollection<CraftingRecipe>(result.Value);
+        if (SelectedWeapon != null) _weaponRecipeCounts[SelectedWeapon.FormId] = result.Value.Count;
+        OnPropertyChanged(nameof(ProjectItemsSummary));
         SelectedRecipe = Recipes.FirstOrDefault(r => r.FormId == selectedId) ?? Recipes.FirstOrDefault();
         if (SelectedRecipe == null) ResetRecipeEditor();
         AcceptRecipeDraft();
@@ -221,8 +225,9 @@ public sealed partial class WeaponsViewModel
     private Task SaveRecipeAsync() => RunOperationAsync(async token =>
     {
         var id = RequireSelectedSword();
-        if (SelectedWorkbench == null || !ushort.TryParse(RecipeOutputCount, out var count) || count == 0)
+        if (!ValidateRecipeFields())
             throw new InvalidOperationException(Text("Weapons_InvalidRecipe", "Select a workbench and enter a positive output count."));
+        var count = ushort.Parse(RecipeOutputCount);
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
         var result = await _builder.SaveRecipeAsync(new SaveRecipeRequest
         {
@@ -230,7 +235,7 @@ public sealed partial class WeaponsViewModel
             Recipe = new CraftingRecipe
             {
                 FormId = SelectedRecipe?.FormId, WeaponFormId = id, EditorId = RecipeEditorId.Trim(),
-                Workbench = SelectedWorkbench.Reference, OutputCount = count, RequiredPerk = SelectedPerk?.Reference,
+                Workbench = SelectedWorkbench!.Reference, OutputCount = count, RequiredPerk = SelectedPerk?.Reference,
                 Ingredients = RecipeIngredients.Select(i => new RecipeIngredient { Reference = i.Item.Reference, Count = i.Count }).ToList()
             }
         }, token);

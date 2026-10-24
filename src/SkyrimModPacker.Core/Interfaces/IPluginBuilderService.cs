@@ -13,7 +13,8 @@ public interface IPluginBuilderService
     Task<Result<WeaponRecord>> CloneSwordAsync(CloneSwordRequest request, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<WeaponRecord>>> GetWeaponsAsync(string pluginPath, CancellationToken cancellationToken = default);
     Task<Result<WeaponRecord>> UpdateSwordAsync(UpdateSwordRequest request, CancellationToken cancellationToken = default);
-    Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default, string? projectFilePath = null);
+    Task<Result<WeaponRecord>> DuplicateWeaponAsync(DuplicateWeaponRequest request, CancellationToken cancellationToken = default);
+    Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default, string? projectFilePath = null, bool deleteRecipes = false);
     Task<Result<WeaponOptions>> GetWeaponOptionsAsync(string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<CraftingRecipe>>> GetRecipesAsync(string pluginPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<CraftingRecipe>> SaveRecipeAsync(SaveRecipeRequest request, CancellationToken cancellationToken = default);

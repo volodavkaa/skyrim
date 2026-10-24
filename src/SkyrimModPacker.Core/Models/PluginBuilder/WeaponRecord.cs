@@ -7,6 +7,7 @@ public sealed class WeaponRecord
     public uint FormId { get; init; }
     public string EditorId { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
+    public string DisplayName => $"{Name} — {EditorId} [{FormId:X6}]";
     public ushort Damage { get; init; }
     public float Weight { get; init; }
     public uint Value { get; init; }

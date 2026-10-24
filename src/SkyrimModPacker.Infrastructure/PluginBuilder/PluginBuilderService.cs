@@ -234,12 +234,15 @@ public sealed partial class PluginBuilderService : IPluginBuilderService
         }, () => request.PluginPath, request.GameDataPath, cancellationToken);
     }
 
-    public async Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default, string? projectFilePath = null)
+    public async Task<Result> DeleteSwordAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default, string? projectFilePath = null, bool deleteRecipes = false)
     {
         return await RunWriteAsync(transaction =>
         {
             var mod = ReadWorkspaceForEditing(pluginPath, gameDataPath);
             var sword = FindOwnedSword(mod, formId);
+            // Item-owned crafting/tempering recipes are removed with their output weapon.
+            foreach (var recipe in mod.ConstructibleObjects.Where(r => deleteRecipes && r.FormKey.ModKey == mod.ModKey && r.CreatedObject.FormKey == sword.FormKey).ToArray())
+                mod.ConstructibleObjects.Remove(recipe.FormKey);
             if (mod.EnumerateMajorRecords().Any(r => r.FormKey != sword.FormKey && r.EnumerateFormLinks().Any(link => link.FormKey == sword.FormKey)))
                 throw new InvalidOperationException("This sword is referenced by another record in the plugin. Remove those references first.");
             var nextId = mod.ModHeader.Stats.NextFormID;

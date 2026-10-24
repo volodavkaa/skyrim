@@ -61,7 +61,9 @@ public class WeaponsPageTests
                 var ingredient = Choice(0x102, "IngotIron");
                 var perk = Choice(0x106, "SteelSmithing");
                 var list = Choice(0x2000, "LItemSword");
-                var vm = new WeaponsViewModel(Substitute.For<IPluginBuilderService>(), settings, profiles, Substitute.For<IWeaponProjectService>())
+                var localization = Substitute.For<ILocalizationService>();
+                localization.GetString(Arg.Any<string>()).Returns(call => app.TryFindResource(call.Arg<string>()) as string ?? call.Arg<string>());
+                var vm = new WeaponsViewModel(Substitute.For<IPluginBuilderService>(), settings, profiles, Substitute.For<IWeaponProjectService>(), localization)
                 {
                     IsBaseConnected = true, GameDataPath = @"C:\Games\Skyrim\Data",
                     ProjectResources = ["meshes/Custom/blade.nif", "textures/Custom/blade.dds"], TextureSubdirectory = "Custom",
@@ -91,6 +93,13 @@ public class WeaponsPageTests
                 var recipe = new CraftingRecipe { FormId = 0x801, WeaponFormId = 0x800, EditorId = "RecipeCustomIronSword", Workbench = workbench.Reference, Ingredients = [new RecipeIngredient { Reference = ingredient.Reference, Count = 2 }], RequiredPerk = perk.Reference };
                 vm.Recipes.Add(recipe);
                 vm.SelectedRecipe = recipe;
+                vm.PersonalPresets = [new WeaponPreset { Name = "Personal sword parameters", Kind = WeaponKind.OneHandSword }];
+                vm.SelectedPreset = vm.PersonalPresets[0];
+                vm.BatchItems = [new BatchImportRow {
+                    Item = new BatchResourceItem(@"C:\Models\VeryLongResourceFolder\CustomSwordFirstPersonModel.nif", "meshes/Custom/Batch/123456789/CustomSwordFirstPersonModel.nif", "hash", ModelAssignment.FirstPerson),
+                    Assignment = ModelAssignment.FirstPerson,
+                    Assignments = [new(ModelAssignment.ResourceOnly, "Resource only"), new(ModelAssignment.ThirdPerson, "Third-person model"), new(ModelAssignment.FirstPerson, "First-person model")]
+                }];
                 var page = new WeaponsPage(vm)
                 {
                     Foreground = app.TryFindResource("TextFillColorPrimaryBrush") as Brush ?? Brushes.White,
@@ -109,9 +118,24 @@ public class WeaponsPageTests
                     new WeaponSummaryRow { Label = "Модель", Value = @"Weapons\Custom\blade.nif", IsChanged = true }
                 ];
                 vm.SummaryFiles = ["MySwords.esp", "meshes/Custom/blade.nif", "textures/Custom/blade.dds"];
+                foreach (var language in new[] { "uk", "en" })
+                foreach (var theme in new[] { "Dark", "Light" })
                 foreach (var (width, scale) in new[] { (900, 1d), (600, 1d), (420, 1d), (1200, 1d), (600, 1.3d) })
-                foreach (var step in Enumerable.Range(0, 5))
+                foreach (var step in Enumerable.Range(0, 7))
                 {
+                    if (width == 900 && step == 0)
+                    {
+                    app.Resources.MergedDictionaries[0] = (ResourceDictionary)XamlReader.Parse($"<ui:ThemesDictionary xmlns:ui=\"clr-namespace:Wpf.Ui.Markup;assembly=Wpf.Ui\" Theme=\"{theme}\" />");
+                    app.Resources.MergedDictionaries[2] = new ResourceDictionary { Source = new Uri($"pack://application:,,,/SkyrimModPacker.UI;component/Resources/Strings.{language}.xaml") };
+                    localization.LanguageChanged += Raise.Event<Action>();
+                    page = new WeaponsPage(vm) { FontSize = 14 };
+                    page.Resources.MergedDictionaries.Add(app.Resources.MergedDictionaries[0]);
+                    page.Resources.MergedDictionaries.Add(app.Resources.MergedDictionaries[2]);
+                    ((Frame)root.Child).Content = page;
+                    root.Background = theme == "Dark" ? new SolidColorBrush(Color.FromRgb(32, 32, 32)) : Brushes.WhiteSmoke;
+                    }
+                    var dpi = width == 1200 ? 2d : width == 900 ? 1.5d : 1d;
+                    VisualTreeHelper.SetRootDpi(root, new DpiScale(dpi, dpi));
                     page.EditorScale = scale;
                     vm.CurrentStep = step;
                     vm.ShowCreationPanel = step == 0;
@@ -130,7 +154,7 @@ public class WeaponsPageTests
                     root.UpdateLayout();
                     foreach (var expander in Descendants<Expander>(page).ToList())
                     {
-                        if (Equals(expander.Header, app.FindResource("Weapons_Resources")))
+                        if (step == 4 || Equals(expander.Header, app.FindResource("Weapons_Resources")))
                             expander.SetCurrentValue(Expander.IsExpandedProperty, true);
                     }
                     var frame = new DispatcherFrame();
@@ -142,6 +166,16 @@ public class WeaponsPageTests
                     var viewport = Descendants<ScrollViewer>(page).First();
                     Assert.True(viewport.ExtentWidth <= viewport.ViewportWidth + 1, $"Horizontal overflow at width {width}, scale {scale}, step {step}");
                     var texts = Descendants<TextBox>(page).ToList();
+                    bool InVisibleLayout(DependencyObject element)
+                    {
+                        for (DependencyObject? current = element; current != null; current = VisualTreeHelper.GetParent(current))
+                            if (current is UIElement ui && ui.Visibility != Visibility.Visible) return false;
+                        return true;
+                    }
+                    Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.AddWeaponCommand && InVisibleLayout(button));
+                    Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.DuplicateWeaponCommand && InVisibleLayout(button));
+                    Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.PreviewModelCommand && InVisibleLayout(button));
+                    if (step == 6) Assert.Contains(Descendants<TextBlock>(page), text => text.Text == (string)app.Resources.MergedDictionaries[2]["Stage5_Zip"]);
                     switch (step)
                     {
                         case 0:
@@ -160,9 +194,11 @@ public class WeaponsPageTests
                             Assert.Contains(texts, box => box.Text == "Опис меча");
                             if (width == 600) Assert.Contains(Descendants<TextBlock>(page), text => text.Text == vm.WeightError);
                             break;
-                        case 4:
+                        case 5:
                             Assert.Contains(Descendants<TextBlock>(page), text => text.Text == "7 → 20");
                             Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.SaveWizardSwordCommand);
+                            break;
+                        case 6:
                             Assert.Contains(Descendants<System.Windows.Controls.Button>(page), button => button.Command == vm.PackProjectCommand);
                             break;
                     }
@@ -175,8 +211,16 @@ public class WeaponsPageTests
                         var encoder = new PngBitmapEncoder();
                         encoder.Frames.Add(BitmapFrame.Create(bitmap));
                         var zoomSuffix = scale == 1 ? "" : "-zoom130";
-                        using var file = File.Create(Path.Combine(previewDirectory, $"weapons-step{step}-{width}{zoomSuffix}.png"));
+                        using var file = File.Create(Path.Combine(previewDirectory, $"weapons-{language}-{theme}-step{step}-{width}{zoomSuffix}.png"));
                         encoder.Save(file);
+                        if (width == 600 && scale == 1 && step is 2 or 3 or 4 or 6)
+                        {
+                            viewport.ScrollToBottom(); root.UpdateLayout();
+                            var bottom = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                            bottom.Render(root); var bottomEncoder = new PngBitmapEncoder(); bottomEncoder.Frames.Add(BitmapFrame.Create(bottom));
+                            using var bottomFile = File.Create(Path.Combine(previewDirectory, $"weapons-{language}-{theme}-step{step}-{width}-bottom.png"));
+                            bottomEncoder.Save(bottomFile);
+                        }
                     }
                 }
                 // Exercise the real asynchronous Closing handler without showing a desktop window.
@@ -222,7 +266,7 @@ public class WeaponsPageTests
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await completion.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(180));
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject

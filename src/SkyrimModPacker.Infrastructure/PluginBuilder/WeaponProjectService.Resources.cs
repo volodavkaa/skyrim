@@ -192,7 +192,8 @@ public sealed partial class WeaponProjectService
     }
 
     private async Task CopyResourcesAsync(string projectFilePath, string folder, ProjectDocument document,
-        IReadOnlyList<(string Source, string Relative)> files, string gameDataPath, WorkspaceFileSnapshot original, CancellationToken token)
+        IReadOnlyList<(string Source, string Relative)> files, string gameDataPath, WorkspaceFileSnapshot original, CancellationToken token,
+        IReadOnlyDictionary<string, string>? expectedHashes = null)
     {
         var pending = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (source, relative) in files)
@@ -227,6 +228,8 @@ public sealed partial class WeaponProjectService
                     output.Flush(flushToDisk: true);
                 }
                 if (new FileInfo(temp).Length == 0) throw new IOException("An imported resource is empty: " + relative);
+                if (expectedHashes != null && await BatchHashAsync(temp, token) != expectedHashes[relative])
+                    throw new IOException("A batch source changed during copying: " + relative);
                 staged.Add((temp, target));
             }
             foreach (var (temp, target) in staged)

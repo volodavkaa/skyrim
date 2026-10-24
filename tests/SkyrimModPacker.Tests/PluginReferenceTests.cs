@@ -29,7 +29,8 @@ public sealed class PluginReferenceTests : IDisposable
     public void Dispose() => Directory.Delete(_root, true);
 
     public static IEnumerable<object[]> Cases() =>
-        from field in new[] { "keyword", "sound", "enchantment", "output", "ingredient", "workbench", "perk", "list" }
+        from field in new[] { "keyword", "sound", "enchantment", "output", "ingredient", "workbench", "perk", "list",
+            "AttackSound2D", "AttackLoopSound", "AttackFailSound", "IdleSound", "EquipSound", "UnequipSound", "PickUpSound", "PutDownSound" }
         from state in new[] { "valid", "missing", "deleted", "wrong", "null" }
         select new object[] { field, state };
 
@@ -40,7 +41,7 @@ public sealed class PluginReferenceTests : IDisposable
         IMajorRecord target = field switch
         {
             "keyword" or "workbench" => new Keyword(key, SkyrimRelease.SkyrimSE),
-            "sound" => new SoundDescriptor(key, SkyrimRelease.SkyrimSE),
+            "sound" or "AttackSound2D" or "AttackLoopSound" or "AttackFailSound" or "IdleSound" or "EquipSound" or "UnequipSound" or "PickUpSound" or "PutDownSound" => new SoundDescriptor(key, SkyrimRelease.SkyrimSE),
             "enchantment" => new ObjectEffect(key, SkyrimRelease.SkyrimSE),
             "perk" => new Perk(key, SkyrimRelease.SkyrimSE),
             _ => new MiscItem(key, SkyrimRelease.SkyrimSE)
@@ -64,6 +65,11 @@ public sealed class PluginReferenceTests : IDisposable
         var weapon = new Weapon(new FormKey(Plugin, 0x800), SkyrimRelease.SkyrimSE) { EditorID = "Sword" };
         mod.Weapons.Add(weapon);
         var reference = state == "null" ? FormKey.Null : key;
+        if (field.EndsWith("Sound", StringComparison.Ordinal) || field == "AttackSound2D")
+        {
+            ((IFormLinkNullable<ISoundDescriptorGetter>)typeof(Weapon).GetProperty(field)!.GetValue(weapon)!).SetTo(reference);
+            return mod;
+        }
         switch (field)
         {
             case "keyword": weapon.Keywords = [new FormLink<IKeywordGetter>(reference)]; break;

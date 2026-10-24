@@ -126,7 +126,7 @@ public class AdvancedPluginBuilderTests : IDisposable
         {
             PluginPath = Plugin, GameDataPath = Data, FormId = 0x800, EditorId = sword.EditorId, Name = sword.Name,
             Damage = 12, Weight = 8, Value = 100,
-            Details = new WeaponDetails { Description = "Без чар", Speed = 1, Reach = 1, ModelPath = @"Weapons\Iron\LongSword.nif" }
+            Details = new WeaponDetails { Description = "Без чар", Speed = 1, Reach = 1, ModelPath = @"Weapons\Iron\LongSword.nif", AttackSound = null, Keywords = [], Enchantment = null }
         });
         Assert.True(updated.IsSuccess, updated.Error);
         Assert.Null(updated.Value.Details.Enchantment);
@@ -134,6 +134,27 @@ public class AdvancedPluginBuilderTests : IDisposable
         Assert.Empty(updated.Value.Details.Keywords);
         Assert.Equal(before, await File.ReadAllBytesAsync(Plugin + ".bak"));
         Assert.Equal(gameBytes, await File.ReadAllBytesAsync(MasterPath));
+    }
+
+    [Fact]
+    public async Task ModelOnlyUpdate_PreservesOtherEditableFields()
+    {
+        await PrepareAsync(Details());
+        var before = Assert.Single((await _builder.GetWeaponsAsync(Plugin)).Value);
+        var updated = await _builder.UpdateSwordAsync(new UpdateSwordRequest
+        {
+            PluginPath = Plugin, GameDataPath = Data, FormId = before.FormId, EditorId = before.EditorId, Name = before.Name,
+            Damage = before.Damage, Weight = before.Weight, Value = before.Value,
+            Details = new WeaponDetails { ModelPath = @"Weapons\Custom\different.nif" }
+        });
+        Assert.True(updated.IsSuccess, updated.Error);
+        Assert.Equal(before.Details.Description, updated.Value.Details.Description);
+        Assert.Equal(before.Details.Speed, updated.Value.Details.Speed);
+        Assert.Equal(before.Details.Reach, updated.Value.Details.Reach);
+        Assert.Equal(before.Details.Enchantment, updated.Value.Details.Enchantment);
+        Assert.Equal(before.Details.EnchantmentCharge, updated.Value.Details.EnchantmentCharge);
+        Assert.Equal(before.Details.AttackSound, updated.Value.Details.AttackSound);
+        Assert.Equal(before.Details.Keywords, updated.Value.Details.Keywords);
     }
 
     [Theory]

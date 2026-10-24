@@ -61,6 +61,7 @@ public sealed partial class WeaponsViewModel
         PluginPath = project.PluginPath;
         ShowCreationPanel = false;
         Weapons = new ObservableCollection<WeaponRecord>(result.Value);
+        await RefreshWeaponOriginsAsync(token);
         SelectedWeapon = Weapons.FirstOrDefault();
         if (SelectedWeapon == null) ResetDraft();
         await RefreshProjectResourcesAsync(token);

@@ -53,7 +53,7 @@ public sealed partial class WeaponsViewModel
         WriterSessionId = _draftWriterSession, PluginPath = PluginPath, ProjectFilePath = ProjectFilePath, GameDataPath = GameDataPath,
         WeaponFormId = SelectedWeapon?.FormId, TemplateFormId = SelectedTemplate?.FormId, RecipeFormId = SelectedRecipe?.FormId,
         TemplatePluginName = SelectedTemplate?.PluginName ?? "Skyrim.esm", RestorationTemplatePluginName = RestorationTemplate?.PluginName ?? "Skyrim.esm",
-        RestorationTemplateFormId = RestorationTemplate?.FormId, CurrentStep = CurrentStep,
+        RestorationTemplateFormId = RestorationTemplate?.FormId, CurrentStep = CurrentStep, WizardSchemaVersion = 2,
         NewWeapon = _newWeaponPending, NewRecipe = _newRecipePending,
         WeaponIsDirty = HasUnsavedWeaponChanges && (!discard || recipeOnly), RecipeIsDirty = HasUnsavedRecipeChanges && !discard,
         WeaponDiscarded = discard && !recipeOnly && HasUnsavedWeaponChanges, RecipeDiscarded = discard && HasUnsavedRecipeChanges,
@@ -64,7 +64,7 @@ public sealed partial class WeaponsViewModel
             EditorId = EditorId, Name = WeaponName, Damage = Damage, Weight = Weight, Value = Value, Description = Description,
             Speed = Speed, Reach = Reach, ModelPath = ModelPath, FirstPersonPath = FirstPersonModelPath,
             FirstPersonEdited = _firstPersonEdited, RestoreFirstPerson = _restoreFirstPerson, FirstPersonReference = _firstPersonReference,
-            RestorationOrigin = _restorationOrigin, RestorationPluginName = _restorationPluginName, Sound = SelectedSound?.Reference, Enchantment = SelectedEnchantment?.Reference,
+            RestorationOrigin = _restorationOrigin, RestorationPluginName = _restorationPluginName, Sound = SelectedSound?.Reference, Sounds = _draftSounds, Enchantment = SelectedEnchantment?.Reference,
             EnchantmentCharge = EnchantmentCharge, Keywords = WeaponKeywords.Select(k => k.Reference).ToArray()
         },
         Recipe = new()

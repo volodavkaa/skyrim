@@ -10,7 +10,7 @@ public sealed record WeaponBalanceRow(string Label, string Vanilla, string Custo
 
 public sealed partial class WeaponsViewModel
 {
-    private void RefreshStage4Texts() { OnPropertyChanged(nameof(WeaponTypes)); FilterTemplates(); RefreshBalance(); OnPropertyChanged(nameof(CompatibilityWarnings)); }
+    private void RefreshStage4Texts() { OnPropertyChanged(nameof(WeaponTypes)); FilterTemplates(); RefreshBalance(); OnPropertyChanged(nameof(CompatibilityWarnings)); NotifyInheritance(); OnPropertyChanged(nameof(ProjectItemsSummary)); }
     public string? CompatibilityWarnings
     {
         get

@@ -49,6 +49,9 @@ public sealed partial class WeaponsViewModel
     {
         RequireProject();
         if (SelectedResource == null) throw new IOException(Text("ResourceEdit_Select", "Select a resource."));
+        static string MeshResource(string path) => (path.Replace('\\', '/').StartsWith("meshes/", StringComparison.OrdinalIgnoreCase) ? path : "meshes/" + path).Replace('\\', '/');
+        if (new[] { ModelPath, FirstPersonModelPath }.Any(p => !string.IsNullOrWhiteSpace(p) && MeshResource(p).Equals(SelectedResource.RelativePath, StringComparison.OrdinalIgnoreCase)))
+            throw new IOException(Text("Items_DraftResourceUsed", "This model is assigned in the editor. Change the assignment before deleting the resource."));
         var result = await _projects.DeleteResourceAsync(ProjectFilePath, SelectedResource.RelativePath, GameDataPath, token);
         if (result.IsFailure) throw new IOException(result.Error);
         await RefreshProjectResourcesAsync(token);

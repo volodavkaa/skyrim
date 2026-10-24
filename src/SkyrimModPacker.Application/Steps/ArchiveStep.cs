@@ -14,6 +14,7 @@ public sealed class ArchiveStep : IPackStep
     private readonly IArchiver _archiver;
     private readonly IBuildHistoryRepository? _historyRepository;
     private readonly ILogger<ArchiveStep>? _logger;
+    private readonly IReportedArchiveService? _reportedArchive;
 
     public string Name => "Create Archive";
     public int Order => 500;
@@ -21,11 +22,12 @@ public sealed class ArchiveStep : IPackStep
     public ArchiveStep(
         IArchiver archiver,
         IBuildHistoryRepository? historyRepository = null,
-        ILogger<ArchiveStep>? logger = null)
+        ILogger<ArchiveStep>? logger = null, IReportedArchiveService? reportedArchive = null)
     {
         _archiver = archiver;
         _historyRepository = historyRepository;
         _logger = logger;
+        _reportedArchive = reportedArchive;
     }
 
     /// <inheritdoc />
@@ -72,7 +74,12 @@ public sealed class ArchiveStep : IPackStep
             context.LogMessages.Add(dependencies);
             _logger?.LogInformation("{Dependencies}", dependencies);
 
-            await _archiver.CreateArchiveAsync(
+            if (context.Profile.IncludeExportReport)
+            {
+                if (_reportedArchive == null) throw new InvalidOperationException("Export report service is unavailable.");
+                await _reportedArchive.CreateAsync(_archiver, context, filesToArchive, cancellationToken);
+            }
+            else await _archiver.CreateArchiveAsync(
                 context.OutputArchivePath,
                 filesToArchive,
                 context.Progress,
@@ -93,7 +100,7 @@ public sealed class ArchiveStep : IPackStep
                         ProfileName = context.Profile.Name,
                         Version = context.Profile.Version,
                         ArchivePath = context.OutputArchivePath,
-                        FileCount = filesToArchive.Count,
+                        FileCount = filesToArchive.Count + (context.Profile.IncludeExportReport ? 1 : 0),
                         ArchiveSizeBytes = context.ArchiveSizeBytes,
                         Timestamp = DateTime.UtcNow,
                         Success = true

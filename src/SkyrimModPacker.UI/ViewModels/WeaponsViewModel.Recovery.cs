@@ -146,6 +146,8 @@ public sealed partial class WeaponsViewModel
             _firstPersonReference = w.FirstPersonReference; _restorationOrigin = w.RestorationOrigin; _restorationPluginName = w.RestorationPluginName;
             WeaponKeywords = new(w.Keywords.Select(k => Option(Options.Keywords, k)));
             SelectedSound = SelectOption(SoundChoices, w.Sound); SelectedEnchantment = SelectOption(EnchantmentChoices, w.Enchantment);
+            _draftSounds = w.Sounds ?? SelectedWeapon?.Details.Sounds ?? SelectedTemplate?.Details.Sounds;
+            NotifyInheritance();
             EnchantmentCharge = w.EnchantmentCharge; _newWeaponPending = snapshot.NewWeapon;
         }
         if (!dirtyOnly || snapshot.RecipeIsDirty)
@@ -157,7 +159,7 @@ public sealed partial class WeaponsViewModel
             _newRecipePending = snapshot.NewRecipe;
         }
         RestorationTemplate = Templates.FirstOrDefault(t => t.FormId == snapshot.RestorationTemplateFormId && t.PluginName.Equals(snapshot.RestorationTemplatePluginName, StringComparison.OrdinalIgnoreCase));
-        CurrentStep = Math.Clamp(snapshot.CurrentStep, 0, 4);
+        CurrentStep = snapshot.WizardSchemaVersion < 2 && snapshot.CurrentStep >= 4 ? 5 : Math.Clamp(snapshot.CurrentStep, 0, 6);
         IsWizardSaved = false;
     }
 }

@@ -5,22 +5,27 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SkyrimModPacker.Core.Common;
+using SkyrimModPacker.Core.Interfaces;
+using SkyrimModPacker.Core.Models;
 
 namespace SkyrimModPacker.UI.ViewModels;
 
 public sealed partial class WeaponsViewModel
 {
+    private readonly IPluginValidationService? _pluginValidator;
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsModStep), nameof(IsTemplateStep), nameof(IsModelStep), nameof(IsPropertiesStep), nameof(IsSummaryStep), nameof(CanGoBack), nameof(CanGoNext))]
+    [NotifyPropertyChangedFor(nameof(IsModStep), nameof(IsTemplateStep), nameof(IsModelStep), nameof(IsPropertiesStep), nameof(IsSummaryStep), nameof(IsRecipeStep), nameof(IsZipStep), nameof(CanGoBack), nameof(CanGoNext))]
     [NotifyCanExecuteChangedFor(nameof(PreviousStepCommand), nameof(NextStepCommand))]
     private int _currentStep;
     public bool IsModStep => CurrentStep == 0;
     public bool IsTemplateStep => CurrentStep == 1;
     public bool IsModelStep => CurrentStep == 2;
     public bool IsPropertiesStep => CurrentStep == 3;
-    public bool IsSummaryStep => CurrentStep == 4;
+    public bool IsRecipeStep => CurrentStep == 4;
+    public bool IsSummaryStep => CurrentStep == 5;
+    public bool IsZipStep => CurrentStep == 6;
     public bool CanGoBack => CurrentStep > 0;
-    public bool CanGoNext => CurrentStep < 4;
+    public bool CanGoNext => CurrentStep < 6;
     public bool HasSelectedWeapon => SelectedWeapon != null;
 
     [ObservableProperty] private string? _projectError;
@@ -58,6 +63,7 @@ public sealed partial class WeaponsViewModel
                 ProjectError = null;
                 try { RequirePlugin(); PluginWriteGuard.EnsureOutsideGame(PluginPath, GameDataPath); }
                 catch (Exception ex) { ProjectError = ex.Message; return; }
+                if (!Enum.IsDefined(SelectedWeaponKind)) { ProjectError = Text("Stage5_PresetCompatibility", "Choose a supported weapon type."); return; }
                 break;
             case 1:
                 TemplateError = null;
@@ -75,6 +81,32 @@ public sealed partial class WeaponsViewModel
                 if (!ValidateWizardProperties()) return;
                 BuildWeaponSummary();
                 break;
+            case 4:
+                if (SelectedWeapon == null || HasUnsavedChanges)
+                {
+                    ErrorMessage = Text("Stage5_SaveBeforeNext", "Save the weapon and save or discard recipe changes before continuing.");
+                    return;
+                }
+                BuildWeaponSummary();
+                break;
+            case 5:
+                if (SelectedWeapon == null || HasUnsavedChanges)
+                {
+                    ErrorMessage = Text("Stage5_SaveBeforeNext", "Save the weapon and save or discard recipe changes before continuing.");
+                    return;
+                }
+                if (!await ValidateWizardModelAsync(token)) { CurrentStep = 2; return; }
+                if (!ValidateWizardProperties()) { CurrentStep = 3; return; }
+                var checkedFiles = await _projects.GetPackingFilesAsync(ProjectFilePath, GameDataPath, token);
+                if (checkedFiles.IsFailure) throw new InvalidOperationException(checkedFiles.Error);
+                if (_pluginValidator != null)
+                {
+                    PluginDiagnostics = new(await _pluginValidator.ValidateAsync(PluginPath, GameDataPath, cancellationToken: token));
+                    if (PluginDiagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+                        throw new InvalidOperationException(string.Join(Environment.NewLine, PluginDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+                }
+                IsWizardSaved = true;
+                break;
         }
         CurrentStep++;
     });
@@ -82,7 +114,7 @@ public sealed partial class WeaponsViewModel
     [RelayCommand]
     private async Task SaveWizardSwordAsync()
     {
-        if (IsLoading || !IsSummaryStep) return;
+        if (IsLoading || !(IsSummaryStep || IsRecipeStep || IsPropertiesStep)) return;
         IsWizardSaved = false;
         if (!ValidateWizardProperties()) { CurrentStep = 3; return; }
         // Each existing command owns its cancellation/operation scope.
@@ -159,7 +191,7 @@ public sealed partial class WeaponsViewModel
         ValueError = uint.TryParse(Value, out _) ? null : Text("Wizard_InvalidValue", "Enter an integer from 0 to 4294967295.");
         SpeedError = TryNumber(Speed, out var speed) && speed > 0 ? null : Text("Wizard_InvalidPositive", "Enter a finite number greater than zero.");
         ReachError = TryNumber(Reach, out var reach) && reach > 0 ? null : Text("Wizard_InvalidPositive", "Enter a finite number greater than zero.");
-        ChargeError = ushort.TryParse(EnchantmentCharge, out var charge) && (SelectedEnchantment == null || charge > 0) ? null : Text("Wizard_InvalidCharge", "Use 0–65535; an enchanted weapon needs a positive charge.");
+        ChargeError = ushort.TryParse(EnchantmentCharge, out var charge) && (SelectedEnchantment == null ? charge == 0 : charge > 0) ? null : Text("Wizard_InvalidCharge", "Use zero without an enchantment, otherwise 1–65535.");
         if (SpeedError != null || ReachError != null || ChargeError != null) ShowAdvancedProperties = true;
         return new[] { EditorIdError, WeaponNameError, DamageError, WeightError, ValueError, SpeedError, ReachError, ChargeError }.All(e => e == null);
     }
@@ -207,6 +239,7 @@ public sealed partial class WeaponsViewModel
     protected override void OnPropertyChanged(PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
+        if (e.PropertyName is nameof(Weapons)) OnPropertyChanged(nameof(ProjectItemsSummary));
         if (e.PropertyName is nameof(Damage) or nameof(Weight) or nameof(Value) or nameof(Speed) or nameof(Reach)) RefreshBalance();
         if (e.PropertyName is nameof(CurrentStep) or nameof(RestorationTemplate)) QueueDraftSave();
         if (e.PropertyName is nameof(HasUnsavedWeaponChanges) or nameof(HasUnsavedRecipeChanges))
@@ -218,6 +251,9 @@ public sealed partial class WeaponsViewModel
             nameof(RecipeEditorId) or nameof(RecipeOutputCount) or nameof(SelectedWorkbench) or nameof(SelectedPerk)) UpdateUnsavedChanges();
         switch (e.PropertyName)
         {
+            case nameof(RecipeEditorId): RecipeIdError = null; return;
+            case nameof(RecipeOutputCount): RecipeCountError = null; return;
+            case nameof(SelectedWorkbench): RecipeWorkbenchError = null; return;
             case nameof(EditorId): EditorIdError = null; break;
             case nameof(WeaponName): WeaponNameError = null; break;
             case nameof(Damage): DamageError = null; break;
@@ -234,8 +270,8 @@ public sealed partial class WeaponsViewModel
             case nameof(WeaponKeywords): break;
             case nameof(PluginName): PluginNameError = null; return;
             case nameof(OutputDirectory): OutputDirectoryError = null; return;
-            case nameof(PluginPath): ProjectError = null; CurrentStep = 0; IsWizardSaved = false; LastProjectArchivePath = null; return;
-            case nameof(SelectedTemplate): TemplateError = null; return;
+            case nameof(PluginPath): OnPropertyChanged(nameof(HasWorkspace)); ProjectError = null; CurrentStep = 0; IsWizardSaved = false; LastProjectArchivePath = null; return;
+            case nameof(SelectedTemplate): TemplateError = null; NotifyInheritance(); return;
             case nameof(SelectedWeapon): OnPropertyChanged(nameof(HasSelectedWeapon)); IsWizardSaved = false; return;
             default: return;
         }

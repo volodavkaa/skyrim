@@ -142,7 +142,7 @@ public sealed partial class WeaponProjectService(IPluginBuilderService builder, 
         {
             logger?.LogError(ex, "Weapon project operation failed");
             var details = ex.Message;
-            foreach (var key in ex.Data.Keys.Cast<object>().Where(k => k.ToString()?.Contains("Rollback", StringComparison.OrdinalIgnoreCase) == true))
+            foreach (var key in ex.Data.Keys.Cast<object>().Where(k => k.ToString()?.Contains("Rollback", StringComparison.OrdinalIgnoreCase) == true || k.ToString()?.Contains("Cleanup", StringComparison.OrdinalIgnoreCase) == true))
                 details += Environment.NewLine + key + ": " + ex.Data[key];
             return Result<T>.Failure(details);
         }

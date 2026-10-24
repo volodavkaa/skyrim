@@ -168,6 +168,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             PluginFileName = PluginFileName.Trim(),
             PluginSourcePath = PluginSourcePath.Trim(),
             WeaponProjectPath = WeaponProjectPath.Trim(),
+            IncludeExportReport = SelectedProfile.IncludeExportReport,
             EnableEsl = EnableEsl,
             Keywords = Keywords.ToList(),
             CreatedAt = SelectedProfile.CreatedAt,
@@ -237,6 +238,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
             PluginFileName = SelectedProfile.PluginFileName,
             PluginSourcePath = SelectedProfile.PluginSourcePath,
             WeaponProjectPath = SelectedProfile.WeaponProjectPath,
+            IncludeExportReport = SelectedProfile.IncludeExportReport,
             EnableEsl = SelectedProfile.EnableEsl,
             Keywords = new List<string>(SelectedProfile.Keywords)
         };

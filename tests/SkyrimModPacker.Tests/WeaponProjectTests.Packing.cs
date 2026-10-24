@@ -233,17 +233,19 @@ public partial class WeaponProjectTests
         var vm = ActivatorUtilities.CreateInstance<WeaponsViewModel>(provider);
         await vm.OpenProjectCommand.ExecuteAsync(project.ProjectFilePath);
         Assert.Null(vm.ErrorMessage);
-        vm.CurrentStep = 4;
+        vm.CurrentStep = 5;
         await vm.SaveWizardSwordCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         vm.EnableProjectEsl = true;
+        if (!vm.HasUnsavedChanges) await vm.NextStepCommand.ExecuteAsync(null);
         await vm.PackProjectCommand.ExecuteAsync(null);
         Assert.Null(vm.ErrorMessage);
         Assert.True(File.Exists(vm.LastProjectArchivePath));
-        using (var zip = ZipFile.OpenRead(vm.LastProjectArchivePath!)) Assert.Equal(3, zip.Entries.Count);
+        using (var zip = ZipFile.OpenRead(vm.LastProjectArchivePath!)) { Assert.Equal(4, zip.Entries.Count); Assert.NotNull(zip.GetEntry("mod-report.json")); }
         var saved = Assert.Single(await profiles.LoadAllAsync());
         Assert.Equal(project.ProjectFilePath, saved.WeaponProjectPath);
         Assert.True(saved.EnableEsl);
+        Assert.True(saved.IncludeExportReport);
         var build = new BuildViewModel(profiles, settings, provider.GetRequiredService<IModScanner>(), provider.GetRequiredService<PackingPipeline>());
         await build.LoadProfilesAsync();
         await build.ScanCommand.ExecuteAsync(null);
@@ -254,9 +256,10 @@ public partial class WeaponProjectTests
         var editor = new ProfilesViewModel(mockRepository);
         editor.Version = "2.0";
         await editor.SaveProfileCommand.ExecuteAsync(null);
-        await mockRepository.Received().SaveAsync(Arg.Is<ModProfile>(p => p.WeaponProjectPath == project.ProjectFilePath && p.Version == "2.0"), Arg.Any<CancellationToken>());
+        await mockRepository.Received().SaveAsync(Arg.Is<ModProfile>(p => p.WeaponProjectPath == project.ProjectFilePath && p.Version == "2.0" && p.IncludeExportReport), Arg.Any<CancellationToken>());
         await editor.DuplicateProfileCommand.ExecuteAsync(null);
         Assert.Equal(project.ProjectFilePath, editor.SelectedProfile!.WeaponProjectPath);
+        Assert.True(editor.SelectedProfile.IncludeExportReport);
     }
 
     [Theory]
@@ -273,7 +276,7 @@ public partial class WeaponProjectTests
         var vm = new WeaponsViewModel(_builder, settings, provider.GetRequiredService<IProfileRepository>(), Service,
             packingPipeline: provider.GetRequiredService<PackingPipeline>());
         await vm.OpenProjectCommand.ExecuteAsync(project.ProjectFilePath);
-        vm.CurrentStep = 4;
+        vm.CurrentStep = 5;
         await vm.SaveWizardSwordCommand.ExecuteAsync(null);
         Assert.True(vm.IsWizardSaved);
         switch (field)
@@ -283,6 +286,7 @@ public partial class WeaponProjectTests
             case "keywords": vm.WeaponKeywords.Add(new RecordOption { Reference = new PluginRecordReference("Skyrim.esm", 0x101), EditorId = "Keyword" }); break;
         }
         Assert.False(vm.IsWizardSaved);
+        if (!vm.HasUnsavedChanges) await vm.NextStepCommand.ExecuteAsync(null);
         await vm.PackProjectCommand.ExecuteAsync(null);
         Assert.NotNull(vm.ErrorMessage);
         Assert.Null(vm.LastProjectArchivePath);

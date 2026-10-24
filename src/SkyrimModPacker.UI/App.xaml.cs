@@ -52,6 +52,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<IDraftAutosaveScheduler, DraftAutosaveScheduler>();
             services.AddSingleton<IWorkspaceConflictPrompt, WorkspaceConflictPrompt>();
             services.AddSingleton<IWorkspaceFolderOpener, WorkspaceFolderOpener>();
+            services.AddSingleton<IModelPreviewPresenter, ModelPreviewPresenter>();
 
             // Main window
             services.AddSingleton<MainWindow>();

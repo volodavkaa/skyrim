@@ -21,6 +21,7 @@ public sealed record WeaponDraftFields
     public uint? RestorationOrigin { get; init; }
     public string RestorationPluginName { get; init; } = "Skyrim.esm";
     public PluginRecordReference? Sound { get; init; }
+    public IReadOnlyDictionary<string, PluginRecordReference?>? Sounds { get; init; }
     public PluginRecordReference? Enchantment { get; init; }
     public string EnchantmentCharge { get; init; } = "0";
     public IReadOnlyList<PluginRecordReference> Keywords { get; init; } = [];
@@ -55,6 +56,7 @@ public sealed record WeaponEditorDraft
     public uint? RestorationTemplateFormId { get; init; }
     public string RestorationTemplatePluginName { get; init; } = "Skyrim.esm";
     public int CurrentStep { get; init; }
+    public int WizardSchemaVersion { get; init; } = 1;
     public bool NewWeapon { get; init; }
     public bool NewRecipe { get; init; }
     public bool WeaponIsDirty { get; init; }

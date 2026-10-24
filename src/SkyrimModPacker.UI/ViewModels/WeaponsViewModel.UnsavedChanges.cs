@@ -32,7 +32,8 @@ public sealed partial class WeaponsViewModel
         if (IsEditorBusy) return;
         try
         {
-            if (await RequestLeaveEditorAsync(recipeOnly))
+            var untouchedNewItem = !recipeOnly && SelectedWeapon == null && _newWeaponPending && !HasUnsavedRecipeChanges && _savedWeaponDraft == CaptureWeaponDraft();
+            if (untouchedNewItem || await RequestLeaveEditorAsync(recipeOnly))
             {
                 _applyingEditorState = true;
                 try { change(); }
@@ -52,7 +53,7 @@ public sealed partial class WeaponsViewModel
     private WeaponDraftState CaptureWeaponDraft() => new(JsonSerializer.Serialize(new
     {
         EditorId, WeaponName, Damage, Weight, Value, Description, Speed, Reach, ModelPath,
-        Sound = SelectedSound?.Reference, Enchantment = SelectedEnchantment?.Reference, EnchantmentCharge,
+        Sound = SelectedSound?.Reference, Sounds = _draftSounds, Enchantment = SelectedEnchantment?.Reference, EnchantmentCharge,
         Keywords = WeaponKeywords.Select(k => k.Reference).ToArray()
     }), FirstPersonModelPath, _firstPersonEdited, _restoreFirstPerson,
         _firstPersonReference, _restorationOrigin, _restorationPluginName);
@@ -81,6 +82,7 @@ public sealed partial class WeaponsViewModel
 
     private void UpdateUnsavedChanges()
     {
+        NotifyInheritance();
         OnPropertyChanged(nameof(CompatibilityWarnings));
         HasUnsavedWeaponChanges = _newWeaponPending || _recoveredWeaponPending || (_savedWeaponDraft != null && _savedWeaponDraft != CaptureWeaponDraft());
         HasUnsavedRecipeChanges = _newRecipePending || _recoveredRecipePending || (_savedRecipeDraft != null && _savedRecipeDraft != CaptureRecipeDraft());

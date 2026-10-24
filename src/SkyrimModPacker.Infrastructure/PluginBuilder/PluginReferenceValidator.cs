@@ -28,6 +28,14 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
                     if (weapon.Keywords != null)
                         foreach (var keyword in weapon.Keywords) Check(record, "WEAP.Keywords", keyword, required: true);
                     Check(record, "WEAP.AttackSound", weapon.AttackSound);
+                    Check(record, "WEAP.AttackSound2D", weapon.AttackSound2D);
+                    Check(record, "WEAP.AttackLoopSound", weapon.AttackLoopSound);
+                    Check(record, "WEAP.AttackFailSound", weapon.AttackFailSound);
+                    Check(record, "WEAP.IdleSound", weapon.IdleSound);
+                    Check(record, "WEAP.EquipSound", weapon.EquipSound);
+                    Check(record, "WEAP.UnequipSound", weapon.UnequipSound);
+                    Check(record, "WEAP.PickUpSound", weapon.PickUpSound);
+                    Check(record, "WEAP.PutDownSound", weapon.PutDownSound);
                     Check(record, "WEAP.ObjectEffect", weapon.ObjectEffect);
                     break;
                 case IConstructibleObjectGetter recipe:
@@ -52,7 +60,7 @@ internal sealed class PluginReferenceValidator(ISkyrimModGetter mod, string path
             }
         }
         diagnostics.Add(new("REFERENCE_SCOPE", DiagnosticSeverity.Unsupported, path, null,
-            "Only WEAP first-person model/keywords/attack sound/enchantment, COBJ output/materials/workbench/HasPerk and LVLI entries are resolved against declared masters and this plugin. Other fields, condition semantics and the full installed load order are not checked.",
+            "Only WEAP first-person model/keywords/nine sound links/enchantment, COBJ output/materials/workbench/HasPerk and LVLI entries are resolved against declared masters and this plugin. Other fields, condition semantics and the full installed load order are not checked.",
             "Review other fields and the final load order in xEdit before installing."));
     }
 

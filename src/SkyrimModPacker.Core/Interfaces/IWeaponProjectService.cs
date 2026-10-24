@@ -6,6 +6,8 @@ namespace SkyrimModPacker.Core.Interfaces;
 
 public interface IWeaponProjectService
 {
+    Task<Result<BatchResourcePlan>> PreviewBatchImportAsync(string projectFilePath, IReadOnlyList<string> sourcePaths, string gameDataPath, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<string>>> ImportBatchAsync(BatchResourcePlan plan, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<WeaponVariant>>> GetVariantsAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<PluginRecordReference?>> GetTemplateReferenceAsync(string projectFilePath, string gameDataPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<ResourceVersion>>> GetResourceVersionsAsync(string projectFilePath, string gameDataPath, CancellationToken cancellationToken = default);

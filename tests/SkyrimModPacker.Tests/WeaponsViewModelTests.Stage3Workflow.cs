@@ -86,6 +86,8 @@ public partial class WeaponsViewModelTests
         await vm.UndoCommand.ExecuteAsync(null); Assert.Null(vm.ErrorMessage); Assert.Equal("first", File.ReadAllText(target)); Assert.Empty(vm.ResourceVersions);
         await vm.RedoCommand.ExecuteAsync(null); Assert.Null(vm.ErrorMessage); Assert.Equal("second", File.ReadAllText(target)); Assert.Single(vm.ResourceVersions);
         vm.SelectedResource = vm.ResourceCatalog.Single(r => r.RelativePath.EndsWith("versioned.nif"));
+        await vm.DeleteResourceCommand.ExecuteAsync(null); Assert.NotNull(vm.ErrorMessage); Assert.True(File.Exists(target));
+        vm.ModelPath = oldPath; // Explicitly unassign the unsaved model before deleting it.
         await vm.DeleteResourceCommand.ExecuteAsync(null); Assert.Null(vm.ErrorMessage); Assert.False(File.Exists(target));
         await vm.RestoreResourceVersionCommand.ExecuteAsync(null); Assert.Null(vm.ErrorMessage); Assert.True(File.Exists(target));
     }

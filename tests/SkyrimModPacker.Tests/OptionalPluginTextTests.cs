@@ -39,7 +39,7 @@ public sealed class OptionalPluginTextTests
             var updated = await builder.UpdateSwordAsync(new UpdateSwordRequest
             {
                 PluginPath = created.Value, GameDataPath = data, FormId = cloned.Value.FormId, EditorId = "NewSword", Name = "Sword", Damage = 7, Weight = 9, Value = 25,
-                Details = new WeaponDetails { ModelPath = @"Weapons\Iron\Sword.nif" }
+                Details = new WeaponDetails { ModelPath = @"Weapons\Iron\Sword.nif", AttackSound = null, Enchantment = null }
             });
             Assert.True(updated.IsSuccess, updated.Error);
             using var saved = SkyrimMod.CreateFromBinaryOverlay(created.Value, SkyrimRelease.SkyrimSE);

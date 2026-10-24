@@ -7,6 +7,7 @@ public sealed class ProjectResourceRow
 {
     public ProjectResourceEntry Entry { get; }
     public string RelativePath => Entry.RelativePath;
+    public string TypeText { get; }
     public string OriginText { get; }
     public string AvailabilityText { get; }
     public string RegistrationText { get; }
@@ -19,6 +20,7 @@ public sealed class ProjectResourceRow
     public ProjectResourceRow(ProjectResourceEntry entry, Func<string, string, string> text)
     {
         Entry = entry;
+        TypeText = text(entry.Category == SkyrimModPacker.Core.Models.FileCategory.Mesh ? "Items_ModelFile" : "Items_TextureFile", entry.Category.ToString());
         OriginText = text("Models_Origin_" + entry.Origin, entry.Origin.ToString());
         AvailabilityText = text("Models_Availability_" + entry.Availability, entry.Availability.ToString());
         RegistrationText = text(entry.IsRegistered ? "Resources_Registered" : "Resources_Unregistered", entry.IsRegistered ? "Registered" : "Not registered");

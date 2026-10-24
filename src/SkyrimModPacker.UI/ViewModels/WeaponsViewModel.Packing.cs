@@ -39,7 +39,7 @@ public sealed partial class WeaponsViewModel
         LastProjectArchivePath = null;
         RequireProject();
         RequirePlugin();
-        if (!IsSummaryStep || !IsWizardSaved || HasUnsavedChanges)
+        if (!IsZipStep || !IsWizardSaved || HasUnsavedChanges)
             throw new InvalidOperationException(Text("Weapons_SaveBeforePacking", "Save the sword on Summary before packing. Unsaved changes are not included."));
         if (_packingPipeline == null) throw new InvalidOperationException("The packing pipeline is not available.");
         var settings = await _settings.LoadAsync(token);
@@ -51,7 +51,7 @@ public sealed partial class WeaponsViewModel
         var profile = new ModProfile
         {
             Id = existing?.Id ?? Guid.NewGuid(), Name = existing?.Name ?? Path.GetFileNameWithoutExtension(PluginPath),
-            Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = EnableProjectEsl,
+            Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = EnableProjectEsl, IncludeExportReport = true,
             CreatedAt = existing?.CreatedAt ?? DateTime.UtcNow, ModifiedAt = DateTime.UtcNow,
             PluginFileName = Path.GetFileName(PluginPath), PluginSourcePath = PluginPath, WeaponProjectPath = ProjectFilePath
         };

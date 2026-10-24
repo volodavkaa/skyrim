@@ -31,7 +31,7 @@ public partial class WeaponsViewModelTests
         await vm.NextStepCommand.ExecuteAsync(null);
         await vm.NextStepCommand.ExecuteAsync(null);
         await vm.NextStepCommand.ExecuteAsync(null);
-        Assert.True(vm.IsSummaryStep);
+        Assert.True(vm.IsRecipeStep);
         Assert.Equal(editorId, vm.EditorId);
         Assert.Contains(vm.WeaponSummary, r => r.IsChanged && r.Value == "7 → 42");
         Assert.Contains(vm.WeaponSummary, r => r.Value.Contains(model));
@@ -78,7 +78,7 @@ public partial class WeaponsViewModelTests
         Assert.Equal(before, await File.ReadAllBytesAsync(vm.PluginPath));
         property.SetValue(vm, valid);
         await vm.NextStepCommand.ExecuteAsync(null);
-        Assert.True(vm.IsSummaryStep);
+        Assert.True(vm.IsRecipeStep);
         Assert.Null(typeof(WeaponsViewModel).GetProperty(error)!.GetValue(vm));
     }
 
@@ -140,7 +140,7 @@ public partial class WeaponsViewModelTests
         Assert.True(vm.IsPropertiesStep);
         vm.EditorId = suggested;
         await vm.NextStepCommand.ExecuteAsync(null);
-        Assert.True(vm.IsSummaryStep);
+        Assert.True(vm.IsRecipeStep);
         vm.SelectedWeapon = vm.Weapons.Single();
         vm.SelectedTemplate = null;
         vm.CurrentStep = 1;

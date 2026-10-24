@@ -23,11 +23,14 @@ public static class DependencyInjection
         services.AddSingleton<IModScanner, FileSystem.ProfileModScanner>();
         services.AddSingleton<ISkyrimLocator, Services.SkyrimLocator>();
         services.AddSingleton<IArchiver, Archivers.ZipArchiver>();
+        services.AddSingleton<IReportedArchiveService, Archivers.ReportedArchiveService>();
         services.AddSingleton<IEslService, Esl.EslService>();
         services.AddSingleton<IPluginValidationService, PluginBuilder.PluginValidationService>();
         services.AddSingleton<IPluginBuilderService, PluginBuilder.PluginBuilderService>();
         services.AddSingleton<IWeaponProjectService, PluginBuilder.WeaponProjectService>();
+        services.AddSingleton<IModelPreviewService, Preview.ModelPreviewService>();
         services.AddSingleton<IWeaponDraftRepository>(_ => new JsonWeaponDraftRepository(appDataDirectory));
+        services.AddSingleton<IWeaponPresetRepository>(_ => new JsonWeaponPresetRepository(appDataDirectory));
         services.AddSingleton<IWorkspaceHistoryService>(_ => new WorkspaceHistoryService(appDataDirectory));
 
         var logSink = inMemoryLogSink ?? new InMemoryLogSink();

@@ -56,7 +56,8 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         ILocalizationService? localizationService = null, ILogger<WeaponsViewModel>? logger = null, PackingPipeline? packingPipeline = null,
         IUnsavedChangesPrompt? unsavedChangesPrompt = null, IWeaponDraftRepository? draftRepository = null,
         IDraftAutosaveScheduler? draftAutosaveScheduler = null, IWorkspaceHistoryService? workspaceHistory = null,
-        IWorkspaceConflictPrompt? conflictPrompt = null, IWorkspaceFolderOpener? folderOpener = null)
+        IWorkspaceConflictPrompt? conflictPrompt = null, IWorkspaceFolderOpener? folderOpener = null, IWeaponPresetRepository? presetRepository = null,
+        IPluginValidationService? pluginValidator = null, IModelPreviewPresenter? previewPresenter = null)
     {
         _builder = pluginBuilderService;
         _settings = settingsRepository;
@@ -69,14 +70,19 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         _workspaceHistory = workspaceHistory;
         _conflictPrompt = conflictPrompt;
         _folderOpener = folderOpener;
+        _presets = presetRepository;
+        _pluginValidator = pluginValidator;
+        _previewPresenter = previewPresenter;
         _localization = localizationService;
         if (_localization != null) _localization.LanguageChanged += RenderResourceCatalog;
         if (_localization != null) _localization.LanguageChanged += RefreshStage4Texts;
+        if (_localization != null) _localization.LanguageChanged += RefreshBatchLabels;
         _logger = logger;
         PageTitle = "Weapons";
         WeaponKeywords.CollectionChanged += OnDraftKeywordsChanged;
         RecipeIngredients.CollectionChanged += DraftCollectionChanged;
         AcceptWeaponDraft(); AcceptRecipeDraft();
+        NotifyInheritance();
         OnPropertyChanged(nameof(TemplateSelection));
     }
 
@@ -160,6 +166,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             ProjectFilePath = string.Empty;
             ShowCreationPanel = false;
             Weapons = new ObservableCollection<WeaponRecord>(result.Value);
+            await RefreshWeaponOriginsAsync(token);
             SelectedWeapon = Weapons.FirstOrDefault();
             if (SelectedWeapon == null) ResetDraft();
             await ConfirmedWorkspaceLoadedAsync(token);
@@ -186,10 +193,10 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         {
             SelectedWeaponKind = value.Kind;
             _synchronizingWeaponTemplate = true;
-            try { SelectedTemplate = FilteredTemplates.FirstOrDefault(); }
+            try { SelectedTemplate = InheritanceTemplate; }
             finally { _synchronizingWeaponTemplate = false; }
             OnPropertyChanged(nameof(TemplateSelection));
-            BalanceTemplate = FilteredTemplates.FirstOrDefault();
+            BalanceTemplate = InheritanceTemplate ?? FilteredTemplates.FirstOrDefault();
             FillEditor(value.EditorId, value.Name, value.Damage, value.Weight, value.Value);
             FillDetails(value.Details);
         }
@@ -201,6 +208,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
             AcceptRecipeDraft();
         }
         AcceptWeaponDraft();
+        NotifyInheritance();
         OnPropertyChanged(nameof(WeaponSelection));
     }
 
@@ -278,7 +286,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         RequirePlugin();
         if (SelectedWeapon == null) throw new InvalidOperationException(Text("Weapons_SelectRecord", "Select a sword in the plugin first."));
         GameDataPath = (await _settings.LoadAsync(token)).SkyrimDataPath;
-        var result = await _builder.DeleteSwordAsync(PluginPath, GameDataPath, SelectedWeapon.FormId, token, string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath);
+        var result = await _builder.DeleteSwordAsync(PluginPath, GameDataPath, SelectedWeapon.FormId, token, string.IsNullOrWhiteSpace(ProjectFilePath) ? null : ProjectFilePath, deleteRecipes: true);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         await RefreshWeaponsAsync(null, token);
         StatusMessage = Text("Weapons_Deleted", "Sword deleted. A .bak copy was saved.");
@@ -289,6 +297,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         var result = await _builder.GetWeaponsAsync(PluginPath, token);
         if (result.IsFailure) throw new InvalidOperationException(result.Error);
         Weapons = new ObservableCollection<WeaponRecord>(result.Value);
+        await RefreshWeaponOriginsAsync(token);
         _preserveRecipeOnRefresh = preserveRecipe;
         try { SelectedWeapon = Weapons.FirstOrDefault(w => w.FormId == selectedId); }
         finally { _preserveRecipeOnRefresh = false; }
@@ -322,7 +331,7 @@ public sealed partial class WeaponsViewModel : ViewModelBase
         var profile = new ModProfile
         {
             Id = existing?.Id ?? Guid.NewGuid(), Name = existing?.Name ?? Path.GetFileNameWithoutExtension(PluginPath),
-            Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = existing?.EnableEsl ?? false,
+            Version = existing?.Version ?? "1.0", Keywords = existing?.Keywords.ToList() ?? [], EnableEsl = existing?.EnableEsl ?? false, IncludeExportReport = existing?.IncludeExportReport ?? false,
             CreatedAt = existing?.CreatedAt ?? DateTime.UtcNow, ModifiedAt = DateTime.UtcNow,
             PluginFileName = Path.GetFileName(PluginPath), PluginSourcePath = PluginPath, WeaponProjectPath = ProjectFilePath
         };

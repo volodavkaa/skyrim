@@ -55,28 +55,34 @@ public sealed partial class PluginBuilderService
         FirstPersonModelPath = source?.Statics.FirstOrDefault(s => s.FormKey == sword.FirstPersonModel.FormKey && !s.IsDeleted)?.Model?.File.GivenPath,
         Keywords = sword.Keywords?.Select(k => Reference(k.FormKey)).OfType<PluginRecordReference>().ToList() ?? [],
         AttackSound = Reference(sword.AttackSound.FormKey), Enchantment = Reference(sword.ObjectEffect.FormKey),
+        Sounds = WeaponSounds(sword),
         EnchantmentCharge = sword.EnchantmentAmount ?? 0
     };
 
     private static void ApplyDetails(ISkyrimMod mod, IWeapon sword, WeaponDetails details, string gameDataPath)
     {
-        if (!float.IsFinite(details.Speed) || details.Speed <= 0 || !float.IsFinite(details.Reach) || details.Reach <= 0)
+        var speed = details.SpeedSpecified ? details.Speed : sword.Data?.Speed ?? 1;
+        var reach = details.ReachSpecified ? details.Reach : sword.Data?.Reach ?? 1;
+        var description = details.DescriptionSpecified ? details.Description : sword.Description?.String ?? "";
+        var enchantmentReference = details.EnchantmentSpecified ? details.Enchantment : Reference(sword.ObjectEffect.FormKey);
+        var charge = details.EnchantmentChargeSpecified ? details.EnchantmentCharge : details.EnchantmentSpecified && enchantmentReference == null ? (ushort)0 : sword.EnchantmentAmount ?? 0;
+        if (!float.IsFinite(speed) || speed <= 0 || !float.IsFinite(reach) || reach <= 0)
             throw new InvalidOperationException("Speed and reach must be finite positive numbers.");
-        if (details.Description.Contains('\0'))
+        if (description.Contains('\0'))
             throw new InvalidOperationException("Description must not contain a null character.");
-        var modelPath = details.ModelPath.Trim().Replace('/', '\\');
+        var modelPath = (details.ModelPathSpecified ? details.ModelPath : sword.Model?.File.GivenPath ?? "").Trim().Replace('/', '\\');
         if (modelPath.StartsWith("meshes\\", StringComparison.OrdinalIgnoreCase)) modelPath = modelPath[7..];
         if (string.IsNullOrWhiteSpace(modelPath) || Path.IsPathRooted(modelPath) ||
             modelPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0 || modelPath.Contains(':') ||
             modelPath.Split('\\').Any(part => part is ".." or "." or "") ||
             !Path.GetExtension(modelPath).Equals(".nif", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Use a relative NIF path inside meshes, for example Weapons\\Iron\\LongSword.nif.");
-        if (details.Enchantment != null && details.EnchantmentCharge == 0)
+        if (enchantmentReference != null && charge == 0)
             throw new InvalidOperationException("A weapon enchantment requires a positive charge.");
-        if (details.Enchantment == null && details.EnchantmentCharge != 0)
+        if (enchantmentReference == null && charge != 0)
             throw new InvalidOperationException("Charge must be zero when no enchantment is assigned.");
         using var resolver = new RecordResolver(mod, gameDataPath);
-        var keywordRecords = details.Keywords.Select(k => resolver.Resolve<IKeywordGetter>(k)).ToList();
+        var keywordRecords = (details.KeywordsSpecified ? details.Keywords : ToDetails(sword).Keywords).Select(k => resolver.Resolve<IKeywordGetter>(k)).ToList();
         var keywords = keywordRecords.Select(k => k.FormKey).ToList();
         if (keywords.Distinct().Count() != keywords.Count) throw new InvalidOperationException("Duplicate keywords are not allowed.");
         var knownTypes = new Dictionary<string, WeaponKind>(StringComparer.OrdinalIgnoreCase) {
@@ -87,8 +93,14 @@ public sealed partial class PluginBuilderService
             if (knownTypes.TryGetValue(keyword.EditorID ?? "", out var type) && type != WeaponTypes.Kind(sword) &&
                 !(WeaponTypes.Kind(sword) == WeaponKind.Crossbow && type == WeaponKind.Bow))
                 throw new InvalidOperationException("Weapon type keyword is incompatible with the inherited animation type: " + keyword.EditorID);
-        var sound = details.AttackSound == null ? FormKey.Null : resolver.Resolve<ISoundDescriptorGetter>(details.AttackSound).FormKey;
-        var enchantment = details.Enchantment == null ? null : resolver.Resolve<IObjectEffectGetter>(details.Enchantment);
+        var soundChanges = details.Sounds?.ToDictionary(p => p.Key, p => p.Value) ?? [];
+        if (details.AttackSoundSpecified) soundChanges[nameof(IWeaponGetter.AttackSound)] = details.AttackSound;
+        foreach (var change in soundChanges)
+        {
+            if (!WeaponSounds(sword).ContainsKey(change.Key)) throw new InvalidOperationException("Unsupported weapon sound slot: " + change.Key);
+            if (change.Value != null) _ = resolver.Resolve<ISoundDescriptorGetter>(change.Value);
+        }
+        var enchantment = enchantmentReference == null ? null : resolver.Resolve<IObjectEffectGetter>(enchantmentReference);
         if (enchantment != null && !IsWeaponEnchantment(enchantment))
             throw new InvalidOperationException("Select a touch, fire-and-forget weapon enchantment, rather than an armor or staff enchantment.");
         if (enchantment != null)
@@ -114,17 +126,17 @@ public sealed partial class PluginBuilderService
                 current = resolver.Resolve<IObjectEffectGetter>(Reference(current.BaseEnchantment.FormKey)!);
             }
         }
-        sword.Description = details.Description;
-        sword.Data!.Speed = details.Speed;
-        sword.Data.Reach = details.Reach;
+        sword.Description = description;
+        sword.Data!.Speed = speed;
+        sword.Data.Reach = reach;
         sword.Model ??= new Model();
         sword.Model.File = modelPath;
         ApplyFirstPersonModel(mod, sword, details, gameDataPath);
         sword.Keywords = [];
         foreach (var key in keywords) sword.Keywords.Add(new FormLink<IKeywordGetter>(key));
-        sword.AttackSound.SetTo(details.AttackSound == null ? (FormKey?)null : sound);
+        foreach (var change in soundChanges) SetWeaponSound(sword, change.Key, change.Value);
         sword.ObjectEffect.SetTo(enchantment?.FormKey);
-        sword.EnchantmentAmount = enchantment == null ? null : details.EnchantmentCharge;
+        sword.EnchantmentAmount = enchantment == null ? null : charge;
     }
 
     public Task<Result<IReadOnlyList<CraftingRecipe>>> GetRecipesAsync(string pluginPath, uint weaponFormId, CancellationToken cancellationToken = default)

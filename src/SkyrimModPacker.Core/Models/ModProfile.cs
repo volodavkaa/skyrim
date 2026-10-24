@@ -30,6 +30,7 @@ public sealed class ModProfile
 
     /// <summary>Apply ESL to compatible staged plugins before archiving; disabled for existing profiles.</summary>
     public bool EnableEsl { get; set; }
+    public bool IncludeExportReport { get; set; }
 
     /// <summary>Timestamp when the profile was created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

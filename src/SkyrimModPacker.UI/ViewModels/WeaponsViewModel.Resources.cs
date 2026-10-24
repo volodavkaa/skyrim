@@ -16,6 +16,12 @@ public sealed partial class WeaponsViewModel
     [ObservableProperty] private string? _resourceCatalogError;
     [ObservableProperty] private string? _resourceCatalogDiagnostics;
     private ProjectResourceCatalog? _savedResourceCatalog;
+    public IEnumerable<ProjectResourceRow> OwnResourceCatalog => ResourceCatalog.Where(r => r.Entry.Origin != ModelOrigin.Vanilla);
+    public IEnumerable<ProjectResourceRow> VanillaResourceCatalog => ResourceCatalog.Where(r => r.Entry.Origin == ModelOrigin.Vanilla);
+    partial void OnResourceCatalogChanged(ObservableCollection<ProjectResourceRow> value)
+    {
+        OnPropertyChanged(nameof(OwnResourceCatalog)); OnPropertyChanged(nameof(VanillaResourceCatalog));
+    }
 
     partial void OnModelPathChanged(string value) { ResourceStatus = null; ThirdPersonModelStatus = null; }
 
@@ -28,6 +34,7 @@ public sealed partial class WeaponsViewModel
 
     partial void OnProjectFilePathChanged(string value)
     {
+        _weaponOrigins.Clear(); _weaponRecipeCounts.Clear(); NotifyInheritance();
         DraftFilePath = DraftSaveStatus = DraftSaveError = null;
         ProjectResources = [];
         ResourceCatalog = [];
