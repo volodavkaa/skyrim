@@ -1,0 +1,175 @@
+<Window x:Class="SkyrimModPacker.UI.Views.SmartModWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:layout="clr-namespace:SkyrimModPacker.UI.Controls" Title="{DynamicResource Smart_Title}"
+ Width="1360" Height="900" MinWidth="580" MinHeight="600" WindowStartupLocation="CenterOwner"
+ Background="#101722" Foreground="#F2F6FC"
+ FontSize="14" UseLayoutRounding="True" Loaded="OnLoaded" Closing="OnClosing" SizeChanged="OnSizeChanged">
+ <Window.Resources><ResourceDictionary>
+  <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/SkyrimModPacker.UI;component/Resources/SmartModTheme.xaml"/></ResourceDictionary.MergedDictionaries>
+  <BooleanToVisibilityConverter x:Key="Visible"/>
+  <CollectionViewSource x:Key="GroupedItems" Source="{Binding Items}"><CollectionViewSource.GroupDescriptions><PropertyGroupDescription PropertyName="KindName"/></CollectionViewSource.GroupDescriptions></CollectionViewSource>
+  <Style x:Key="Heading" TargetType="TextBlock"><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,12"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+  <Style x:Key="ErrorText" TargetType="TextBlock"><Setter Property="Foreground" Value="#FFB4B4"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Margin" Value="0,2,0,8"/><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style>
+ </ResourceDictionary></Window.Resources>
+ <Grid Margin="20" Background="#101722">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Border Background="{StaticResource SmartSurface}" CornerRadius="12" Padding="20,16" Margin="0,0,0,16">
+   <DockPanel>
+    <Expander DockPanel.Dock="Right" Header="{DynamicResource Smart_ProjectTools}" MaxWidth="240" Margin="16,0,0,0"><StackPanel>
+     <Button Content="{DynamicResource Weapons_OpenProject}" Click="OnOpen"/>
+     <Button Content="{DynamicResource Smart_SaveDraft}" Command="{Binding SaveDraftNowCommand}" IsEnabled="{Binding HasProject}"/>
+     <Button Content="{DynamicResource Smart_Recover}" Click="OnRecoverBackup"/>
+     <TextBlock Text="{Binding ProjectPath}" TextWrapping="Wrap" FontSize="11" Foreground="#B4C3D5" Margin="0,10,0,0"/>
+    </StackPanel></Expander>
+    <StackPanel><TextBlock Text="{DynamicResource Smart_Title}" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{DynamicResource Smart_Intro}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,6,0,0"/></StackPanel>
+   </DockPanel>
+  </Border>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition x:Name="NavigationColumn" Width="265"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <Border Background="{StaticResource SmartSurface}" CornerRadius="12" Padding="12">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel>
+      <TextBlock Text="{DynamicResource Smart_MyMod}" Style="{StaticResource Heading}"/>
+      <TextBlock Text="{Binding ProgressText}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,10"/>
+      <Button Content="{DynamicResource Smart_Overview}" Style="{StaticResource SmartNav}" Command="{Binding NavigateCommand}" CommandParameter="Overview"/>
+      <TextBlock Text="{DynamicResource Smart_Weapons}" FontWeight="SemiBold" Margin="0,12,0,6"/>
+      <ListBox x:Name="ItemList" ItemsSource="{Binding Source={StaticResource GroupedItems}}" SelectedItem="{Binding SelectedItem}" BorderThickness="0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+       <ListBox.GroupStyle><GroupStyle><GroupStyle.HeaderTemplate><DataTemplate><TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,8,0,4" TextWrapping="Wrap"/></DataTemplate></GroupStyle.HeaderTemplate></GroupStyle></ListBox.GroupStyle>
+       <ListBox.ItemTemplate><DataTemplate>
+        <Grid Margin="0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+         <Border Width="42" Height="50" CornerRadius="6" Background="#111D2D"><Grid><TextBlock Text="{Binding FallbackIcon}" FontSize="26" Foreground="#A5B5C6" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding Thumbnail}" Stretch="Uniform" ToolTip="{Binding PreviewNotice}"/></Grid></Border>
+         <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding StateText}" Foreground="#B4C3D5" FontSize="11" TextWrapping="Wrap"/></StackPanel>
+        </Grid>
+       </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <Expander Header="{DynamicResource Items_Add}" Visibility="{Binding HasProject, Converter={StaticResource Visible}}"><StackPanel><ComboBox x:Name="AddType" ItemsSource="{Binding Types}" DisplayMemberPath="Name" SelectedIndex="0"/><Button Content="{DynamicResource Items_Add}" Click="OnAdd"/></StackPanel></Expander>
+      <TextBlock Text="{DynamicResource Smart_Recipes}" FontWeight="SemiBold" Margin="0,12,0,6"/>
+      <ItemsControl ItemsSource="{Binding RecipeLinks}"><ItemsControl.ItemTemplate><DataTemplate>
+       <Button Command="{Binding DataContext.NavigateRecipeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" HorizontalContentAlignment="Left"><TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap"/></Button>
+      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      <Button Content="{DynamicResource Smart_Resources}" Style="{StaticResource SmartNav}" Command="{Binding NavigateCommand}" CommandParameter="Resources" IsEnabled="{Binding HasProject}"/>
+      <Button Content="{DynamicResource Smart_Checks}" Style="{StaticResource SmartNav}" Command="{Binding NavigateCommand}" CommandParameter="Checks" IsEnabled="{Binding HasProject}"/>
+      <Button Content="{DynamicResource Smart_Finished}" Style="{StaticResource SmartNav}" Command="{Binding NavigateCommand}" CommandParameter="Finished" IsEnabled="{Binding HasProject}"/>
+     </StackPanel>
+    </ScrollViewer>
+   </Border>
+   <Border Grid.Column="1" Margin="16,0,0,0" Background="{StaticResource SmartSurface}" CornerRadius="12" Padding="20"><Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <StackPanel>
+     <TextBlock Text="{Binding Error}" Style="{StaticResource ErrorText}"/>
+     <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" Margin="0,0,0,8"/>
+    </StackPanel>
+    <ScrollViewer x:Name="EditorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel x:Name="WorkArea">
+      <StackPanel Visibility="{Binding IsOverview, Converter={StaticResource Visible}}">
+       <TextBlock Text="{DynamicResource Smart_Overview}" Style="{StaticResource Heading}"/>
+       <TextBlock Text="{DynamicResource Smart_SetupHelp}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,16" Visibility="{Binding ShowSetup, Converter={StaticResource Visible}}"/>
+       <TextBlock Text="{DynamicResource Smart_ModName}"/><TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+       <StackPanel Visibility="{Binding ShowSetup, Converter={StaticResource Visible}}">
+       <TextBlock Text="{DynamicResource Smart_Workspace}"/><DockPanel><Button DockPanel.Dock="Right" Content="…" Click="OnBrowse"/><TextBox Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
+       <TextBlock Text="{DynamicResource Smart_ChooseWeapons}" Style="{StaticResource Heading}"/>
+       <TextBlock Text="{DynamicResource Smart_QuantityHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+       <ItemsControl ItemsSource="{Binding Types}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><layout:ResponsiveColumnsPanel MinColumnWidth="250" MaxColumns="2" Gap="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate>
+        <Border Background="#111D2D" BorderBrush="#34465E" BorderThickness="1" CornerRadius="8" Padding="12,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"/><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="−" Width="28" Padding="0" Margin="0" Command="{Binding DataContext.DecreaseTypeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/><TextBox Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Width="42" TextAlignment="Center" Padding="3,8" Margin="4,4"/><Button Content="+" Width="28" Padding="0" Margin="0" Command="{Binding DataContext.IncreaseTypeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/></StackPanel></Grid></Border>
+       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+       </StackPanel>
+       <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,14,0,12" Visibility="{Binding HasProject, Converter={StaticResource Visible}}"/>
+      </StackPanel>
+      <StackPanel Visibility="{Binding IsEditing, Converter={StaticResource Visible}}">
+       <TextBlock Text="{Binding SelectedItem.Name}" Style="{StaticResource Heading}"/>
+       <TextBlock Text="{Binding SelectedItem.StepText}" FontSize="16" Margin="0,0,0,12"/>
+       <ItemsControl ItemsSource="{Binding StepLinks}" Margin="0,0,0,14"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.GoToStepCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Step}" Content="{Binding Name}" FontSize="12" Padding="9,7"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SmartNav}"><Style.Triggers><DataTrigger Binding="{Binding IsCurrent}" Value="True"><Setter Property="Background" Value="#24424D"/><Setter Property="BorderBrush" Value="#80D8CF"/><Setter Property="Foreground" Value="#B9FFF3"/></DataTrigger></Style.Triggers></Style></Button.Style></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+       <TextBlock Text="{Binding StepHelp}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,14"/>
+       <Expander Header="{DynamicResource Smart_ItemActions}"><WrapPanel><Button Content="{DynamicResource Smart_SaveItem}" Command="{Binding SaveItemCommand}"/><Button Content="{DynamicResource Items_Duplicate}" Click="OnDuplicate"/><Button Content="{DynamicResource Weapons_Delete}" Style="{StaticResource SmartDanger}" Click="OnDelete"/></WrapPanel></Expander>
+       <layout:ResponsiveColumnsPanel x:Name="EditorColumns" MinColumnWidth="330" MaxColumns="2" Gap="18" Margin="0,12,0,0">
+        <StackPanel>
+         <StackPanel Visibility="{Binding IsNameStep, Converter={StaticResource Visible}}">
+          <TextBlock Text="{DynamicResource Weapons_Name}"/><TextBox Text="{Binding SelectedItem.Name, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Name]}" Style="{StaticResource ErrorText}"/>
+          <TextBlock Text="{DynamicResource Smart_Template}"/><ComboBox ItemsSource="{Binding ItemTemplates}" SelectedItem="{Binding SelectedTemplate}" DisplayMemberPath="Name"/>
+          <TextBlock Text="{DynamicResource Smart_TemplateHint}" TextWrapping="Wrap"/>
+          <Button Content="{DynamicResource Smart_ApplyTemplate}" Click="OnApplyTemplate"/>
+          <TextBlock Text="{Binding SelectedItem.Errors[Template]}" Style="{StaticResource ErrorText}"/>
+         </StackPanel>
+         <StackPanel Visibility="{Binding IsAppearanceStep, Converter={StaticResource Visible}}">
+          <TextBlock Text="{DynamicResource Models_Third}"/><TextBox Text="{Binding SelectedItem.ModelPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportThird}" Click="OnImportThird"/>
+          <TextBlock Text="{Binding SelectedItem.Errors[ModelPath]}" Style="{StaticResource ErrorText}"/>
+          <TextBlock Text="{DynamicResource Models_First}"/><TextBox Text="{Binding SelectedItem.FirstPersonPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportFirst}" Click="OnImportFirst"/>
+          <Button Content="{DynamicResource Smart_ImportTextures}" Click="OnTextures"/><Button Content="{DynamicResource Smart_RestoreModels}" Command="{Binding RestoreTemplateCommand}" CommandParameter="models"/>
+          <TextBlock Text="{Binding SelectedItem.PreviewNotice}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+         </StackPanel>
+         <StackPanel Visibility="{Binding IsPropertiesStep, Converter={StaticResource Visible}}">
+          <TextBlock Text="{DynamicResource Weapons_Damage}"/><TextBox Text="{Binding SelectedItem.Damage, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Damage]}" Style="{StaticResource ErrorText}"/>
+          <TextBlock Text="{DynamicResource Weapons_Weight}"/><TextBox Text="{Binding SelectedItem.Weight, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Weight]}" Style="{StaticResource ErrorText}"/>
+          <TextBlock Text="{DynamicResource Weapons_Value}"/><TextBox Text="{Binding SelectedItem.Value, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Value]}" Style="{StaticResource ErrorText}"/>
+          <Expander Header="{DynamicResource Smart_Advanced}" Margin="0,8,0,12"><StackPanel Margin="0,12,0,0">
+           <TextBlock Text="{DynamicResource Wizard_EditorId}"/><TextBox Text="{Binding SelectedItem.EditorId, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{DynamicResource Weapons_Description}"/><TextBox Text="{Binding SelectedItem.Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
+           <TextBlock Text="{DynamicResource Weapons_Speed}"/><TextBox Text="{Binding SelectedItem.Speed, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{DynamicResource Weapons_Reach}"/><TextBox Text="{Binding SelectedItem.Reach, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{DynamicResource Weapons_Sound}"/><ComboBox ItemsSource="{Binding Options.Sounds}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedItem.Sound}"/><Button Content="{DynamicResource Smart_Clear}" Command="{Binding ClearSoundCommand}"/>
+           <TextBlock Text="{DynamicResource Weapons_Enchantment}"/><ComboBox ItemsSource="{Binding Options.Enchantments}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedItem.Enchantment}"/><Button Content="{DynamicResource Smart_Clear}" Command="{Binding ClearEnchantmentCommand}"/>
+           <TextBlock Text="{DynamicResource Weapons_Charge}"/><TextBox Text="{Binding SelectedItem.EnchantmentCharge, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{DynamicResource Weapons_Keywords}"/><ListBox ItemsSource="{Binding SelectedItem.Fields.Keywords}" SelectedItem="{Binding SelectedKeyword}" MaxHeight="150"/>
+           <ComboBox ItemsSource="{Binding Options.Keywords}" SelectedItem="{Binding KeywordToAdd}" DisplayMemberPath="DisplayName"/><WrapPanel><Button Content="+" Command="{Binding AddKeywordCommand}"/><Button Content="−" Command="{Binding RemoveKeywordCommand}"/></WrapPanel>
+           <TextBlock Text="{Binding SelectedItem.Error}" Style="{StaticResource ErrorText}"/>
+          </StackPanel></Expander>
+          <Expander Header="{DynamicResource Smart_Inheritance}"><StackPanel><TextBlock Text="{Binding InheritanceText}" TextWrapping="Wrap"/><Button Content="{DynamicResource Smart_RestoreStats}" Command="{Binding RestoreTemplateCommand}" CommandParameter="stats"/><Button Content="{DynamicResource Smart_RestoreSounds}" Command="{Binding RestoreTemplateCommand}" CommandParameter="sounds"/><Button Content="{DynamicResource Smart_RestoreKeywords}" Command="{Binding RestoreTemplateCommand}" CommandParameter="keywords"/></StackPanel></Expander>
+         </StackPanel>
+         <StackPanel Visibility="{Binding IsAcquisitionStep, Converter={StaticResource Visible}}">
+          <TextBlock Text="{DynamicResource Smart_RecipeQuestions}" TextWrapping="Wrap"/>
+          <WrapPanel><Button Content="{DynamicResource Smart_AddCrafting}" Command="{Binding AddRecipeCommand}" CommandParameter="crafting"/><Button Content="{DynamicResource Smart_AddTempering}" Command="{Binding AddRecipeCommand}" CommandParameter="tempering"/></WrapPanel>
+          <ListBox ItemsSource="{Binding SelectedItem.Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="DisplayName" MaxHeight="110"/>
+          <StackPanel x:Name="RecipeEditor">
+           <TextBlock Text="{DynamicResource Smart_OutputCount}"/><TextBox Text="{Binding SelectedRecipe.OutputCount, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{DynamicResource Smart_Workbench}"/><ComboBox ItemsSource="{Binding Workbenches}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedRecipe.Workbench}"/>
+           <TextBlock Text="{DynamicResource Smart_RequiredPerk}"/><ComboBox ItemsSource="{Binding Options.Perks}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedRecipe.RequiredPerk}"/>
+           <Button Content="{DynamicResource Smart_ClearPerk}" Click="OnClearPerk"/>
+           <TextBlock Text="{DynamicResource Smart_Ingredients}" FontWeight="SemiBold"/>
+           <ItemsControl ItemsSource="{Binding SelectedRecipe.Ingredients}"><ItemsControl.ItemTemplate><DataTemplate>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+             <ComboBox ItemsSource="{Binding DataContext.Options.Ingredients, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding Reference}"/>
+             <TextBox Grid.Column="1" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Margin="4,4,0,10"/>
+             <Button Grid.Column="2" Content="−" Command="{Binding DataContext.RemoveIngredientCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+            </Grid>
+           </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+           <Button Content="{DynamicResource Smart_AddIngredient}" Command="{Binding AddIngredientCommand}"/><Button Content="{DynamicResource Smart_DeleteRecipe}" Click="OnDeleteRecipe"/>
+           <TextBlock Text="{Binding RecipeValidationText}" Style="{StaticResource ErrorText}"/>
+          </StackPanel>
+          <Expander Header="{DynamicResource Smart_Advanced}"><StackPanel>
+           <TextBlock Text="{DynamicResource Smart_ListHint}" TextWrapping="Wrap"/><ComboBox ItemsSource="{Binding Options.LeveledLists}" SelectedItem="{Binding SelectedLeveledList}" DisplayMemberPath="DisplayName"/>
+           <TextBlock Text="{DynamicResource Smart_Level}"/><TextBox Text="{Binding ListLevel}"/><TextBlock Text="{DynamicResource Smart_Quantity}"/><TextBox Text="{Binding ListCount}"/><Button Content="{DynamicResource Smart_AddToList}" Command="{Binding AddToListCommand}"/>
+          </StackPanel></Expander>
+         </StackPanel>
+         <StackPanel Visibility="{Binding IsSummaryStep, Converter={StaticResource Visible}}"><TextBlock Text="{Binding SelectedSummary}" TextWrapping="Wrap" FontSize="16"/><Button Content="{DynamicResource Smart_SaveItem}" Style="{StaticResource SmartPrimary}" Command="{Binding SaveItemCommand}" Margin="0,16,0,8"/><Expander Header="{DynamicResource Smart_Inheritance}"><TextBlock Text="{Binding InheritanceText}" TextWrapping="Wrap"/></Expander><TextBlock Text="{Binding SelectedItem.PreviewNotice}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,12,0,0"/></StackPanel>
+        </StackPanel>
+        <Border x:Name="PreviewHost" CornerRadius="10" Height="510" ClipToBounds="True" VerticalAlignment="Top"/>
+       </layout:ResponsiveColumnsPanel>
+      </StackPanel>
+      <StackPanel Visibility="{Binding IsResources, Converter={StaticResource Visible}}">
+       <TextBlock Text="{DynamicResource Smart_Resources}" Style="{StaticResource Heading}"/><TextBlock Text="{DynamicResource Smart_TextureUsage}" TextWrapping="Wrap"/>
+       <ListBox ItemsSource="{Binding Resources}" SelectedItem="{Binding SelectedResource}" DisplayMemberPath="RelativePath" MaxHeight="240" Margin="0,12"/>
+       <TextBlock Text="{Binding SelectedResource.OriginText}"/><TextBlock Text="{Binding SelectedResource.TypeText}"/><TextBlock Text="{Binding SelectedResource.AvailabilityText}"/><TextBlock Text="{Binding SelectedResource.ArchiveText}"/><TextBlock Text="{Binding SelectedResource.UsageText}" TextWrapping="Wrap"/><TextBlock Text="{Binding SelectedResource.IssueText}" TextWrapping="Wrap"/><TextBlock Text="{Binding SelectedResource.Detail}" TextWrapping="Wrap"/>
+       <WrapPanel><Button Content="{DynamicResource Smart_ReplaceResource}" Click="OnReplaceResource"/><Button Content="{DynamicResource Smart_DeleteResource}" Click="OnDeleteResource"/><Button Content="{DynamicResource Smart_EditResourceOwner}" Click="OnEditResourceOwner"/></WrapPanel>
+      </StackPanel>
+      <StackPanel Visibility="{Binding IsChecks, Converter={StaticResource Visible}}">
+       <TextBlock Text="{DynamicResource Smart_Checks}" Style="{StaticResource Heading}"/><TextBlock Text="{Binding Summary}" TextWrapping="Wrap"/>
+       <WrapPanel><Button Content="{DynamicResource Smart_Validate}" Command="{Binding CheckCommand}"/><Button Content="{DynamicResource Smart_ReviewExternal}" Click="OnReviewExternal"/></WrapPanel>
+       <ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.NavigateIssueCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" HorizontalContentAlignment="Left"><TextBlock Text="{Binding Message}" TextWrapping="Wrap"/></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+       <CheckBox Content="{DynamicResource Smart_EnableEsl}" IsChecked="{Binding EnableEsl}" Margin="0,12"/>
+       <Button Content="{DynamicResource Smart_Pack}" Style="{StaticResource SmartPrimary}" Command="{Binding PackCommand}" HorizontalAlignment="Left"/>
+      </StackPanel>
+      <StackPanel Visibility="{Binding IsFinished, Converter={StaticResource Visible}}">
+       <TextBlock Text="{DynamicResource Smart_Finished}" Style="{StaticResource Heading}"/><TextBlock Text="{Binding Summary}" TextWrapping="Wrap"/><TextBlock Text="{Binding LastArchivePath}" TextWrapping="Wrap" Margin="0,12"/>
+       <WrapPanel><Button Content="{DynamicResource Smart_OpenFolder}" Command="{Binding OpenArchiveFolderCommand}"/><Button Content="{DynamicResource Smart_ReadReport}" Command="{Binding ReadReportCommand}"/><Button Content="{DynamicResource Smart_Continue}" Command="{Binding NavigateCommand}" CommandParameter="Overview"/></WrapPanel>
+      </StackPanel>
+      <Expander Header="{DynamicResource Smart_Messages}" Margin="0,16,0,8"><Expander.Style><Style TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Style.Triggers><DataTrigger Binding="{Binding Status}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Expander.Style><TextBox Text="{Binding Status, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto"/></Expander>
+     </StackPanel>
+    </ScrollViewer>
+   </Grid></Border>
+  </Grid>
+  <Border Grid.Row="2" Background="{StaticResource SmartSurface}" CornerRadius="10" Padding="12,8" Margin="0,16,0,0"><DockPanel>
+   <WrapPanel DockPanel.Dock="Right"><Button Content="{DynamicResource Smart_Start}" Style="{StaticResource SmartPrimary}" Command="{Binding CreateProjectCommand}" IsEnabled="{Binding CanCreateProject}" Visibility="{Binding ShowSetup, Converter={StaticResource Visible}}"/><Button Content="{DynamicResource Smart_SaveExit}" Click="OnSaveExit" Visibility="{Binding HasProject, Converter={StaticResource Visible}}"/><Button Content="{Binding NextActionText}" Style="{StaticResource SmartPrimary}" Command="{Binding NextCommand}" Visibility="{Binding HasProject, Converter={StaticResource Visible}}"/></WrapPanel>
+   <StackPanel><TextBlock Text="{Binding SetupCountText}" Foreground="#B4C3D5" VerticalAlignment="Center" Margin="8,10" Visibility="{Binding ShowSetup, Converter={StaticResource Visible}}"/><Button Content="{DynamicResource Smart_Back}" Command="{Binding PreviousCommand}" HorizontalAlignment="Left" Visibility="{Binding HasProject, Converter={StaticResource Visible}}"/><TextBlock Text="{Binding SaveStatus}" Foreground="#B4C3D5" FontSize="12" TextWrapping="Wrap"/></StackPanel>
+  </DockPanel></Border>
+ </Grid>
+</Window>

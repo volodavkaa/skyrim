@@ -53,6 +53,9 @@ public partial class App : System.Windows.Application
             services.AddSingleton<IWorkspaceConflictPrompt, WorkspaceConflictPrompt>();
             services.AddSingleton<IWorkspaceFolderOpener, WorkspaceFolderOpener>();
             services.AddSingleton<IModelPreviewPresenter, ModelPreviewPresenter>();
+            services.AddSingleton<IModelThumbnailService, ModelThumbnailService>();
+            services.AddSingleton<ISmartModWindowLauncher, SmartModWindowLauncher>();
+            services.AddTransient<SmartModViewModel>();
 
             // Main window
             services.AddSingleton<MainWindow>();

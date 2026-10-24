@@ -6,6 +6,7 @@ namespace SkyrimModPacker.Core.Interfaces;
 /// <summary>Creates plugins in a workspace outside the game directory.</summary>
 public interface IPluginBuilderService
 {
+    Task<Result<IReadOnlyList<string>>> GetMastersAsync(string pluginPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SwordTemplate>>> GetWeaponTemplatesAsync(string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<WeaponModels>> GetWeaponModelsAsync(string pluginPath, string gameDataPath, uint formId, CancellationToken cancellationToken = default);
     Task<Result<string>> CreateAsync(CreatePluginRequest request, CancellationToken cancellationToken = default);

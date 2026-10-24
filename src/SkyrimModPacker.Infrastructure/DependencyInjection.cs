@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddSingleton<IWeaponProjectService, PluginBuilder.WeaponProjectService>();
         services.AddSingleton<IModelPreviewService, Preview.ModelPreviewService>();
         services.AddSingleton<IWeaponDraftRepository>(_ => new JsonWeaponDraftRepository(appDataDirectory));
+        services.AddSingleton<ISmartModDraftRepository, JsonSmartModDraftRepository>();
         services.AddSingleton<IWeaponPresetRepository>(_ => new JsonWeaponPresetRepository(appDataDirectory));
         services.AddSingleton<IWorkspaceHistoryService>(_ => new WorkspaceHistoryService(appDataDirectory));
 
