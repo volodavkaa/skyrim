@@ -19,7 +19,7 @@ public sealed partial class WeaponProjectService
             var catalog = await Task.Run(() => BuildResourceCatalog(folder, document, gameDataPath, cancellationToken, inspectVanilla: false), cancellationToken);
             if (!catalog.CanPack)
                 throw new InvalidOperationException("Project resources block packing: " + string.Join("; ",
-                    catalog.Entries.Where(e => e.BlocksPacking).Select(e => e.RelativePath + " (" + string.Join(", ", e.Issues) + ")")
+                    catalog.Entries.Where(e => e.BlocksPacking).Select(e => e.RelativePath + " (" + string.Join(", ", e.Issues) + "): " + e.Detail)
                         .Concat(catalog.Diagnostics.Select(d => d.Record + ": " + d.Detail))));
 
             var resources = document.Resources.Select(NormalizeResource).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

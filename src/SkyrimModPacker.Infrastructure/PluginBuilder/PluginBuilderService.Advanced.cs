@@ -19,19 +19,27 @@ public sealed partial class PluginBuilderService
             try
             {
             foreach (var name in WeaponTypes.VanillaSources.Where(n => File.Exists(Path.Combine(gameDataPath, n)))) sources.Add(ReadMaster(gameDataPath, name));
+            var usages = ListUsages(sources, cancellationToken);
             IReadOnlyList<RecordOption> Options(IEnumerable<IMajorRecordGetter> records) => records
                 .Where(r => !r.IsDeleted && !string.IsNullOrWhiteSpace(r.EditorID))
                 .Select(r =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    return new RecordOption { Reference = Reference(r.FormKey)!, EditorId = r.EditorID! };
+                    var material = CraftingMaterialCatalog.Classify(r.EditorID!, r is IMiscItemGetter or IIngredientGetter);
+                    var listUsages = r is ILeveledItemGetter && usages.TryGetValue(r.FormKey, out var found) ? found.Distinct().ToArray() : [];
+                    var name = r switch { IMiscItemGetter misc => misc.Name?.String, IIngredientGetter ingredient => ingredient.Name?.String,
+                        ILeveledItemGetter => string.Join("; ", listUsages.Select(u => u.OwnerName).Where(n => n.Length > 0).Distinct().Take(2)), _ => null };
+                    return new RecordOption { Reference = Reference(r.FormKey)!, EditorId = r.EditorID!, Name = name ?? "",
+                        MaterialCategory = material.Category, SearchAliases = material.Aliases, ListUsages = listUsages };
                 }).OrderBy(r => r.EditorId, StringComparer.OrdinalIgnoreCase).ToList();
             return new WeaponOptions
             {
                 Keywords = Options(sources.SelectMany(s => s.Keywords).DistinctBy(r => r.FormKey)), Sounds = Options(sources.SelectMany(s => s.SoundDescriptors).DistinctBy(r => r.FormKey)),
                 Enchantments = Options(sources.SelectMany(s => s.ObjectEffects).Where(IsWeaponEnchantment).DistinctBy(r => r.FormKey)),
                 Ingredients = Options(sources.SelectMany(s => s.EnumerateMajorRecords<IItemGetter>()).Where(r => r is not ILeveledItemGetter).DistinctBy(r => r.FormKey)),
-                Perks = Options(sources.SelectMany(s => s.Perks).DistinctBy(r => r.FormKey)), LeveledLists = Options(sources.SelectMany(s => s.LeveledItems).DistinctBy(r => r.FormKey))
+                Perks = Options(sources.SelectMany(s => s.Perks).DistinctBy(r => r.FormKey)), LeveledLists = Options(sources.SelectMany(s => s.LeveledItems).DistinctBy(r => r.FormKey)),
+                ExistingEditorIds = sources.SelectMany(s => s.EnumerateMajorRecords()).Where(r => !r.IsDeleted && !string.IsNullOrWhiteSpace(r.EditorID))
+                    .Select(r => new RecordOption { Reference = Reference(r.FormKey)!, EditorId = r.EditorID! }).ToArray()
             };
             }
             finally { foreach (var source in sources) source.Dispose(); }
@@ -299,7 +307,16 @@ public sealed partial class PluginBuilderService
             }
             else
             {
-                if (matching.Count > 0) throw new InvalidOperationException("The sword is already in the list. Remove it first to change its level or count.");
+                if (matching.Count > 0)
+                {
+                    if (!request.UpdateExisting || matching.Count > 1) throw new InvalidOperationException("The weapon is already in the list. Resolve existing entries before adding another.");
+                    var existing = matching[0];
+                    if (existing.Data!.Level == request.Level && existing.Data.Count == request.Count) return true;
+                    existing.Data.Level = request.Level; existing.Data.Count = request.Count;
+                    list.Entries.Remove(existing);
+                    var position = list.Entries.TakeWhile(e => e.Data == null || e.Data.Level <= request.Level).Count(); list.Entries.Insert(position, existing);
+                    WritePlugin(transaction, mod, request.PluginPath, request.GameDataPath, true, cancellationToken, mod.ModHeader.Stats.NextFormID); return true;
+                }
                 if (list.Entries.Count >= 255) throw new InvalidOperationException("The leveled list already contains the maximum 255 entries.");
                 var entry = new LeveledItemEntry { Data = new LeveledItemEntryData { Level = request.Level, Count = request.Count } };
                 entry.Data.Reference.SetTo(sword.FormKey);

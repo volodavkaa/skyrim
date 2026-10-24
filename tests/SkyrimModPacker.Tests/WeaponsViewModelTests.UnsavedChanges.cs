@@ -231,7 +231,7 @@ public partial class WeaponsViewModelTests
     public async Task Unsaved_ImportsAndReadOnlyRefreshes_HaveSeparateDiskAndDraftSemantics()
     {
         var (vm, _) = await PrepareGuardedEditorAsync();
-        var dds = Path.Combine(_root, "texture.dds"); File.WriteAllText(dds, "fixture");
+        var dds = Path.Combine(_root, "texture.dds"); File.WriteAllBytes(dds, PreviewFixtures.ResourceDds("fixture"));
         await vm.ImportTexturesCommand.ExecuteAsync(new[] { dds });
         Assert.False(vm.HasUnsavedChanges);
         vm.Damage = "31";

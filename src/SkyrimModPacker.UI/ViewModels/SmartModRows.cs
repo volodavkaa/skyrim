@@ -16,8 +16,10 @@ public sealed partial class SmartModTypeRow(WeaponKind kind, string name) : Obse
 
 public sealed partial class SmartModIngredientRow : ObservableObject
 {
+    [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private PluginRecordReference? _reference;
     [ObservableProperty] private string _count = "1";
+    [ObservableProperty] private string _quantityError = "";
     public SmartModIngredientRow(SmartModIngredientDraft draft) { Reference = draft.Reference; Count = draft.Count; }
     public SmartModIngredientDraft Capture() => new(Reference, Count);
 }
@@ -82,7 +84,7 @@ public sealed partial class SmartModItemRow : ObservableObject, IDataErrorInfo
     public void Replace(SmartModItemDraft draft)
     {
         _draft = draft;
-        foreach (var name in new[] { nameof(Name), nameof(EditorId), nameof(Damage), nameof(Weight), nameof(Value), nameof(ModelPath), nameof(FirstPersonPath), nameof(Description), nameof(Speed), nameof(Reach), nameof(EnchantmentCharge), nameof(Sound), nameof(Enchantment), nameof(Fields), nameof(Template), nameof(StateText), nameof(ConfirmedFormId) })
+        foreach (var name in new[] { nameof(Name), nameof(EditorId), nameof(Damage), nameof(Weight), nameof(Value), nameof(ModelPath), nameof(FirstPersonPath), nameof(UseSharedModel), nameof(Description), nameof(Speed), nameof(Reach), nameof(EnchantmentCharge), nameof(Sound), nameof(Enchantment), nameof(Fields), nameof(Template), nameof(StateText), nameof(ConfirmedFormId) })
             OnPropertyChanged(name);
         Changed?.Invoke();
     }
@@ -103,8 +105,14 @@ public sealed partial class SmartModItemRow : ObservableObject, IDataErrorInfo
     public string EnchantmentCharge { get => Fields.EnchantmentCharge; set => Edit(Fields with { EnchantmentCharge = value }, nameof(EnchantmentCharge)); }
     public PluginRecordReference? Sound { get => Fields.Sound; set => Edit(Fields with { Sound = value }, nameof(Sound)); }
     public PluginRecordReference? Enchantment { get => Fields.Enchantment; set => Edit(Fields with { Enchantment = value }, nameof(Enchantment)); }
-    public string ModelPath { get => Fields.ModelPath; set => Edit(Fields with { ModelPath = value }, nameof(ModelPath)); }
-    public string FirstPersonPath { get => Fields.FirstPersonPath; set => Edit(Fields with { FirstPersonPath = value, FirstPersonEdited = true, RestoreFirstPerson = false }, nameof(FirstPersonPath)); }
+    public bool UseSharedModel
+    {
+        get => Fields.UseSharedModel;
+        set { Edit(Fields with { UseSharedModel = value, FirstPersonPath = value ? ModelPath : FirstPersonPath,
+            FirstPersonEdited = value || Fields.FirstPersonEdited, RestoreFirstPerson = value ? false : Fields.RestoreFirstPerson }, nameof(UseSharedModel)); OnPropertyChanged(nameof(FirstPersonPath)); }
+    }
+    public string ModelPath { get => Fields.ModelPath; set { Edit(Fields with { ModelPath = value, FirstPersonPath = UseSharedModel ? value : FirstPersonPath }, nameof(ModelPath)); OnPropertyChanged(nameof(FirstPersonPath)); } }
+    public string FirstPersonPath { get => Fields.FirstPersonPath; set { Edit(Fields with { FirstPersonPath = value, UseSharedModel = Fields.UseSharedModel && value.Equals(ModelPath, StringComparison.OrdinalIgnoreCase), FirstPersonEdited = true, RestoreFirstPerson = false }, nameof(FirstPersonPath)); OnPropertyChanged(nameof(UseSharedModel)); } }
     public void SetKeywords(IReadOnlyList<PluginRecordReference> values) => Edit(Fields with { Keywords = values }, nameof(Fields));
     public void SetState(SmartModItemState state) { _draft = _draft with { State = state }; OnPropertyChanged(nameof(StateText)); }
     public bool Validate(Func<string, string> message)

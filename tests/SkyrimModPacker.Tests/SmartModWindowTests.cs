@@ -90,7 +90,13 @@ public sealed class SmartModWindowTests
         var source = new SwordTemplate { FormId = 0x12EB7, Name = "Iron sword", EditorId = "IronSword", Damage = 7, Weight = 9, Value = 25,
             Details = new() { ModelPath = "third.nif", FirstPersonModelPath = "first.nif" } };
         builder.GetWeaponTemplatesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<SwordTemplate>>.Success([source]));
-        builder.GetWeaponOptionsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<WeaponOptions>.Success(new()));
+        builder.GetWeaponOptionsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<WeaponOptions>.Success(new()
+        { Keywords = [new() { Reference = new("Skyrim.esm", 1), EditorId = "CraftingSmithingForge" }, new() { Reference = new("Skyrim.esm", 2), EditorId = "CraftingSmithingSharpeningWheel" }],
+            LeveledLists = [new() { Reference = new("Skyrim.esm", 3), EditorId = "ExampleEquipment", Name = "Стражник / Guard", ListUsages = [new("Equipment", "Стражник / Guard", "ExampleGuard", new("Skyrim.esm", 4)) { Kind = "Npc" }] },
+                new() { Reference = new("Skyrim.esm", 5), EditorId = "UnknownPurpose" }] }));
+        builder.GetLeveledListDetailsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<PluginRecordReference>(), Arg.Any<CancellationToken>()).Returns(
+            Result<LeveledListDetails>.Success(new(new("Skyrim.esm", 3), "ExampleEquipment", "CalculateFromAllLevelsLessThanOrEqualPlayer", "0",
+                [new(new("Skyrim.esm", 0x12EB7), "Залізний меч / Iron sword", "IronSword", 1, 1, false)]) { SelectionFlags = 1 }));
         settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings { SkyrimDataPath = @"C:\Game\Data" });
         projects.CreateAsync(Arg.Any<CreatePluginRequest>(), Arg.Any<CancellationToken>()).Returns(Result<WeaponProject>.Success(new()
             { Name = "Smart", ProjectFilePath = @"C:\Mods\Smart\mod-project.json", PluginPath = @"C:\Mods\Smart\Smart.esp" }));
@@ -99,6 +105,7 @@ public sealed class SmartModWindowTests
         preview.LoadAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Scene());
         using var vm = new SmartModViewModel(builder, projects, settings, drafts, validator, localization: localization);
         await vm.InitializeAsync(); Assert.False(vm.CanCreateProject); vm.Types[0].Count = "2"; Assert.True(vm.CanCreateProject); await vm.CreateProjectCommand.ExecuteAsync(null); Assert.Equal("", vm.Error); Assert.False(vm.CanCreateProject);
+        vm.AddRecipeCommand.Execute("crafting"); vm.AddIngredientCommand.Execute(null);
         var thumbnail = await new ModelThumbnailService(preview).CreateAsync("", "third.nif", "");
         foreach (var item in vm.Items) item.Thumbnail = thumbnail.Image;
         var window = new SmartModWindow(vm, preview);
@@ -145,10 +152,75 @@ public sealed class SmartModWindowTests
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 using var file = File.Create(Path.Combine(output, $"{language}-{width}-{step}.png")); encoder.Save(file);
             }
+            vm.SelectedItem!.Step = SmartModItemStep.Acquisition; vm.FilterListCommand.Execute("Equipment"); vm.SelectedListTarget = vm.ListTargets.First(t => t.Reference != null); vm.ListLevel = "12"; vm.ListCount = "3";
+            await vm.RefreshSelectedListAsync();
+            var panel = (FrameworkElement)window.FindName("LeveledListPanel");
+            foreach (var expander in Descendants<Expander>(root)) if (ReferenceEquals(expander.Content, panel)) expander.IsExpanded = true;
+            root.UpdateLayout();
+            Assert.Contains("IronSword", vm.ListContents); Assert.Contains("12", vm.LeveledListSummary); Assert.Contains("ExampleGuard", vm.LeveledListPurpose);
+            var panelBitmap = new RenderTargetBitmap((int)Math.Ceiling(panel.ActualWidth), (int)Math.Ceiling(panel.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            var panelDrawing = new DrawingVisual();
+            using (var drawingContext = panelDrawing.RenderOpen()) drawingContext.DrawRectangle(new VisualBrush(panel), null, new Rect(0, 0, panel.ActualWidth, panel.ActualHeight));
+            panelBitmap.Render(panelDrawing); var panelEncoder = new PngBitmapEncoder(); panelEncoder.Frames.Add(BitmapFrame.Create(panelBitmap));
+            using (var file = File.Create(Path.Combine(output, $"{language}-leveled-list.png"))) panelEncoder.Save(file);
         }
         var closed = new TaskCompletionSource(); window.Closed += (_, _) => closed.TrySetResult(); window.Close();
         await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
     });
+    [Fact]
+    public Task MaterialAndTextureFolderDialogsRenderReadableUkAndEn() => Sta(async () =>
+    {
+        var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/ui-smart-mod")); Directory.CreateDirectory(output);
+        foreach (var language in new[] { "uk", "en" })
+        {
+            var strings = new ResourceDictionary { Source = new Uri($"pack://application:,,,/SkyrimModPacker.UI;component/Resources/Strings.{language}.xaml") };
+            string Label(string key) => (string)strings[key];
+            var option = new RecordOption { Reference = new("Skyrim.esm", 1), EditorId = "IngotIron", Name = "Залізний злиток / Iron ingot", MaterialCategory = "Metal" };
+            var index = new MaterialSearchIndex([option]);
+            var plan = new TextureFolderPlan("project", "hash", @"C:\Textures", "weapons/custom", [new(@"C:\Textures\base.dds", "textures/weapons/custom/base.dds", 1024, "hash", false, null)], 1);
+            foreach (var window in new Window[] { new MaterialPickerWindow(index, Label, option),
+                new TextureFolderWindow(plan.SourceFolder, _ => Task.FromResult(plan), () => Task.FromResult<ModelPreview?>(Scene()), Label) })
+            {
+                window.ShowInTaskbar = false; window.ShowActivated = false; window.Left = -10000; window.Top = -10000;
+                window.Show(); await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                var root = (FrameworkElement)window.Content;
+                root.Measure(new Size(window.Width - 32, window.Height - 50)); root.Arrange(new Rect(0, 0, window.Width - 32, window.Height - 50)); root.UpdateLayout();
+                foreach (var input in Descendants<TextBox>(root)) Assert.True(Contrast(((SolidColorBrush)input.Foreground).Color, ((SolidColorBrush)input.Background).Color) >= 4.5);
+                var dpi = VisualTreeHelper.GetDpi(root);
+                var bitmap = new RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(root.ActualHeight * dpi.DpiScaleY), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+                var drawing = new DrawingVisual();
+                using (var context = drawing.RenderOpen()) context.DrawRectangle(new VisualBrush(root), null, new Rect(0, 0, root.ActualWidth, root.ActualHeight));
+                bitmap.Render(drawing);
+                var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                using (var file = File.Create(Path.Combine(output, $"{language}-{window.GetType().Name}.png"))) encoder.Save(file);
+                window.Close();
+            }
+        }
+    });
+
+    [Fact]
+    public Task AvailableRealLeModelRendersInSharedViewportAndThumbnail() => Sta(async () =>
+    {
+        var root = Environment.GetEnvironmentVariable("SKYRIM_LE_PROJECT"); if (string.IsNullOrEmpty(root)) return;
+        var service = new ModelPreviewService(); var scene = await service.LoadAsync(root, @"Stage21\third.nif", root);
+        Assert.All(scene.TextureDependencies, d => Assert.True(d.Available));
+        Assert.NotEmpty(scene.Textures); Assert.DoesNotContain(scene.Warnings, warning => warning.Contains("BC7"));
+        Assert.All(scene.Meshes.Where(m => !string.IsNullOrEmpty(m.DiffuseTexture)), mesh => Assert.Contains(scene.Textures, t => t.Path == mesh.DiffuseTexture));
+        var thumbnail = await new ModelThumbnailService(service).CreateAsync(root, @"Stage21\third.nif", root);
+        Assert.Null(thumbnail.Error); Assert.NotNull(thumbnail.Image);
+        using var control = new ModelPreviewControl(service);
+        foreach (var resource in new[] { "SmartModTheme.xaml", "Strings.uk.xaml" })
+            control.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/SkyrimModPacker.UI;component/Resources/" + resource) });
+        await control.LoadAsync(new(root, @"Stage21\third.nif", @"Stage21\first.nif", root)); Assert.True(control.HasScene);
+        var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/ui-smart-mod")); Directory.CreateDirectory(output);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create((BitmapSource)thumbnail.Image));
+        using (var file = File.Create(Path.Combine(output, "real-le-dagger-thumbnail.png"))) encoder.Save(file);
+        control.Width = 1000; control.Height = 720; control.Measure(new Size(1000, 720)); control.Arrange(new Rect(0, 0, 1000, 720)); control.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(1000, 720, 96, 96, PixelFormats.Pbgra32); bitmap.Render(control);
+        var fullEncoder = new PngBitmapEncoder(); fullEncoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var file = File.Create(Path.Combine(output, "real-le-bc7-preview.png"))) fullEncoder.Save(file);
+    });
+
     private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

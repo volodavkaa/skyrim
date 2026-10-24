@@ -9,4 +9,5 @@ public sealed class LeveledListRequest
     public required PluginRecordReference List { get; init; }
     public short Level { get; init; } = 1;
     public short Count { get; init; } = 1;
+    public bool UpdateExisting { get; init; }
 }

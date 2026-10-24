@@ -85,6 +85,10 @@
         <StackPanel>
          <StackPanel Visibility="{Binding IsNameStep, Converter={StaticResource Visible}}">
           <TextBlock Text="{DynamicResource Weapons_Name}"/><TextBox Text="{Binding SelectedItem.Name, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Name]}" Style="{StaticResource ErrorText}"/>
+          <TextBlock Text="{DynamicResource Wizard_EditorId}"/><TextBox Text="{Binding SelectedItem.EditorId, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/>
+          <TextBlock Text="{DynamicResource Smart_IdHint}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
+          <Button Content="{DynamicResource Smart_NewId}" Command="{Binding GenerateIdentifierCommand}"/>
+          <TextBlock Text="{Binding IdentifierNotice}" TextWrapping="Wrap" Margin="0,5,0,12"/><TextBlock Text="{Binding SelectedItem.Errors[EditorId]}" Style="{StaticResource ErrorText}"/>
           <TextBlock Text="{DynamicResource Smart_Template}"/><ComboBox ItemsSource="{Binding ItemTemplates}" SelectedItem="{Binding SelectedTemplate}" DisplayMemberPath="Name"/>
           <TextBlock Text="{DynamicResource Smart_TemplateHint}" TextWrapping="Wrap"/>
           <Button Content="{DynamicResource Smart_ApplyTemplate}" Click="OnApplyTemplate"/>
@@ -93,8 +97,9 @@
          <StackPanel Visibility="{Binding IsAppearanceStep, Converter={StaticResource Visible}}">
           <TextBlock Text="{DynamicResource Models_Third}"/><TextBox Text="{Binding SelectedItem.ModelPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportThird}" Click="OnImportThird"/>
           <TextBlock Text="{Binding SelectedItem.Errors[ModelPath]}" Style="{StaticResource ErrorText}"/>
-          <TextBlock Text="{DynamicResource Models_First}"/><TextBox Text="{Binding SelectedItem.FirstPersonPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportFirst}" Click="OnImportFirst"/>
-          <Button Content="{DynamicResource Smart_ImportTextures}" Click="OnTextures"/><Button Content="{DynamicResource Smart_RestoreModels}" Command="{Binding RestoreTemplateCommand}" CommandParameter="models"/>
+          <CheckBox IsChecked="{Binding SelectedItem.UseSharedModel}"><TextBlock Text="{DynamicResource Smart_SharedModel}" TextWrapping="Wrap"/></CheckBox>
+          <TextBlock Text="{DynamicResource Models_First}"/><TextBox Text="{Binding SelectedItem.FirstPersonPath, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding SelectedItem.UseSharedModel}"/><Button Content="{DynamicResource Smart_ImportFirst}" Click="OnImportFirst"/>
+          <Button Content="{DynamicResource Smart_TextureFolderTitle}" Click="OnTextureFolder"/><Button Content="{DynamicResource Smart_ImportTextures}" Click="OnTextures"/><Button Content="{DynamicResource Smart_RestoreModels}" Command="{Binding RestoreTemplateCommand}" CommandParameter="models"/>
           <TextBlock Text="{Binding SelectedItem.PreviewNotice}" TextWrapping="Wrap" Margin="0,12,0,0"/>
          </StackPanel>
          <StackPanel Visibility="{Binding IsPropertiesStep, Converter={StaticResource Visible}}">
@@ -102,7 +107,6 @@
           <TextBlock Text="{DynamicResource Weapons_Weight}"/><TextBox Text="{Binding SelectedItem.Weight, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Weight]}" Style="{StaticResource ErrorText}"/>
           <TextBlock Text="{DynamicResource Weapons_Value}"/><TextBox Text="{Binding SelectedItem.Value, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Value]}" Style="{StaticResource ErrorText}"/>
           <Expander Header="{DynamicResource Smart_Advanced}" Margin="0,8,0,12"><StackPanel Margin="0,12,0,0">
-           <TextBlock Text="{DynamicResource Wizard_EditorId}"/><TextBox Text="{Binding SelectedItem.EditorId, UpdateSourceTrigger=PropertyChanged}"/>
            <TextBlock Text="{DynamicResource Weapons_Description}"/><TextBox Text="{Binding SelectedItem.Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
            <TextBlock Text="{DynamicResource Weapons_Speed}"/><TextBox Text="{Binding SelectedItem.Speed, UpdateSourceTrigger=PropertyChanged}"/>
            <TextBlock Text="{DynamicResource Weapons_Reach}"/><TextBox Text="{Binding SelectedItem.Reach, UpdateSourceTrigger=PropertyChanged}"/>
@@ -117,27 +121,67 @@
          </StackPanel>
          <StackPanel Visibility="{Binding IsAcquisitionStep, Converter={StaticResource Visible}}">
           <TextBlock Text="{DynamicResource Smart_RecipeQuestions}" TextWrapping="Wrap"/>
-          <WrapPanel><Button Content="{DynamicResource Smart_AddCrafting}" Command="{Binding AddRecipeCommand}" CommandParameter="crafting"/><Button Content="{DynamicResource Smart_AddTempering}" Command="{Binding AddRecipeCommand}" CommandParameter="tempering"/></WrapPanel>
-          <ListBox ItemsSource="{Binding SelectedItem.Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="DisplayName" MaxHeight="110"/>
-          <StackPanel x:Name="RecipeEditor">
-           <TextBlock Text="{DynamicResource Smart_OutputCount}"/><TextBox Text="{Binding SelectedRecipe.OutputCount, UpdateSourceTrigger=PropertyChanged}"/>
-           <TextBlock Text="{DynamicResource Smart_Workbench}"/><ComboBox ItemsSource="{Binding Workbenches}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedRecipe.Workbench}"/>
+          <Border Style="{StaticResource SmartCardBorder}"><StackPanel><TextBlock Text="{DynamicResource Smart_Crafting}" FontWeight="SemiBold"/><WrapPanel><Button Content="{Binding CraftingAction}" Command="{Binding AddRecipeCommand}" CommandParameter="crafting"/><Button Content="{DynamicResource Smart_DisableRecipe}" Click="OnDisableRecipe" Tag="crafting" IsEnabled="{Binding HasCraftingRecipe}"/></WrapPanel></StackPanel></Border>
+          <Border Style="{StaticResource SmartCardBorder}"><StackPanel><TextBlock Text="{DynamicResource Smart_Tempering}" FontWeight="SemiBold"/><WrapPanel><Button Content="{Binding TemperingAction}" Command="{Binding AddRecipeCommand}" CommandParameter="tempering"/><Button Content="{DynamicResource Smart_DisableRecipe}" Click="OnDisableRecipe" Tag="tempering" IsEnabled="{Binding HasTemperingRecipe}"/></WrapPanel></StackPanel></Border>
+          <StackPanel Visibility="{Binding HasRecipeConflict, Converter={StaticResource Visible}}"><TextBlock Text="{DynamicResource Smart_RecipeConflict}" Style="{StaticResource ErrorText}"/><TextBlock Text="{Binding RecipeConflictDetails}" TextWrapping="Wrap"/><ListBox ItemsSource="{Binding SelectedItem.Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="EditorId" MaxHeight="140"/><Button Content="{DynamicResource Smart_KeepRecipe}" Click="OnResolveRecipeConflict"/></StackPanel>
+          <StackPanel x:Name="RecipeEditor" Visibility="{Binding HasSelectedRecipe, Converter={StaticResource Visible}}">
+           <TextBlock Text="{Binding SelectedRecipe.DisplayName}" FontSize="18" FontWeight="SemiBold" Margin="0,8"/>
+           <TextBlock Text="{DynamicResource Smart_OutputCount}" TextWrapping="Wrap"/><TextBox Text="{Binding SelectedRecipe.OutputCount, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{Binding RecipeWorkbenchText}" Foreground="#B4C3D5" Margin="0,0,0,12"/>
            <TextBlock Text="{DynamicResource Smart_RequiredPerk}"/><ComboBox ItemsSource="{Binding Options.Perks}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedRecipe.RequiredPerk}"/>
            <Button Content="{DynamicResource Smart_ClearPerk}" Click="OnClearPerk"/>
            <TextBlock Text="{DynamicResource Smart_Ingredients}" FontWeight="SemiBold"/>
            <ItemsControl ItemsSource="{Binding SelectedRecipe.Ingredients}"><ItemsControl.ItemTemplate><DataTemplate>
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
-             <ComboBox ItemsSource="{Binding DataContext.Options.Ingredients, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding Reference}"/>
-             <TextBox Grid.Column="1" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}" Margin="4,4,0,10"/>
+            <Grid><Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="85"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+             <Button Click="OnChooseIngredient" Tag="{Binding}" HorizontalContentAlignment="Left" ToolTip="{Binding Reference}"><TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap"/></Button>
+             <StackPanel Grid.Column="1" Margin="4,0,0,0"><TextBlock Text="{DynamicResource Smart_Quantity}"/><TextBox Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}" ToolTip="{Binding QuantityError}"/></StackPanel>
              <Button Grid.Column="2" Content="−" Command="{Binding DataContext.RemoveIngredientCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+             <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding QuantityError}" Foreground="#FFB4B4" TextWrapping="Wrap"/>
             </Grid>
            </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-           <Button Content="{DynamicResource Smart_AddIngredient}" Command="{Binding AddIngredientCommand}"/><Button Content="{DynamicResource Smart_DeleteRecipe}" Click="OnDeleteRecipe"/>
+           <Button Content="{DynamicResource Smart_AddIngredient}" Click="OnChooseIngredient"/><Button Content="{DynamicResource Smart_DeleteRecipe}" Click="OnDeleteRecipe"/>
            <TextBlock Text="{Binding RecipeValidationText}" Style="{StaticResource ErrorText}"/>
           </StackPanel>
-          <Expander Header="{DynamicResource Smart_Advanced}"><StackPanel>
-           <TextBlock Text="{DynamicResource Smart_ListHint}" TextWrapping="Wrap"/><ComboBox ItemsSource="{Binding Options.LeveledLists}" SelectedItem="{Binding SelectedLeveledList}" DisplayMemberPath="DisplayName"/>
-           <TextBlock Text="{DynamicResource Smart_Level}"/><TextBox Text="{Binding ListLevel}"/><TextBlock Text="{DynamicResource Smart_Quantity}"/><TextBox Text="{Binding ListCount}"/><Button Content="{DynamicResource Smart_AddToList}" Command="{Binding AddToListCommand}"/>
+          <Expander><Expander.Header><TextBlock Text="{DynamicResource Smart_ListTitle}" TextWrapping="Wrap"/></Expander.Header><StackPanel x:Name="LeveledListPanel">
+           <TextBlock Text="{DynamicResource Smart_ListWhere}" TextWrapping="Wrap" FontSize="18" FontWeight="SemiBold"/>
+           <Button Command="{Binding FilterListCommand}" CommandParameter="Equipment" HorizontalContentAlignment="Left"><TextBlock Text="{DynamicResource Smart_ListWantNpc}" TextWrapping="Wrap"/></Button>
+           <Button Command="{Binding FilterListCommand}" CommandParameter="Containers" HorizontalContentAlignment="Left"><TextBlock Text="{DynamicResource Smart_ListWantChest}" TextWrapping="Wrap"/></Button>
+           <Button Command="{Binding FilterListCommand}" CommandParameter="Merchants" HorizontalContentAlignment="Left"><TextBlock Text="{DynamicResource Smart_ListWantMerchant}" TextWrapping="Wrap"/></Button>
+           <Button Content="{DynamicResource Smart_ListWantAdvanced}" Command="{Binding FilterListCommand}" CommandParameter="All"/>
+           <Button Command="{Binding SkipListCommand}"><TextBlock Text="{DynamicResource Smart_ListSkip}" TextWrapping="Wrap"/></Button>
+           <StackPanel Visibility="{Binding ShowListChoices, Converter={StaticResource Visible}}">
+           <TextBlock Text="{Binding ListScenarioHelp}" TextWrapping="Wrap" Margin="0,10"/>
+           <StackPanel Visibility="{Binding HasListTargetSelection, Converter={StaticResource Visible}}"><TextBlock Text="{DynamicResource Smart_ListTargetSearch}"/><TextBox Text="{Binding ListTargetSearch, UpdateSourceTrigger=PropertyChanged}"/>
+           <ComboBox ItemsSource="{Binding ListTargets}" SelectedItem="{Binding SelectedListTarget}" DisplayMemberPath="DisplayName" ToolTip="{Binding SelectedListTarget.DisplayName}"/>
+           </StackPanel>
+           <TextBlock Text="{DynamicResource Smart_ListSharedWarning}" TextWrapping="Wrap" Foreground="#FFDC9E" Margin="0,10"/>
+           <TextBlock Text="{Binding ListTargetResultText}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,8"/>
+           <Expander IsExpanded="{Binding IsAdvancedListSelection, Mode=OneWay}"><Expander.Header><TextBlock Text="{DynamicResource Smart_ListAdvancedSearch}" TextWrapping="Wrap"/></Expander.Header><StackPanel>
+           <TextBlock Text="{DynamicResource Smart_ListSearch}"/><TextBox Text="{Binding ListSearch, UpdateSourceTrigger=PropertyChanged}"/>
+           <WrapPanel><Button Content="{DynamicResource Smart_ListAll}" Command="{Binding FilterListCommand}" CommandParameter=""/><Button Content="{DynamicResource Smart_ListCategory_Containers}" Command="{Binding FilterListCommand}" CommandParameter="Containers"/><Button Content="{DynamicResource Smart_ListCategory_Merchants}" Command="{Binding FilterListCommand}" CommandParameter="Merchants"/><Button Content="{DynamicResource Smart_ListCategory_Equipment}" Command="{Binding FilterListCommand}" CommandParameter="Equipment"/><Button Content="{DynamicResource Smart_ListUnknown}" Command="{Binding FilterListCommand}" CommandParameter="Unknown"/></WrapPanel>
+           <TextBlock Text="{DynamicResource Smart_ListLimit}" TextWrapping="Wrap"/>
+           </StackPanel></Expander>
+           <StackPanel Visibility="{Binding CanShowTargetLists, Converter={StaticResource Visible}}">
+           <ListBox ItemsSource="{Binding FilteredLeveledLists}" SelectedItem="{Binding SelectedLeveledList}" MaxHeight="220"><ListBox.ItemTemplate><DataTemplate><StackPanel>
+            <TextBlock TextWrapping="Wrap"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="{Binding Name}"/><Style.Triggers><DataTrigger Binding="{Binding Name}" Value=""><Setter Property="Text" Value="{DynamicResource Smart_ListUnnamed}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+            <TextBlock Text="{Binding EditorId}" TextWrapping="Wrap" FontWeight="SemiBold"/><TextBlock Text="{Binding Reference.PluginName}" Foreground="#B4C3D5"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#B4C3D5"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="{DynamicResource Smart_ListUnknown}"/><Style.Triggers>
+             <DataTrigger Binding="{Binding ListUsages[0].Category}" Value="Containers"><Setter Property="Text" Value="{DynamicResource Smart_ListCategory_Containers}"/></DataTrigger>
+             <DataTrigger Binding="{Binding ListUsages[0].Category}" Value="Merchants"><Setter Property="Text" Value="{DynamicResource Smart_ListCategory_Merchants}"/></DataTrigger>
+             <DataTrigger Binding="{Binding ListUsages[0].Category}" Value="Equipment"><Setter Property="Text" Value="{DynamicResource Smart_ListCategory_Equipment}"/></DataTrigger>
+            </Style.Triggers></Style></TextBlock.Style></TextBlock>
+           </StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+           <Expander><Expander.Header><TextBlock Text="{DynamicResource Smart_ListInspectHint}" TextWrapping="Wrap"/></Expander.Header><StackPanel>
+           <TextBlock Text="{DynamicResource Smart_ListExplanation}" TextWrapping="Wrap"/>
+           <TextBlock Text="{Binding LeveledListPurpose}" TextWrapping="Wrap" Margin="0,10"/>
+           <TextBlock Text="{DynamicResource Smart_ListContents}" FontWeight="SemiBold"/><TextBox Text="{Binding ListContents, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="220" VerticalScrollBarVisibility="Auto"/>
+           </StackPanel></Expander>
+           <TextBlock Text="{DynamicResource Smart_ListMinLevel}"/><TextBox Text="{Binding ListLevel, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{DynamicResource Smart_ListItemCount}"/><TextBox Text="{Binding ListCount, UpdateSourceTrigger=PropertyChanged}"/>
+           <TextBlock Text="{Binding LeveledListSummary}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,10"/>
+           <TextBlock Text="{DynamicResource Smart_ListOutcome}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
+           <Button Command="{Binding AddToListCommand}" Style="{StaticResource SmartPrimary}"><TextBlock Text="{DynamicResource Smart_ListSaveAndAdd}" TextWrapping="Wrap"/></Button>
+           </StackPanel>
+           </StackPanel>
           </StackPanel></Expander>
          </StackPanel>
          <StackPanel Visibility="{Binding IsSummaryStep, Converter={StaticResource Visible}}"><TextBlock Text="{Binding SelectedSummary}" TextWrapping="Wrap" FontSize="16"/><Button Content="{DynamicResource Smart_SaveItem}" Style="{StaticResource SmartPrimary}" Command="{Binding SaveItemCommand}" Margin="0,16,0,8"/><Expander Header="{DynamicResource Smart_Inheritance}"><TextBlock Text="{Binding InheritanceText}" TextWrapping="Wrap"/></Expander><TextBlock Text="{Binding SelectedItem.PreviewNotice}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,12,0,0"/></StackPanel>

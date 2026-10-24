@@ -26,7 +26,7 @@ public sealed partial class SmartModViewModel
     {
         var bench = Options.Keywords.FirstOrDefault(k => k.Reference == data.Workbench);
         var tempering = bench?.EditorId == "CraftingSmithingSharpeningWheel";
-        return data.Workbench != null && bench != null && ushort.TryParse(data.OutputCount, out var output) && output > 0 && (!tempering || output == 1) &&
+        return data.Workbench != null && bench != null && tempering == data.IsTempering && ushort.TryParse(data.OutputCount, out var output) && output > 0 && (!tempering || output == 1) &&
             data.EditorId.Length is > 0 and <= 128 && char.IsAsciiLetter(data.EditorId[0]) && data.EditorId.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') &&
             data.Ingredients.Count > 0 && data.Ingredients.All(i => i.Reference != null && int.TryParse(i.Count, out var count) && count > 0) &&
             data.Ingredients.Select(i => i.Reference).Distinct().Count() == data.Ingredients.Count;
@@ -34,6 +34,10 @@ public sealed partial class SmartModViewModel
     private bool ValidateRecipes(SmartModItemRow item)
     {
         var valid = true;
+        if (item.Recipes.GroupBy(r => r.IsTempering).Any(g => g.Count() > 1))
+        {
+            Issues.Add(new(item.Name + ": " + Label("Smart_RecipeConflict"), item.Id, item.Recipes.First().Id)); valid = false;
+        }
         foreach (var recipe in item.Recipes)
         {
             var data = recipe.Capture();
@@ -60,6 +64,8 @@ public sealed partial class SmartModViewModel
     private async Task SaveItemCoreAsync(SmartModItemRow item, CancellationToken token)
     {
         Issues.Clear();
+        if (IdentifierConflict(item) is { Length: > 0 } conflict)
+        { SelectedItem = item; item.Step = SmartModItemStep.NameAndTemplate; throw new InvalidOperationException(conflict); }
         if (!item.Validate(Label) || !ValidateRecipes(item))
         {
             SelectedItem = item;
@@ -169,6 +175,7 @@ public sealed partial class SmartModViewModel
         if (!HasProject || Items.Count == 0) { Issues.Add(new(Label("Smart_InvalidQuantity"))); return false; }
         foreach (var item in Items)
         {
+            if (IdentifierConflict(item) is { Length: > 0 } idIssue) Issues.Add(new(item.Name + ": " + idIssue, item.Id, Step: SmartModItemStep.NameAndTemplate));
             if (!item.Validate(Label)) Issues.Add(new(item.Name + ": " + item.Error, item.Id));
             ValidateRecipes(item);
             try { await ValidateModelsAsync(item, token); }
@@ -248,6 +255,14 @@ public sealed partial class SmartModViewModel
         if (firstPerson) SelectedItem.FirstPersonPath = path; else SelectedItem.ModelPath = path;
         await RecordSuccessfulWriteAsync(token); await RefreshResourcesAsync(token);
     });
+    public async Task<TextureFolderPlan> PreviewTextureFolderAsync(string source, string mapping) =>
+        Require(await _projects.PreviewTextureFolderAsync(ProjectPath, source, mapping, _gameData, _lifetime.Token));
+    public Task ImportTextureFolderAsync(TextureFolderPlan plan) => RunAsync(async token =>
+    {
+        var revision = await CheckWorkspaceAsync(token); using var expectation = revision == null ? null : new WorkspaceWriteExpectation(revision);
+        Require(await _projects.ImportTextureFolderAsync(plan, _gameData, token));
+        await RecordSuccessfulWriteAsync(token); await RefreshResourcesAsync(token); PreviewChanged?.Invoke();
+    });
     public Task ImportTexturesAsync(IReadOnlyList<string> sources) => RunAsync(async token =>
     {
         if (!HasProject) return;
@@ -277,14 +292,17 @@ public sealed partial class SmartModViewModel
     [RelayCommand]
     private Task AddToListAsync() => RunAsync(async token =>
     {
-        if (SelectedItem?.ConfirmedFormId is not { } form || SelectedLeveledList == null || !short.TryParse(ListLevel, out var level) || level < 0 || !short.TryParse(ListCount, out var count) || count <= 0)
+        if (SelectedItem is not { } item || SelectedLeveledList == null || !short.TryParse(ListLevel, out var level) || level < 1 || !short.TryParse(ListCount, out var count) || count <= 0)
             throw new InvalidOperationException(Label("Smart_SaveBeforeList"));
+        if (item.ConfirmedFormId == null || item.Capture().State != SmartModItemState.Ready) await SaveItemCoreAsync(item, token);
+        var form = item.ConfirmedFormId ?? throw new InvalidOperationException(Label("Smart_SaveBeforeList"));
         var revision = await CheckWorkspaceAsync(token); using var expectation = revision == null ? null : new WorkspaceWriteExpectation(revision);
         var result = await _builder.AddToLeveledListAsync(new()
         {
-            PluginPath = PluginPath, GameDataPath = _gameData, WeaponFormId = form, List = SelectedLeveledList.Reference, Level = level, Count = count
+            PluginPath = PluginPath, GameDataPath = _gameData, WeaponFormId = form, List = SelectedLeveledList.Reference, Level = level, Count = count, UpdateExisting = true
         }, token);
         if (result.IsFailure) throw new IOException(result.Error);
         await RecordSuccessfulWriteAsync(token);
+        await RefreshSelectedListAsync(); Status = Label("Smart_ListSaved");
     });
 }

@@ -13,6 +13,7 @@ public sealed partial class SmartModViewModel
         EditorId = editorId, Name = name, Damage = damage.ToString(), Weight = weight.ToString(CultureInfo.InvariantCulture), Value = value.ToString(),
         Description = details.Description, Speed = details.Speed.ToString(CultureInfo.InvariantCulture), Reach = details.Reach.ToString(CultureInfo.InvariantCulture),
         ModelPath = details.ModelPath, FirstPersonPath = details.FirstPersonModelPath ?? "", FirstPersonReference = details.FirstPersonModel,
+        UseSharedModel = !string.IsNullOrWhiteSpace(details.ModelPath) && details.ModelPath.Equals(details.FirstPersonModelPath, StringComparison.OrdinalIgnoreCase),
         Keywords = details.Keywords.ToArray(), Sound = details.AttackSound, Sounds = details.Sounds,
         Enchantment = details.Enchantment, EnchantmentCharge = details.EnchantmentCharge.ToString()
     };
@@ -63,6 +64,7 @@ public sealed partial class SmartModViewModel
                 Reach = old == null || current.Reach != old.Reach ? current.Reach : fresh.Reach,
                 Description = old == null || current.Description != old.Description ? current.Description : fresh.Description,
                 ModelPath = old == null || current.ModelPath != old.ModelPath ? current.ModelPath : fresh.ModelPath,
+                UseSharedModel = current.UseSharedModel,
                 FirstPersonPath = current.FirstPersonEdited || current.RestoreFirstPerson ? current.FirstPersonPath : "", FirstPersonEdited = current.FirstPersonEdited,
                 FirstPersonReference = current.FirstPersonEdited || current.RestoreFirstPerson ? current.FirstPersonReference : fresh.FirstPersonReference, RestoreFirstPerson = current.RestoreFirstPerson,
                 Sound = old == null || current.Sound != old.Sound ? current.Sound : fresh.Sound,
@@ -72,6 +74,7 @@ public sealed partial class SmartModViewModel
                 EnchantmentCharge = old == null || current.EnchantmentCharge != old.EnchantmentCharge ? current.EnchantmentCharge : fresh.EnchantmentCharge
             };
         }
+        if (fresh.UseSharedModel) fresh = fresh with { FirstPersonPath = fresh.ModelPath, FirstPersonEdited = true, RestoreFirstPerson = false };
         item.Replace(item.Capture() with { Template = new(template.PluginName, template.FormId), Weapon = fresh, State = SmartModItemState.InProgress });
         await ResolveFirstPersonAsync(item, token); await PersistAsync(token);
     });
@@ -96,7 +99,7 @@ public sealed partial class SmartModViewModel
         {
             "sounds" => current with { Sound = source.Sound, Sounds = source.Sounds },
             "keywords" => current with { Keywords = source.Keywords },
-            "models" => current with { ModelPath = source.ModelPath, FirstPersonPath = source.FirstPersonPath, FirstPersonEdited = false,
+            "models" => current with { ModelPath = source.ModelPath, FirstPersonPath = source.FirstPersonPath, FirstPersonEdited = false, UseSharedModel = false,
                 RestoreFirstPerson = true, FirstPersonReference = source.FirstPersonReference },
             _ => current with { Damage = source.Damage, Weight = source.Weight, Value = source.Value, Speed = source.Speed,
                 Reach = source.Reach, Description = source.Description, Enchantment = source.Enchantment, EnchantmentCharge = source.EnchantmentCharge }
@@ -111,6 +114,8 @@ public sealed partial class SmartModViewModel
     public Task DuplicateSelectedAsync(bool copyRecipes) => RunAsync(async token =>
     {
         if (SelectedItem is not { } item) return;
+        if (copyRecipes && item.Recipes.GroupBy(r => r.IsTempering).Any(g => g.Count() > 1))
+            throw new InvalidOperationException(Label("Smart_RecipeConflict"));
         var copy = item.Capture() with { Id = Guid.NewGuid(), ConfirmedFormId = null, State = SmartModItemState.InProgress };
         copy = copy with
         {
@@ -147,6 +152,10 @@ public sealed partial class SmartModViewModel
     {
         if (IsBusy || SelectedItem is not { } item) return;
         var tempering = kind == "tempering";
+        if (item.Recipes.FirstOrDefault(r => r.IsTempering == tempering) is { } existing)
+        {
+            SelectedRecipe = existing; item.Step = SmartModItemStep.Acquisition; return;
+        }
         var id = Guid.NewGuid();
         var bench = Options.Keywords.FirstOrDefault(k => k.EditorId == (tempering ? "CraftingSmithingSharpeningWheel" : "CraftingSmithingForge"));
         if (bench == null) { Error = Label("Smart_NoWorkbench"); return; }
@@ -158,6 +167,7 @@ public sealed partial class SmartModViewModel
     public Task DeleteRecipeAsync() => RunAsync(async token =>
     {
         if (SelectedRecipe is not { } recipe || SelectedItem is not { } item) return;
+        if (item.Recipes.Count(r => r.IsTempering == recipe.IsTempering) > 1) throw new InvalidOperationException(Label("Smart_RecipeConflict"));
         if (recipe.ConfirmedFormId is { } form)
         {
             IReadOnlyList<CraftingRecipe> recipes = item.ConfirmedFormId == null ? [] : Require(await _builder.GetRecipesAsync(PluginPath, item.ConfirmedFormId.Value, token));

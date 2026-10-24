@@ -3,7 +3,7 @@ using SkyrimModPacker.Core.Models;
 
 namespace SkyrimModPacker.Infrastructure.Preview;
 
-/// <summary>Bounded top-mip BC1/BC2/BC3 decoder; other formats are explicitly unsupported.</summary>
+/// <summary>Bounded top-mip BC1/BC2/BC3 and Windows BC7 decoder.</summary>
 public static class DdsPreviewDecoder
 {
     public static PreviewTexture Decode(string path, byte[] data, CancellationToken token = default)
@@ -12,18 +12,27 @@ public static class DdsPreviewDecoder
         var b = data.AsSpan();
         if (b.Length < 128 || !b[..4].SequenceEqual("DDS "u8) || U32(b, 4) != 124 || U32(b, 76) != 32) throw new InvalidDataException("Invalid DDS header.");
         var width = U32(b, 16); var height = U32(b, 12);
-        if (width == 0 || height == 0 || width > 4096 || height > 4096 || (long)width * height > 4 * 1024 * 1024)
+        if (width == 0 || height == 0 || width > 4096 || height > 4096)
             throw new InvalidDataException("DDS preview supports at most 4 million pixels and 4096 per dimension.");
         if (U32(b, 112) != 0 || U32(b, 24) > 1) throw new NotSupportedException("Cubemap/volume DDS preview is not supported.");
         var offset = 128; var fourcc = b.Slice(84, 4);
+        var bc7 = false;
         var format = fourcc.SequenceEqual("DXT1"u8) ? 1 : fourcc.SequenceEqual("DXT3"u8) ? 2 : fourcc.SequenceEqual("DXT5"u8) ? 3 : 0;
         if (fourcc.SequenceEqual("DX10"u8))
         {
             if (b.Length < 148) throw new InvalidDataException("Truncated DDS DX10 header.");
             if (U32(b, 132) != 3 || U32(b, 136) != 0 || U32(b, 140) != 1) throw new NotSupportedException("DDS arrays and cubemaps are not supported.");
             format = U32(b, 128) switch { 71 => 1, 74 => 2, 77 => 3, _ => 0 }; offset = 148;
+            bc7 = U32(b, 128) is 98 or 99;
         }
-        if (format == 0) throw new NotSupportedException("DDS preview supports BC1/DXT1, BC2/DXT3 and BC3/DXT5 only; BC7 is not supported.");
+        if (bc7)
+        {
+            if (b.Length - offset < (long)(((int)width + 3) / 4) * (((int)height + 3) / 4) * 16) throw new InvalidDataException("DDS BC7 top mip is truncated.");
+            if (!OperatingSystem.IsWindows()) throw new NotSupportedException("BC7 preview requires Windows Direct3D 11.");
+            return Bc7PreviewDecoder.Decode(path, data, offset, (int)width, (int)height, token);
+        }
+        if (format == 0) throw new NotSupportedException("DDS preview supports BC1/DXT1, BC2/DXT3, BC3/DXT5 and BC7 only.");
+        if ((long)width * height > 4 * 1024 * 1024) throw new InvalidDataException("DDS preview supports at most 4 million decoded pixels.");
         var blockSize = format == 1 ? 8 : 16; var columns = ((int)width + 3) / 4; var rows = ((int)height + 3) / 4;
         if (b.Length - offset < (long)columns * rows * blockSize) throw new InvalidDataException("DDS top mip is truncated.");
         var output = new byte[checked((int)(width * height * 4))];

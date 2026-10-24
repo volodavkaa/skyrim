@@ -28,7 +28,19 @@ public sealed class ModelPreviewService : IModelPreviewService
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { warnings.Add($"Texture '{source}': {ex.Message}"); }
         }
-        return scene with { Textures = textures, Warnings = warnings };
+        var dependencies = new List<PreviewTextureDependency>();
+        foreach (var source in scene.TexturePaths)
+        {
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                ReadResource(projectDirectory, Resource(source, "textures", ".dds"), gameDataPath, 32 * 1024 * 1024, token, probe: true);
+                dependencies.Add(new(source, true));
+            }
+            catch (FileNotFoundException ex) { dependencies.Add(new(source, false, ex.Message)); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { dependencies.Add(new(source, null, ex.Message)); }
+        }
+        return scene with { Textures = textures, Warnings = warnings, TextureDependencies = dependencies };
     }, token);
 
     private static string Resource(string path, string root, string extension)
@@ -40,12 +52,12 @@ public sealed class ModelPreviewService : IModelPreviewService
         return path;
     }
 
-    private static byte[] ReadResource(string project, string relative, string data, int limit, CancellationToken token)
+    private static byte[] ReadResource(string project, string relative, string data, int limit, CancellationToken token, bool probe = false)
     {
         foreach (var root in new[] { project, data }.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var target = PackingPathGuard.ResolveUnderRoot(root, relative);
-            if (File.Exists(target)) { using var input = File.OpenRead(target); return ReadBounded(input, limit, token); }
+            if (File.Exists(target)) { if (probe) return []; using var input = File.OpenRead(target); return ReadBounded(input, limit, token); }
             if (Directory.Exists(target)) throw new IOException("A resource path points to a directory: " + relative);
             var manifest = Path.Combine(root, "mod-project.json");
             if (root == project && File.Exists(manifest))
@@ -70,6 +82,7 @@ public sealed class ModelPreviewService : IModelPreviewService
                     if (!archive.TryGetFolder(Path.GetDirectoryName(relative.Replace('/', '\\'))!, out var folder)) continue;
                     var file = folder.Files.FirstOrDefault(f => Path.GetFileName(f.Path.Replace('/', '\\')).Equals(Path.GetFileName(relative), StringComparison.OrdinalIgnoreCase));
                     if (file == null) continue;
+                    if (probe) return [];
                     using var stream = file.AsStream(); return ReadBounded(stream, limit, token);
                 }
                 finally { (archive as IDisposable)?.Dispose(); }

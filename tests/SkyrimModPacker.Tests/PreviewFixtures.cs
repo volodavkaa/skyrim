@@ -5,6 +5,13 @@ namespace SkyrimModPacker.Tests;
 
 internal static class PreviewFixtures
 {
+    public static byte[] ResourceDds(string marker = "fixture resource") => Dds().Concat(Encoding.UTF8.GetBytes(marker)).ToArray();
+    public static byte[] Bc7(uint dxgi = 98)
+    {
+        var bytes = new byte[164]; Array.Copy(Dds(), bytes, 128); Encoding.ASCII.GetBytes("DX10").CopyTo(bytes, 84);
+        BitConverter.GetBytes(dxgi).CopyTo(bytes, 128); BitConverter.GetBytes(3u).CopyTo(bytes, 132); BitConverter.GetBytes(1u).CopyTo(bytes, 140);
+        bytes[148] = 64; return bytes; // Valid mode 6, constant black endpoints and zero indices.
+    }
     public static byte[] Nif(string scenario = "valid", string diffuse = "textures/test.dds")
     {
         byte[] Block(Action<BinaryWriter> write) { using var memory = new MemoryStream(); using var w = new BinaryWriter(memory); write(w); return memory.ToArray(); }

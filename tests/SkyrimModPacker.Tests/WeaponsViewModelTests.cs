@@ -230,7 +230,7 @@ public partial class WeaponsViewModelTests : IDisposable
         var nif = Path.Combine(sourceDirectory, "blade.nif");
         var dds = Path.Combine(sourceDirectory, "blade.dds");
         await File.WriteAllTextAsync(nif, "model fixture");
-        await File.WriteAllTextAsync(dds, "texture fixture");
+        await File.WriteAllBytesAsync(dds, PreviewFixtures.ResourceDds("texture fixture"));
         await vm.ImportModelCommand.ExecuteAsync(nif);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal(@"Swords\blade.nif", vm.ModelPath);
@@ -260,7 +260,7 @@ public partial class WeaponsViewModelTests : IDisposable
         Assert.NotNull(reopened.ErrorMessage);
         Assert.Null(reopened.ResourceStatus);
         Assert.Equal("model fixture", await File.ReadAllTextAsync(nif));
-        Assert.Equal("texture fixture", await File.ReadAllTextAsync(dds));
+        Assert.Equal(PreviewFixtures.ResourceDds("texture fixture"), await File.ReadAllBytesAsync(dds));
     }
 
     [Fact]

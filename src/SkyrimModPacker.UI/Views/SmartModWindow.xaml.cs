@@ -14,6 +14,7 @@ public partial class SmartModWindow : Window
 {
     public SmartModViewModel ViewModel { get; }
     private readonly ModelPreviewControl _preview;
+    private readonly IModelPreviewService _previewService;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly string? _initialProject;
     private string _previewIdentity = "";
@@ -22,7 +23,7 @@ public partial class SmartModWindow : Window
     {
         ViewModel = viewModel; DataContext = viewModel; _initialProject = projectPath;
         InitializeComponent();
-        _preview = new(previewService); PreviewHost.Child = _preview;
+        _previewService = previewService; _preview = new(previewService); PreviewHost.Child = _preview;
         ViewModel.PreviewChanged += QueuePreview;
         ViewModel.PropertyChanged += OnViewModelChanged;
         _previewTimer.Tick += OnPreviewTick;
@@ -109,8 +110,41 @@ public partial class SmartModWindow : Window
         var dialog = new OpenFileDialog { Filter = "DDS (*.dds)|*.dds", Multiselect = true };
         if (dialog.ShowDialog(this) == true) await ViewModel.ImportTexturesAsync(dialog.FileNames);
     }
+    private async void OnTextureFolder(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || !ViewModel.HasProject) return;
+        var folder = new OpenFolderDialog(); if (folder.ShowDialog(this) != true) return;
+        var dialog = new TextureFolderWindow(folder.FolderName, mapping => ViewModel.PreviewTextureFolderAsync(folder.FolderName, mapping),
+            async () => ViewModel.SelectedItem is { ModelPath.Length: > 0 } item
+                ? await _previewService.LoadAsync(ViewModel.ProjectDirectory, item.ModelPath, ViewModel.GameDataPath) : null, ViewModel.Label) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.Plan is { } plan) await ViewModel.ImportTextureFolderAsync(plan);
+    }
     private void OnClearPerk(object sender, RoutedEventArgs e) { if (!ViewModel.IsBusy && ViewModel.SelectedRecipe != null) ViewModel.SelectedRecipe.RequiredPerk = null; }
     private async void OnDeleteRecipe(object sender, RoutedEventArgs e) { if (!ViewModel.IsBusy && ViewModel.SelectedRecipe != null && Confirm("Smart_DeleteRecipeQuestion")) await ViewModel.DeleteRecipeAsync(); }
+    private async void OnDisableRecipe(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || ViewModel.SelectedItem == null || sender is not System.Windows.Controls.Button button) return;
+        ViewModel.SelectedRecipe = ViewModel.SelectedItem.Recipes.FirstOrDefault(r => r.IsTempering == ((string?)button.Tag == "tempering"));
+        if (ViewModel.SelectedRecipe != null && Confirm("Smart_DeleteRecipeQuestion")) await ViewModel.DeleteRecipeAsync();
+    }
+    private async void OnResolveRecipeConflict(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || ViewModel.SelectedRecipe == null) return;
+        var removed = ViewModel.SelectedItem!.Recipes.Where(r => r.IsTempering == ViewModel.SelectedRecipe.IsTempering && r.Id != ViewModel.SelectedRecipe.Id);
+        var details = string.Join(Environment.NewLine, removed.Select(r => r.EditorId));
+        if (MessageBox.Show(this, ViewModel.Label("Smart_ResolveRecipeQuestion") + Environment.NewLine + details, Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes) await ViewModel.ResolveRecipeConflictAsync();
+    }
+    private void OnChooseIngredient(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy || ViewModel.SelectedRecipe == null) return;
+        var row = (sender as System.Windows.Controls.Button)?.Tag as SmartModIngredientRow;
+        var current = row?.Reference == null ? null : ViewModel.Options.Ingredients.FirstOrDefault(o => o.Reference == row.Reference)
+            ?? new RecordOption { Reference = row.Reference, EditorId = row.Reference.ToString() };
+        var picker = new MaterialPickerWindow(ViewModel.IngredientIndex, ViewModel.Label, current) { Owner = this };
+        if (picker.ShowDialog() != true || picker.Selection is not { } selection) return;
+        ViewModel.AddOrIncrementIngredient(selection, row);
+    }
     private async void OnReplaceResource(object sender, RoutedEventArgs e)
     {
         if (ViewModel.IsBusy || ViewModel.SelectedResource == null) return;

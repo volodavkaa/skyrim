@@ -21,5 +21,6 @@ public interface IPluginBuilderService
     Task<Result<CraftingRecipe>> SaveRecipeAsync(SaveRecipeRequest request, CancellationToken cancellationToken = default);
     Task<Result> DeleteRecipeAsync(string pluginPath, string gameDataPath, uint recipeFormId, CancellationToken cancellationToken = default);
     Task<Result> AddToLeveledListAsync(LeveledListRequest request, CancellationToken cancellationToken = default);
+    Task<Result<LeveledListDetails>> GetLeveledListDetailsAsync(string pluginPath, string gameDataPath, PluginRecordReference list, CancellationToken cancellationToken = default);
     Task<Result> RemoveFromLeveledListAsync(LeveledListRequest request, CancellationToken cancellationToken = default);
 }

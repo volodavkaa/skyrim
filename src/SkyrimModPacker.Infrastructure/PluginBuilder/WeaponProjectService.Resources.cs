@@ -73,6 +73,7 @@ public sealed partial class WeaponProjectService
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = ResourceTarget(folder, relative, gameDataPath);
                 if (!File.Exists(path) || new FileInfo(path).Length == 0) missing.Add(relative);
+                else if (relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(path, cancellationToken);
             }
             if (missing.Count > 0) throw new IOException("Missing or empty project resources: " + string.Join(", ", missing));
             return document.Resources.ToArray();
@@ -198,6 +199,7 @@ public sealed partial class WeaponProjectService
         var pending = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (source, relative) in files)
         {
+            if (relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(source, token);
             var target = ResourceTarget(folder, relative, gameDataPath);
             if (pending.TryGetValue(relative, out var previous) && !Path.GetFullPath(source).Equals(previous, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Multiple files target the same resource: " + relative);
@@ -218,7 +220,11 @@ public sealed partial class WeaponProjectService
             {
                 token.ThrowIfCancellationRequested();
                 var target = ResourceTarget(folder, relative, gameDataPath);
-                if (source.Equals(target, StringComparison.OrdinalIgnoreCase)) continue;
+                if (source.Equals(target, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (expectedHashes != null && await BatchHashAsync(source, token) != expectedHashes[relative]) throw new IOException("An existing resource changed during import: " + relative);
+                    continue;
+                }
                 var temp = Path.Combine(stage, staged.Count.ToString());
                 await using (var input = File.OpenRead(source))
                 await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -228,6 +234,9 @@ public sealed partial class WeaponProjectService
                     output.Flush(flushToDisk: true);
                 }
                 if (new FileInfo(temp).Length == 0) throw new IOException("An imported resource is empty: " + relative);
+                if (relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+                    try { SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(temp, token); }
+                    catch (InvalidDataException ex) { throw new InvalidDataException(relative + ": " + ex.Message, ex); }
                 if (expectedHashes != null && await BatchHashAsync(temp, token) != expectedHashes[relative])
                     throw new IOException("A batch source changed during copying: " + relative);
                 staged.Add((temp, target));

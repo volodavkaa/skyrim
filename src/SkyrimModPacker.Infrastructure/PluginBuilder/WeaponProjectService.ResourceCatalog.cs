@@ -131,6 +131,8 @@ public sealed partial class WeaponProjectService
                             {
                                 using var stream = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                                 availability = stream.Length > 0 ? ModelAvailability.Found : ModelAvailability.Missing;
+                                if (!mesh && availability == ModelAvailability.Found)
+                                { var dds = SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(target, token); detail = $"{dds.Format}; {dds.Width} × {dds.Height}; mip: {dds.MipLevels}"; }
                             }
                             catch (FileNotFoundException) { availability = ModelAvailability.Missing; }
                             catch (DirectoryNotFoundException) { availability = ModelAvailability.Missing; }

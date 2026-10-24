@@ -15,7 +15,7 @@ public partial class WeaponsViewModelTests
     {
         var vm = await PrepareAsync();
         var nif = Path.Combine(_root, "catalog.nif"); File.WriteAllText(nif, "model");
-        var dds = Path.Combine(_root, "catalog.dds"); File.WriteAllText(dds, "texture");
+        var dds = Path.Combine(_root, "catalog.dds"); File.WriteAllBytes(dds, PreviewFixtures.ResourceDds("texture"));
         await vm.ImportModelCommand.ExecuteAsync(nif);
         await vm.ImportTexturesCommand.ExecuteAsync(new[] { dds });
         Assert.Null(vm.ErrorMessage); Assert.Null(vm.ResourceCatalogError);

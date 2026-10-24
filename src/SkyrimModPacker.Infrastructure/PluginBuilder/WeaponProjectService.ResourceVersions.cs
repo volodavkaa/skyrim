@@ -113,9 +113,10 @@ public sealed partial class WeaponProjectService
             (catalog.Entries.Any(e => e.RelativePath.EndsWith(".nif", StringComparison.OrdinalIgnoreCase)) ||
              Directory.EnumerateFiles(folder, "*.nif", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }).Any()))
             throw new IOException("DDS usage inside NIF is unknown. In-place replacement or deletion is blocked while models are present.");
-        if (entry?.Issues.Any(i => i != ResourceIssue.MissingOrEmpty && i != ResourceIssue.UnregisteredCustom) == true)
+        if (entry?.Issues.Any(i => i != ResourceIssue.MissingOrEmpty && i != ResourceIssue.UnregisteredCustom && !(i == ResourceIssue.ReadFailed && relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))) == true)
             throw new IOException("Resolve resource issues before changing this file.");
         if (!delete && !versionId.HasValue) RequireSourceFile(sourcePath!, Path.GetExtension(relative));
+        if (!delete && relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(sourcePath!, token);
         var originalHash = exists ? await ResourceHashAsync(target, token) : null;
         ResourceVersion? saved = null;
         if (exists)
@@ -136,6 +137,7 @@ public sealed partial class WeaponProjectService
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 await CopyVersionFileAsync(sourcePath!, temp, token);
                 if (new FileInfo(temp).Length == 0) throw new IOException("Replacement resource is empty.");
+                if (relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) SkyrimModPacker.Infrastructure.Preview.DdsResourceInspector.Inspect(temp, token);
                 publishedHash = await ResourceHashAsync(temp, token);
                 if (versionId.HasValue && await ResourceHashAsync(temp, token) != document.ResourceVersions.Single(v => v.Id == versionId).Sha256)
                     throw new IOException("Resource backup changed while reading.");

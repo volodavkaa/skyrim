@@ -19,7 +19,7 @@ using Xunit;
 
 namespace SkyrimModPacker.Tests;
 
-public class AdvancedPluginBuilderTests : IDisposable
+public partial class AdvancedPluginBuilderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "AdvancedPluginBuilderTests", Guid.NewGuid().ToString("N"));
     private readonly PluginBuilderService _builder = new();

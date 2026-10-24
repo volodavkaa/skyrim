@@ -352,7 +352,7 @@ public sealed class PluginTransactionTests : IDisposable
         var source = Path.Combine(_root, "sources");
         Directory.CreateDirectory(source);
         var files = Enumerable.Range(0, 15).Select(i => Path.Combine(source, "blade" + i + ".dds")).ToArray();
-        foreach (var file in files) await File.WriteAllTextAsync(file, Path.GetFileName(file));
+        foreach (var file in files) await File.WriteAllBytesAsync(file, PreviewFixtures.ResourceDds(Path.GetFileName(file)));
         var results = await Task.WhenAll(files.Select(file => new WeaponProjectService(new PluginBuilderService())
             .ImportTexturesAsync(project.Value.ProjectFilePath, [file], Data)));
         Assert.All(results, result => Assert.True(result.IsSuccess, result.Error));
@@ -361,7 +361,7 @@ public sealed class PluginTransactionTests : IDisposable
         Assert.Equal(15, registered.Value.Count);
         var folder = Path.GetDirectoryName(project.Value.PluginPath)!;
         foreach (var resource in registered.Value)
-            Assert.Equal(Path.GetFileName(resource), await File.ReadAllTextAsync(Path.Combine(folder, resource.Replace('/', '\\'))));
+            Assert.Equal(PreviewFixtures.ResourceDds(Path.GetFileName(resource)), await File.ReadAllBytesAsync(Path.Combine(folder, resource.Replace('/', '\\'))));
         using var prior = JsonDocument.Parse(await File.ReadAllTextAsync(project.Value.ProjectFilePath + ".bak"));
         Assert.Equal(14, prior.RootElement.GetProperty("Resources").GetArrayLength());
         AssertNoTemporaryFiles(folder);
@@ -374,8 +374,8 @@ public sealed class PluginTransactionTests : IDisposable
         var project = (await service.CreateAsync(CreateRequest())).Value;
         var first = Path.Combine(_root, "first.dds");
         var second = Path.Combine(_root, "second.dds");
-        await File.WriteAllTextAsync(first, "first");
-        await File.WriteAllTextAsync(second, "second");
+        await File.WriteAllBytesAsync(first, PreviewFixtures.ResourceDds("first"));
+        await File.WriteAllBytesAsync(second, PreviewFixtures.ResourceDds("second"));
         Assert.True((await service.ImportTexturesAsync(project.ProjectFilePath, [first], Data)).IsSuccess);
         var before = await File.ReadAllBytesAsync(project.ProjectFilePath);
         var backup = await File.ReadAllBytesAsync(project.ProjectFilePath + ".bak");
@@ -387,7 +387,7 @@ public sealed class PluginTransactionTests : IDisposable
         Assert.Equal(before, await File.ReadAllBytesAsync(project.ProjectFilePath));
         Assert.Equal(backup, await File.ReadAllBytesAsync(project.ProjectFilePath + ".bak"));
         var folder = Path.GetDirectoryName(project.PluginPath)!;
-        Assert.Equal("first", await File.ReadAllTextAsync(Path.Combine(folder, "textures", "first.dds")));
+        Assert.Equal(PreviewFixtures.ResourceDds("first"), await File.ReadAllBytesAsync(Path.Combine(folder, "textures", "first.dds")));
         Assert.False(Directory.Exists(Path.Combine(folder, "textures", "new")));
         AssertNoTemporaryFiles(folder);
         Assert.True((await service.ImportTexturesAsync(project.ProjectFilePath, [second], Data, "new/nested")).IsSuccess);
@@ -428,7 +428,7 @@ public sealed class PluginTransactionTests : IDisposable
         var service = new WeaponProjectService(new PluginBuilderService());
         var project = (await service.CreateAsync(CreateRequest())).Value;
         var source = Path.Combine(_root, model ? "new.nif" : "new.dds");
-        await File.WriteAllTextAsync(source, "resource bytes");
+        if (model) await File.WriteAllTextAsync(source, "resource bytes"); else await File.WriteAllBytesAsync(source, PreviewFixtures.ResourceDds("resource bytes"));
         var before = await File.ReadAllBytesAsync(project.ProjectFilePath);
         using var cancellation = new CancellationTokenSource();
         using (await WorkspaceFileGate.AcquireAsync(project.ProjectFilePath, CancellationToken.None))

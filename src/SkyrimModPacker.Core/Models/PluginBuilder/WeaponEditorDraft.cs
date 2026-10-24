@@ -16,6 +16,7 @@ public sealed record WeaponDraftFields
     public string ModelPath { get; init; } = "";
     public string FirstPersonPath { get; init; } = "";
     public bool FirstPersonEdited { get; init; }
+    public bool UseSharedModel { get; init; }
     public bool RestoreFirstPerson { get; init; }
     public PluginRecordReference? FirstPersonReference { get; init; }
     public uint? RestorationOrigin { get; init; }

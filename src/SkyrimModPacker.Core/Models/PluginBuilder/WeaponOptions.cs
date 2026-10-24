@@ -9,4 +9,5 @@ public sealed class WeaponOptions
     public IReadOnlyList<RecordOption> Ingredients { get; init; } = [];
     public IReadOnlyList<RecordOption> Perks { get; init; } = [];
     public IReadOnlyList<RecordOption> LeveledLists { get; init; } = [];
+    public IReadOnlyList<RecordOption> ExistingEditorIds { get; init; } = [];
 }

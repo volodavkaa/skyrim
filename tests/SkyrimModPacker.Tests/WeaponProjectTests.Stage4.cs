@@ -159,7 +159,7 @@ public partial class WeaponProjectTests
         foreach (var name in new[] { "Iron", "Steel" })
         {
             var mesh = Path.Combine(_root, "meshes", name, "sword.nif"); Directory.CreateDirectory(Path.GetDirectoryName(mesh)!); File.WriteAllText(mesh, name + " model");
-            var texture = Path.Combine(_root, "textures", name, "sword.dds"); Directory.CreateDirectory(Path.GetDirectoryName(texture)!); File.WriteAllText(texture, name + " texture");
+            var texture = Path.Combine(_root, "textures", name, "sword.dds"); Directory.CreateDirectory(Path.GetDirectoryName(texture)!); File.WriteAllBytes(texture, PreviewFixtures.ResourceDds(name + " texture"));
             files.Add((await Service.ImportModelAsync(p.ProjectFilePath, mesh, Data)).Value);
             Assert.True((await Service.ImportTexturesAsync(p.ProjectFilePath, [texture], Data)).IsSuccess);
         }

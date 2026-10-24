@@ -10,5 +10,9 @@ public sealed class RecordOption
 {
     public required PluginRecordReference Reference { get; init; }
     public string EditorId { get; init; } = string.Empty;
-    public string DisplayName => string.IsNullOrWhiteSpace(EditorId) ? Reference.ToString() : EditorId;
+    public string Name { get; init; } = string.Empty;
+    public string MaterialCategory { get; init; } = string.Empty;
+    public string SearchAliases { get; init; } = string.Empty;
+    public IReadOnlyList<LeveledListUsage> ListUsages { get; init; } = [];
+    public string DisplayName => !string.IsNullOrWhiteSpace(Name) ? Name : string.IsNullOrWhiteSpace(EditorId) ? Reference.ToString() : EditorId;
 }

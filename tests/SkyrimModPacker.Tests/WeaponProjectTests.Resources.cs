@@ -9,7 +9,8 @@ public partial class WeaponProjectTests
     {
         var path = Path.Combine(_root, "assets", relative);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content);
+        if (relative.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) await File.WriteAllBytesAsync(path, PreviewFixtures.ResourceDds(content));
+        else await File.WriteAllTextAsync(path, content);
         return path;
     }
 
@@ -53,7 +54,7 @@ public partial class WeaponProjectTests
         var other = await Service.ImportTexturesAsync(project.ProjectFilePath, [loose], Data, "Custom/Metal");
         Assert.True(other.IsSuccess, other.Error);
         Assert.Equal("textures/Custom/Metal/metal.dds", Assert.Single(other.Value));
-        Assert.Equal("diffuse", await File.ReadAllTextAsync(file));
+        Assert.Equal(PreviewFixtures.ResourceDds("diffuse"), await File.ReadAllBytesAsync(file));
         var assets = await Service.ValidateResourcesAsync(project.ProjectFilePath, Data);
         Assert.Equal(3, assets.Value.Count);
     }
@@ -110,7 +111,7 @@ public partial class WeaponProjectTests
         manifest = await File.ReadAllBytesAsync(project.ProjectFilePath);
         Assert.True((await Service.ImportTexturesAsync(project.ProjectFilePath, [second], Data)).IsFailure);
         Assert.Equal(manifest, await File.ReadAllBytesAsync(project.ProjectFilePath));
-        Assert.Equal("first", await File.ReadAllTextAsync(Path.Combine(Path.GetDirectoryName(project.PluginPath)!, "textures", "blade.dds")));
+        Assert.Equal(PreviewFixtures.ResourceDds("first"), await File.ReadAllBytesAsync(Path.Combine(Path.GetDirectoryName(project.PluginPath)!, "textures", "blade.dds")));
     }
 
     [Fact]

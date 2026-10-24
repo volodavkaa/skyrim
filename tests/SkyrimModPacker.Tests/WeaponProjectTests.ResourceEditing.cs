@@ -12,7 +12,7 @@ public partial class WeaponProjectTests
     private async Task<(WeaponProject Project, string Relative, string Target)> EditableResourceAsync(string extension)
     {
         var project = (await Service.CreateAsync(Request())).Value;
-        var source = Path.Combine(_root, "initial" + extension); File.WriteAllText(source, "original");
+        var source = await AssetAsync("initial" + extension, "original");
         var relative = extension == ".nif" ? "meshes/" + (await Service.ImportModelAsync(project.ProjectFilePath, source, Data)).Value.Replace('\\', '/') :
             Assert.Single((await Service.ImportTexturesAsync(project.ProjectFilePath, [source], Data)).Value);
         return (project, relative, Path.Combine(Path.GetDirectoryName(project.PluginPath)!, relative));
@@ -25,16 +25,16 @@ public partial class WeaponProjectTests
     {
         var (p, relative, target) = await EditableResourceAsync(extension);
         var plugin = File.ReadAllBytes(p.PluginPath);
-        var source = Path.Combine(_root, "replacement" + extension); File.WriteAllText(source, "replacement");
+        var source = await AssetAsync("replacement" + extension, "replacement");
         var changed = await Service.ReplaceResourceAsync(p.ProjectFilePath, relative, source, Data);
-        Assert.True(changed.IsSuccess, changed.Error); Assert.Equal("replacement", File.ReadAllText(target));
+        Assert.True(changed.IsSuccess, changed.Error); Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(target));
         var version = Assert.Single((await Service.GetResourceVersionsAsync(p.ProjectFilePath, Data)).Value);
         Assert.True((await Service.RestoreResourceVersionAsync(p.ProjectFilePath, version.Id, Data)).IsSuccess);
-        Assert.Equal("original", File.ReadAllText(target));
+        Assert.Equal(extension == ".dds" ? PreviewFixtures.ResourceDds("original") : System.Text.Encoding.UTF8.GetBytes("original"), File.ReadAllBytes(target));
         Assert.True((await Service.DeleteResourceAsync(p.ProjectFilePath, relative, Data)).IsSuccess);
         Assert.False(File.Exists(target)); Assert.Empty((await Service.GetResourcesAsync(p.ProjectFilePath, Data)).Value);
         Assert.True((await Service.RestoreResourceVersionAsync(p.ProjectFilePath, version.Id, Data)).IsSuccess);
-        Assert.Equal("original", File.ReadAllText(target)); Assert.Equal(plugin, File.ReadAllBytes(p.PluginPath));
+        Assert.Equal(extension == ".dds" ? PreviewFixtures.ResourceDds("original") : System.Text.Encoding.UTF8.GetBytes("original"), File.ReadAllBytes(target)); Assert.Equal(plugin, File.ReadAllBytes(p.PluginPath));
         Assert.True((await Service.OpenAsync(p.ProjectFilePath, Data)).IsSuccess);
         Assert.Equal(3, (await Service.GetResourceVersionsAsync(p.ProjectFilePath, Data)).Value.Count);
     }
@@ -71,10 +71,10 @@ public partial class WeaponProjectTests
         var (p, relative, target) = await EditableResourceAsync(".dds");
         var nif = Path.Combine(Path.GetDirectoryName(p.PluginPath)!, "meshes", "unknown.nif"); File.WriteAllText(nif, "nif");
         if (!unregistered) Assert.True((await Service.ImportModelAsync(p.ProjectFilePath, nif, Data)).IsSuccess);
-        var source = Path.Combine(_root, "new.dds"); File.WriteAllText(source, "new");
+        var source = await AssetAsync("new.dds", "new");
         Assert.True((await Service.ReplaceResourceAsync(p.ProjectFilePath, relative, source, Data)).IsFailure);
         Assert.True((await Service.DeleteResourceAsync(p.ProjectFilePath, relative, Data)).IsFailure);
-        Assert.Equal("original", File.ReadAllText(target));
+        Assert.Equal(PreviewFixtures.ResourceDds("original"), File.ReadAllBytes(target));
     }
 
     [Theory]
@@ -190,14 +190,14 @@ public partial class WeaponProjectTests
     public async Task ResourceEditing_MovedProject_RestoresRelativeVersion_AndPackingExcludesBackups()
     {
         var (p, relative, _) = await EditableResourceAsync(".dds");
-        var source = Path.Combine(_root, "new.dds"); File.WriteAllText(source, "new");
+        var source = await AssetAsync("new.dds", "new");
         Assert.True((await Service.ReplaceResourceAsync(p.ProjectFilePath, relative, source, Data)).IsSuccess);
         var version = Assert.Single((await Service.GetResourceVersionsAsync(p.ProjectFilePath, Data)).Value);
         var moved = Path.Combine(_root, "moved-resources"); Directory.Move(Path.GetDirectoryName(p.PluginPath)!, moved);
         var projectPath = Path.Combine(moved, WeaponProjectService.ProjectFileName);
         Assert.True((await Service.OpenAsync(projectPath, Data)).IsSuccess);
         Assert.True((await Service.RestoreResourceVersionAsync(projectPath, version.Id, Data)).IsSuccess);
-        Assert.Equal("original", File.ReadAllText(Path.Combine(moved, relative)));
+        Assert.Equal(PreviewFixtures.ResourceDds("original"), File.ReadAllBytes(Path.Combine(moved, relative)));
         Assert.True((await _builder.CloneSwordAsync(new CloneSwordRequest { PluginPath = Path.Combine(moved, "MySword.esp"),
             GameDataPath = Data, TemplateFormId = 0x12EB7, EditorId = "MovedSword", Name = "Moved" })).IsSuccess);
         var files = await Service.GetPackingFilesAsync(projectPath, Data);

@@ -4,8 +4,8 @@ using SkyrimModPacker.Core.Models;
 
 namespace SkyrimModPacker.Infrastructure.Preview;
 
-/// <summary>Read-only, bounded static SSE geometry subset; never converts or writes NIF files.</summary>
-public sealed class SseNifReader
+/// <summary>Read-only, bounded static Skyrim SE/LE geometry subsets; never converts or writes NIF files.</summary>
+public sealed partial class SseNifReader
 {
     public const int MaxFileBytes = 64 * 1024 * 1024;
     private sealed record Block(string Type, byte[] Bytes);
@@ -17,6 +17,9 @@ public sealed class SseNifReader
     private int _vertices;
     private int _triangles;
     private int _visits;
+    private uint _stream;
+    private readonly HashSet<string> _texturePaths = new(StringComparer.OrdinalIgnoreCase);
+    private bool _textureDependenciesComplete = true;
 
     public static ModelPreview Read(byte[] data, CancellationToken token = default) => new SseNifReader().Parse(data, token);
     private ModelPreview Parse(byte[] data, CancellationToken token)
@@ -27,10 +30,11 @@ public sealed class SseNifReader
         var line = new StringBuilder();
         while (line.Length < 128) { var c = r.ReadByte(); if (c == 10) break; line.Append((char)c); }
         if (line.ToString().TrimEnd('\r') != "Gamebryo File Format, Version 20.2.0.7" || r.ReadUInt32() != 0x14020007)
-            throw new NotSupportedException("Preview supports SSE NIF 20.2.0.7 only.");
+            throw new NotSupportedException("Preview supports Skyrim LE/SE NIF 20.2.0.7 only.");
         if (r.ReadByte() != 1 || r.ReadUInt32() != 12) throw new NotSupportedException("Unsupported NIF endianness or user version.");
         var count = Count(r, 4096);
-        if (r.ReadUInt32() != 100) throw new NotSupportedException("Preview supports Bethesda stream 100 (Skyrim SE), not LE/FO4 NIFs.");
+        _stream = r.ReadUInt32();
+        if (_stream is not (83 or 100)) throw new NotSupportedException("Preview supports Bethesda streams 83 (LE) and 100 (SE) only.");
         for (var i = 0; i < 3; i++) Bytes(r, r.ReadByte());
         var typeCount = r.ReadUInt16(); if (typeCount > 4096) throw new InvalidDataException("Too many block types.");
         var types = Enumerable.Range(0, typeCount).Select(_ => Text(r)).ToArray();
@@ -51,7 +55,8 @@ public sealed class SseNifReader
         if (r.BaseStream.Position != r.BaseStream.Length) throw new InvalidDataException("Unexpected data after the NIF footer.");
         foreach (var id in rootIds) Visit(id, Matrix4x4.Identity, 0);
         if (_meshes.Count == 0) throw new NotSupportedException("No visible supported static geometry was found.");
-        return new(_meshes, [], ["Static geometry and diffuse texture only. Skyrim shaders, collision, animation and plugin texture overrides are not reproduced."]);
+        return new(_meshes, [], ["Static geometry and diffuse texture only. Skyrim shaders, collision, animation and plugin texture overrides are not reproduced."])
+        { TexturePaths = _texturePaths.Order(StringComparer.OrdinalIgnoreCase).ToArray(), TextureDependenciesComplete = _textureDependenciesComplete };
     }
 
     private void Visit(int id, Matrix4x4 parent, int depth)
@@ -62,7 +67,8 @@ public sealed class SseNifReader
         try
         {
             var block = _blocks[id];
-            if (block.Type is not ("NiNode" or "BSFadeNode" or "BSTriShape")) throw new NotSupportedException("Unsupported scene block: " + block.Type);
+            var geometry = _stream == 83 ? block.Type is "NiTriShape" or "NiTriStrips" : block.Type == "BSTriShape";
+            if (!geometry && block.Type is not ("NiNode" or "BSFadeNode")) throw new NotSupportedException("Unsupported scene block: " + block.Type);
             using var r = Reader(block.Bytes);
             var name = ObjectNet(r);
             var flags = r.ReadUInt32(); var translation = Vector(r);
@@ -71,8 +77,8 @@ public sealed class SseNifReader
             var rotation = new Matrix4x4(a[0], a[3], a[6], 0, a[1], a[4], a[7], 0, a[2], a[5], a[8], 0, 0, 0, 0, 1);
             var transform = Matrix4x4.CreateScale(scale) * rotation * Matrix4x4.CreateTranslation(translation) * parent;
             Link(r); // Collision is intentionally not displayed.
-            if ((flags & 1) != 0) return;
-            if (block.Type != "BSTriShape")
+            if ((flags & 1) != 0) { _textureDependenciesComplete = false; return; }
+            if (!geometry)
             {
                 var children = Count(r, _blocks.Length); var links = Enumerable.Range(0, children).Select(_ => Link(r)).ToArray();
                 var effects = Count(r, _blocks.Length); for (var i = 0; i < effects; i++) Link(r);
@@ -80,6 +86,7 @@ public sealed class SseNifReader
                 foreach (var child in links.Where(i => i >= 0)) Visit(child, transform, depth + 1);
                 return;
             }
+            if (_stream == 83) { ReadLeGeometry(r, block.Type, name, transform); return; }
             for (var i = 0; i < 4; i++) Number(r); // Bounds are not trusted for framing.
             if (Link(r) != -1) throw new NotSupportedException("Skinned NIF geometry is not supported by this static preview.");
             var shader = Link(r); Link(r); // Alpha property: approximate diffuse preview only.
@@ -122,15 +129,27 @@ public sealed class SseNifReader
 
     private string? Texture(int shader)
     {
-        if (shader < 0) return null;
-        if (_blocks[shader].Type != "BSLightingShaderProperty") return null;
+        if (shader < 0) { _textureDependenciesComplete = false; return null; }
+        if (_blocks[shader].Type == "BSEffectShaderProperty")
+        {
+            using var effect = Reader(_blocks[shader].Bytes);
+            ObjectNet(effect); effect.ReadUInt32(); effect.ReadUInt32();
+            for (var i = 0; i < 4; i++) Number(effect);
+            var source = Text(effect); effect.ReadUInt32();
+            for (var i = 0; i < 10; i++) Number(effect);
+            var greyscale = Text(effect); End(effect);
+            foreach (var path in new[] { source, greyscale }.Where(p => !string.IsNullOrWhiteSpace(p))) _texturePaths.Add(path);
+            return string.IsNullOrWhiteSpace(source) ? null : source;
+        }
+        if (_blocks[shader].Type != "BSLightingShaderProperty") { _textureDependenciesComplete = false; return null; }
         using var r = Reader(_blocks[shader].Bytes);
         r.ReadUInt32(); ObjectNet(r); r.ReadUInt32(); r.ReadUInt32();
         for (var i = 0; i < 4; i++) Number(r);
-        var set = Link(r); if (set < 0) return null;
+        var set = Link(r); if (set < 0) { _textureDependenciesComplete = false; return null; }
         if (_blocks[set].Type != "BSShaderTextureSet") throw new InvalidDataException("Invalid shader texture-set link.");
         using var t = Reader(_blocks[set].Bytes); var count = Count(t, 16);
         var values = Enumerable.Range(0, count).Select(_ => Text(t)).ToArray(); End(t);
+        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v))) _texturePaths.Add(value);
         return values.Length > 0 && !string.IsNullOrWhiteSpace(values[0]) ? values[0] : null;
     }
 

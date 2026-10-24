@@ -13,7 +13,7 @@ using SkyrimModPacker.UI.Services;
 namespace SkyrimModPacker.UI.ViewModels;
 
 /// <summary>Independent wizard session over the existing workspace, plugin and packing services.</summary>
-public sealed partial class SmartModViewModel : ObservableObject, IDisposable
+public sealed partial class SmartModViewModel : ObservableObject, IDisposable, IAsyncDisposable
 {
     private readonly IPluginBuilderService _builder;
     private readonly IWeaponProjectService _projects;
@@ -101,10 +101,23 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable
     private static T Require<T>(Result<T> result) => result.IsSuccess ? result.Value : throw new InvalidOperationException(result.Error);
     private void NotifyStep()
     {
+        OnPropertyChanged(nameof(IdentifierNotice));
+        OnPropertyChanged(nameof(LeveledListPurpose)); OnPropertyChanged(nameof(LeveledListSummary));
+        foreach (var name in new[] { nameof(HasSelectedRecipe), nameof(HasCraftingRecipe), nameof(HasTemperingRecipe), nameof(HasRecipeConflict), nameof(CraftingAction), nameof(TemperingAction), nameof(RecipeWorkbenchText), nameof(RecipeConflictDetails) }) OnPropertyChanged(name);
         foreach (var name in new[] { nameof(StepLinks), nameof(StepHelp), nameof(ProgressText), nameof(NextActionText), nameof(SelectedSummary) }) OnPropertyChanged(name);
         foreach (var name in new[] { nameof(IsOverview), nameof(IsEditing), nameof(IsResources), nameof(IsChecks), nameof(IsFinished), nameof(IsNameStep), nameof(IsAppearanceStep), nameof(IsPropertiesStep), nameof(IsAcquisitionStep), nameof(IsSummaryStep), nameof(InheritanceText), nameof(Summary), nameof(ItemTemplates), nameof(RecipeLinks), nameof(RecipeValidationText) }) OnPropertyChanged(name);
     }
-    private void RefreshTexts() { NotifyStep(); foreach (var item in Items) item.Replace(item.Capture()); }
+    private void RefreshTexts()
+    {
+        NotifyStep(); foreach (var item in Items)
+        {
+            item.Replace(item.Capture());
+            foreach (var ingredient in item.Recipes.SelectMany(r => r.Ingredients)) ingredient.QuantityError =
+                int.TryParse(ingredient.Count, out var count) && count > 0 ? "" : Label("Smart_IngredientQuantityError");
+        }
+        if (SelectedLeveledList != null) _ = RefreshSelectedListAsync();
+        RefreshListChoices();
+    }
     partial void OnNameChanged(string value) => Changed();
     partial void OnEnableEslChanged(bool value) => Changed();
     partial void OnSectionChanged(SmartModSection value) { NotifyStep(); Changed(false); }
@@ -115,9 +128,9 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable
         if (value != null && !_applying) Section = SmartModSection.Weapons;
         NotifyStep(); Changed(false); PreviewChanged?.Invoke();
     }
-    partial void OnSelectedRecipeChanged(SmartModRecipeRow? value) => Changed(false);
+    partial void OnSelectedRecipeChanged(SmartModRecipeRow? value) { Changed(false); NotifyStep(); }
     partial void OnSelectedResourceChanged(ProjectResourceRow? value) => Changed(false);
-    partial void OnSelectedLeveledListChanged(RecordOption? value) => Changed(false);
+    partial void OnSelectedLeveledListChanged(RecordOption? value) { Changed(false); _ = RefreshSelectedListAsync(); }
     partial void OnListLevelChanged(string value) => Changed(false);
     partial void OnListCountChanged(string value) => Changed(false);
     private void Changed(bool invalidateArchive = true)
@@ -143,7 +156,21 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable
     private void AttachRecipe(SmartModItemRow owner, SmartModRecipeRow recipe)
     {
         recipe.PropertyChanged += (_, _) => { owner.SetState(SmartModItemState.InProgress); Changed(); };
-        void AttachIngredient(SmartModIngredientRow ingredient) => ingredient.PropertyChanged += (_, _) => { owner.SetState(SmartModItemState.InProgress); Changed(); };
+        void AttachIngredient(SmartModIngredientRow ingredient)
+        {
+            void Name()
+            {
+                ingredient.DisplayName = Options.Ingredients.FirstOrDefault(o => o.Reference == ingredient.Reference)?.DisplayName ?? ingredient.Reference?.ToString() ?? Label("Smart_SelectMaterial");
+                ingredient.QuantityError = int.TryParse(ingredient.Count, out var count) && count > 0 ? "" : Label("Smart_IngredientQuantityError");
+            }
+            Name();
+            ingredient.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName is nameof(SmartModIngredientRow.DisplayName) or nameof(SmartModIngredientRow.QuantityError)) return;
+                Name();
+                owner.SetState(SmartModItemState.InProgress); Changed();
+            };
+        }
         foreach (var ingredient in recipe.Ingredients) AttachIngredient(ingredient);
         recipe.Ingredients.CollectionChanged += (_, args) =>
         {
@@ -166,5 +193,12 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true; _autosave.Dispose(); _thumbnailCancellation?.Cancel(); _lifetime.Cancel(); _lifetime.Dispose();
         if (_localization != null) _localization.LanguageChanged -= RefreshTexts;
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Dispose(); Task[] pending;
+        lock (_activeListReads) pending = _activeListReads.ToArray();
+        try { await Task.WhenAll(pending).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
     }
 }

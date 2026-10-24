@@ -14,6 +14,7 @@ public sealed partial class SmartModViewModel
         Templates.Clear(); foreach (var template in templates) Templates.Add(template);
         _options = Require(await _builder.GetWeaponOptionsAsync(_gameData, token));
         OnPropertyChanged(nameof(Options)); OnPropertyChanged(nameof(Workbenches));
+        OnPropertyChanged(nameof(FilteredLeveledLists));
         Types.Clear();
         foreach (var kind in templates.Select(t => t.Kind).Distinct())
         {
