@@ -32,9 +32,11 @@
   "effective_fit_scale": 8.704929339914774,
   "fit_translation": [
     5.3882598876953125e-05,
-    -2.2934036254882812,
+    -2.3209288120269775,
     -0.12585324048995972
   ],
+  "source_grip_fraction": 0.11,
+  "template_grip_y": -3.515815496444702,
   "adjustments": {
     "ScaleMultiplier": 1,
     "RotationXDegrees": 0,
@@ -42,17 +44,18 @@
     "RotationZDegrees": 0,
     "OffsetX": 0,
     "OffsetY": 0,
-    "OffsetZ": 0
+    "OffsetZ": 0,
+    "SourceGripFraction": 0.11
   },
   "exported_weapon_bounds": [
     [
       -8.415473937988281,
-      -11.724499702453613,
+      -11.75202465057373,
       -3.284809112548828
     ],
     [
       8.415583610534668,
-      63.15011978149414,
+      63.12259292602539,
       3.2492330074310303
     ]
   ],
@@ -62,20 +65,17 @@
   },
   "blood_geometry": {
     "BloodEffects": {
-      "vertices": 437,
-      "polygons": 431
+      "vertices": 435,
+      "polygons": 430
     },
     "BloodLighting": {
-      "vertices": 437,
-      "polygons": 431
+      "vertices": 435,
+      "polygons": 430
     }
   },
   "blood_start_y": 5.2361249923706055,
-  "scabbard_mode": "keep",
-  "scabbard_geometry": {
-    "vertices": 396,
-    "polygons": 386
-  },
+  "scabbard_mode": "omit",
+  "scabbard_geometry": null,
   "collision_objects": [
     "bhkListShape",
     "bhkBoxShape",
@@ -126,7 +126,7 @@
         [
           -3.93110954284668,
           4.777082920074463,
-          -3.1223198127746583
+          -3.1140717220306398
         ],
         [
           3.931217784881592,
@@ -150,19 +150,19 @@
       ],
       "after": [
         [
-          -3.59503399848938,
+          -3.5771189880371095,
           6.090103626251221,
-          -2.3305956077575685
+          -2.304241771697998
         ],
         [
-          3.595141763687134,
+          3.5772267532348634,
           63.078346252441406,
-          1.9622272205352784
+          1.923806781768799
         ]
       ]
     }
   },
-  "output_nif": "meshes/rapier/rapier.nif",
-  "output_bytes": 194251,
+  "output_nif": "meshes/rapier_swordtest/rapier_swordtest.nif",
+  "output_bytes": 177818,
   "export_operator_result": []
 }

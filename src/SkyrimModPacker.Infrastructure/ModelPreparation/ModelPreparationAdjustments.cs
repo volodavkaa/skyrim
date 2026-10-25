@@ -8,7 +8,8 @@ public sealed record ModelPreparationAdjustments(
     double RotationZDegrees = 0,
     double OffsetX = 0,
     double OffsetY = 0,
-    double OffsetZ = 0)
+    double OffsetZ = 0,
+    double SourceGripFraction = 0.11)
 {
     public void Validate()
     {
@@ -20,5 +21,7 @@ public sealed record ModelPreparationAdjustments(
         foreach (var value in new[] { OffsetX, OffsetY, OffsetZ })
             if (!double.IsFinite(value) || value is < -100 or > 100)
                 throw new ArgumentOutOfRangeException(nameof(OffsetX), "Offset must be between -100 and 100 NIF units.");
+        if (!double.IsFinite(SourceGripFraction) || SourceGripFraction is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(SourceGripFraction), "Grip fraction must be between 0 and 1.");
     }
 }

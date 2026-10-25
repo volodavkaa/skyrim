@@ -13,7 +13,9 @@ public sealed class ModelPreparationComparisonWindow : Window
     private readonly ModelPreviewControl _prepared;
     private readonly ModelPreviewControl _template;
 
-    public ModelPreparationComparisonWindow(string outputFolder, string gameDataFolder)
+    public ModelPreparationComparisonWindow(string outputFolder, string gameDataFolder,
+        string thirdPersonPath, string firstPersonPath,
+        string templateThirdPersonPath, string templateFirstPersonPath)
     {
         Title = "Порівняння підготовленої моделі";
         Width = 1220;
@@ -31,7 +33,7 @@ public sealed class ModelPreparationComparisonWindow : Window
         var root = new DockPanel { Margin = new Thickness(14) };
         var note = new TextBlock
         {
-            Text = "Ліворуч — підготовлена модель, праворуч — ванільний меч. Оберіть першу або третю особу в кожній панелі. Перегляд показує статичну геометрію; кров, піхви та фізику перевіряє звіт повторного імпорту.",
+            Text = "Ліворуч — підготовлена модель, праворуч — ванільний зразок обраного типу. Оберіть першу або третю особу в кожній панелі. Перегляд показує статичну геометрію; звіт перевіряє структуру крові, піхов і колізії. Фізика в грі ще не перевірена.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(4, 0, 4, 12)
         };
@@ -67,10 +69,10 @@ public sealed class ModelPreparationComparisonWindow : Window
         Loaded += async (_, _) =>
         {
             await Task.WhenAll(
-                _prepared.LoadAsync(new ModelPreviewRequest(outputFolder, "meshes/rapier/rapier.nif",
-                    "meshes/rapier/rapier_1stperson.nif", gameDataFolder)),
-                _template.LoadAsync(new ModelPreviewRequest("", "meshes/weapons/iron/longsword.nif",
-                    "meshes/weapons/iron/1stpersonlongsword.nif", gameDataFolder)));
+                _prepared.LoadAsync(new ModelPreviewRequest(outputFolder, thirdPersonPath,
+                    firstPersonPath, gameDataFolder)),
+                _template.LoadAsync(new ModelPreviewRequest("", templateThirdPersonPath,
+                    templateFirstPersonPath, gameDataFolder)));
             SetScale();
         };
         Closed += (_, _) => { _prepared.Dispose(); _template.Dispose(); };

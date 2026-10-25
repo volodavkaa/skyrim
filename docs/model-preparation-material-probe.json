@@ -1,0 +1,72 @@
+{
+  "archive_sha256": "9E31FEA76471DCF66B190254CE92F4802D66955AC05FCAE661A8A0A690752767",
+  "selected_model": "rapier_swordTest/Rapier.fbx",
+  "meshes": [
+    {
+      "name": "RapierLOD1",
+      "uv_layers": 1,
+      "materials": [
+        {
+          "name": "Rapier",
+          "nodes": [
+            {
+              "name": "Principled BSDF",
+              "type": "ShaderNodeBsdfPrincipled"
+            },
+            {
+              "name": "Material Output",
+              "type": "ShaderNodeOutputMaterial"
+            },
+            {
+              "name": "Normal Map",
+              "type": "ShaderNodeNormalMap"
+            }
+          ]
+        }
+      ],
+      "polygon_material_indices": [
+        0
+      ]
+    },
+    {
+      "name": "RapierLOD0",
+      "uv_layers": 1,
+      "materials": [
+        {
+          "name": "Rapier",
+          "nodes": [
+            {
+              "name": "Principled BSDF",
+              "type": "ShaderNodeBsdfPrincipled"
+            },
+            {
+              "name": "Material Output",
+              "type": "ShaderNodeOutputMaterial"
+            },
+            {
+              "name": "Normal Map",
+              "type": "ShaderNodeNormalMap"
+            }
+          ]
+        }
+      ],
+      "polygon_material_indices": [
+        0
+      ]
+    }
+  ],
+  "images": [
+    {
+      "name": "rapier_swordTest/Rapier_BaseColor.png",
+      "bytes": 8439785
+    },
+    {
+      "name": "rapier_swordTest/Rapier_Metallic.png",
+      "bytes": 845669
+    },
+    {
+      "name": "rapier_swordTest/Rapier_Normal.png",
+      "bytes": 8209621
+    }
+  ]
+}

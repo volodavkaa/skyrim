@@ -4,9 +4,13 @@ using SkyrimModPacker.Infrastructure.Preview;
 using SkyrimModPacker.Infrastructure.ModelPreparation;
 using System.Globalization;
 
-if (args.Length is 8 or 15 && args[0] is "--prepare" or "--prepare-draft" or "--prepare-discard")
+if (args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 && args[0] is "--prepare" or "--prepare-draft" or "--prepare-discard")
 {
-    var adjustments = args.Length == 15
+    var weaponType = args.Length is 9 or 12 or 13 ? args[8] : args.Length == 17 ? args[^1] : "sword1h";
+    var textures = args.Length is 12 or 13
+        ? new ModelPreparationTextureOptions(args[9], args[10], args[11], args.Length == 13 && args[12] == "invert")
+        : null;
+    var adjustments = args.Length >= 15
         ? new ModelPreparationAdjustments(
             double.Parse(args[8], CultureInfo.InvariantCulture),
             double.Parse(args[9], CultureInfo.InvariantCulture),
@@ -14,19 +18,22 @@ if (args.Length is 8 or 15 && args[0] is "--prepare" or "--prepare-draft" or "--
             double.Parse(args[11], CultureInfo.InvariantCulture),
             double.Parse(args[12], CultureInfo.InvariantCulture),
             double.Parse(args[13], CultureInfo.InvariantCulture),
-            double.Parse(args[14], CultureInfo.InvariantCulture))
+            double.Parse(args[14], CultureInfo.InvariantCulture),
+            args.Length >= 16 ? double.Parse(args[15], CultureInfo.InvariantCulture) : 0.11)
         : new ModelPreparationAdjustments();
     if (args[0] == "--prepare")
     {
         var folder = await ModelPreparationRunner.RunAsync(args[1], args[2], args[3], args[4],
-            args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments);
+            args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments,
+            weaponType: weaponType, textures: textures);
         Console.WriteLine(folder);
     }
     else
     {
         string staging;
         using (var draft = await ModelPreparationRunner.PrepareDraftAsync(args[1], args[2], args[3],
-                   args[4], args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments))
+                   args[4], args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments,
+                   weaponType: weaponType, textures: textures))
         {
             staging = draft.StagingDirectory;
             if (!File.Exists(Path.Combine(staging, "report.json"))) throw new IOException("Draft report is missing");

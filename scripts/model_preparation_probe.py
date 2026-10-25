@@ -1,4 +1,4 @@
-"""Read-only FBX geometry probe for the model-preparation NIF export gate.
+"""Read-only model geometry probe for the model-preparation NIF export gate.
 
 Run with Blender in background mode:
   blender -b --factory-startup --python scripts/model_preparation_probe.py -- input.zip report.json
@@ -67,10 +67,11 @@ def inspect_archive(path):
         if len(candidates) != 1:
             raise ValueError("Expected exactly one model candidate; found " + str(len(candidates)))
         selected = candidates[0]
-        if PurePosixPath(selected.filename).suffix.casefold() != ".fbx":
-            raise ValueError("This probe currently imports FBX only")
+        suffix = PurePosixPath(selected.filename).suffix.casefold()
+        if suffix not in {".fbx", ".glb"}:
+            raise ValueError("This probe currently imports FBX or self-contained GLB only")
         with tempfile.TemporaryDirectory(prefix="skyrim-model-probe-") as temp:
-            target = os.path.join(temp, "model.fbx")
+            target = os.path.join(temp, "model" + suffix)
             with archive.open(selected) as source, open(target, "xb") as output:
                 copied = 0
                 for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -82,7 +83,10 @@ def inspect_archive(path):
                     raise ValueError("ZIP entry size mismatch")
             bpy.ops.object.select_all(action="SELECT")
             bpy.ops.object.delete(use_global=False)
-            bpy.ops.import_scene.fbx(filepath=target)
+            if suffix == ".fbx":
+                bpy.ops.import_scene.fbx(filepath=target)
+            else:
+                bpy.ops.import_scene.gltf(filepath=target)
         return digest.hexdigest().upper(), selected.filename
 
 
@@ -99,7 +103,7 @@ def nif_export_available():
 def geometry_report():
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     if not meshes:
-        raise ValueError("FBX contains no mesh objects")
+        raise ValueError("Source model contains no mesh objects")
     bounds = [float("inf")] * 3, [float("-inf")] * 3
     result = []
     for obj in meshes:
@@ -123,7 +127,7 @@ def geometry_report():
             "armature_parent": obj.parent is not None and obj.parent.type == "ARMATURE",
         })
     if not sum(item["vertices"] for item in result):
-        raise ValueError("FBX mesh is empty")
+        raise ValueError("Source model mesh is empty")
     minimum, maximum = bounds
     return {
         "meshes": result,

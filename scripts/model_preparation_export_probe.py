@@ -1,4 +1,4 @@
-"""Experimental FBX-to-vanilla-sword export; Skyrim game acceptance remains pending."""
+"""Experimental model-to-vanilla-weapon export; Skyrim game acceptance remains pending."""
 
 import json
 import math
@@ -26,7 +26,7 @@ def select_source_mesh():
     level_zero = [obj for obj in meshes if re.search(r"LOD0$", obj.name, re.IGNORECASE)]
     selected = level_zero if level_zero else meshes
     if len(selected) != 1:
-        raise ValueError("Choose an FBX with one mesh or one LOD0 mesh; found " +
+        raise ValueError("Choose a model with one mesh or one LOD0 mesh; found " +
                          ", ".join(obj.name for obj in selected))
     source = selected[0]
     if not source.data.vertices or not source.data.polygons:
@@ -36,27 +36,38 @@ def select_source_mesh():
     return source
 
 
-def replace_geometry(target, source, fit, material_slots, blade_start_y=None, offset=0.0):
+def replace_geometry(target, source, fit, material_slots, blade_start_y=None, offset=0.0,
+                     blade_end_y=None, blade_side=None):
     geometry = source.data.copy()
     geometry.transform(target.matrix_world.inverted_safe() @ fit @ source.matrix_world)
     if blade_start_y is not None:
+        geometry.transform(target.matrix_world)
         mesh = bmesh.new()
         mesh.from_mesh(geometry)
-        discarded = [face for face in mesh.faces
-                     if any((target.matrix_world @ vertex.co).y < blade_start_y
-                            for vertex in face.verts)]
-        bmesh.ops.delete(mesh, geom=discarded, context="FACES")
+        def clip(plane_co, plane_no, clear_inner=False, clear_outer=False):
+            bmesh.ops.bisect_plane(mesh,
+                                   geom=list(mesh.verts) + list(mesh.edges) + list(mesh.faces),
+                                   dist=1e-5, plane_co=plane_co, plane_no=plane_no,
+                                   clear_inner=clear_inner, clear_outer=clear_outer)
+        clip((0, blade_start_y, 0), (0, 1, 0), clear_inner=True)
+        if blade_end_y is not None:
+            clip((0, blade_end_y, 0), (0, 1, 0), clear_outer=True)
+        if blade_side is not None:
+            clip((blade_side[1], 0, 0), (1, 0, 0),
+                 clear_inner=blade_side[0] == "right",
+                 clear_outer=blade_side[0] == "left")
         unused = [vertex for vertex in mesh.verts if not vertex.link_faces]
         if unused:
             bmesh.ops.delete(mesh, geom=unused, context="VERTS")
         if not mesh.faces:
             mesh.free()
-            raise ValueError("No rapier blade faces remain for blood geometry")
+            raise ValueError("No weapon working-surface faces remain for blood geometry")
         mesh.normal_update()
         for vertex in mesh.verts:
             vertex.co += vertex.normal * offset
         mesh.to_mesh(geometry)
         mesh.free()
+        geometry.transform(target.matrix_world.inverted_safe())
     geometry.materials.clear()
     for material in material_slots:
         if material is not None:
@@ -133,6 +144,29 @@ def fit_scabbard(scabbard, blade, blade_start_y):
     return len(result.vertices), len(result.polygons)
 
 
+def fit_axe_scabbard(scabbard, old_weapon_bounds, new_weapon, blade_side):
+    """Scale the axe's native holster shape around the fitted head and shaft."""
+    old_min, old_max = old_weapon_bounds
+    new_min, new_max = bounds(new_weapon)
+    old_center = [(old_min[i] + old_max[i]) / 2 for i in range(3)]
+    new_center = [(new_min[i] + new_max[i]) / 2 for i in range(3)]
+    scales = [(new_max[i] - new_min[i]) / max(old_max[i] - old_min[i], 1e-6)
+              for i in range(3)]
+    if any(not 0.25 <= value <= 4 for value in scales):
+        raise ValueError("Axe scabbard scale is outside supported range")
+    result = scabbard.data.copy()
+    inverse = scabbard.matrix_world.inverted_safe()
+    for vertex in result.vertices:
+        point = scabbard.matrix_world @ vertex.co
+        fitted = Vector(tuple(new_center[i] + (point[i] - old_center[i]) * scales[i] *
+                              (-1 if i == 0 and blade_side and blade_side[0] == "right" else 1)
+                              for i in range(3)))
+        vertex.co = inverse @ fitted
+    result.update()
+    scabbard.data = result
+    return len(result.vertices), len(result.polygons)
+
+
 def fit_collision_box(collider, weapon):
     """Retain the template's Havok metadata while fitting its box to one sword section."""
     old_min, old_max = bounds(collider)
@@ -158,12 +192,14 @@ def fit_collision_box(collider, weapon):
         raise ValueError("Degenerate fitted collision box: " + collider.name)
     x0, y0, z0 = minimum
     x1, y1, z1 = maximum
-    world_vertices = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
-                      (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
+    # Preserve PyNifly's imported box vertex and face order: its exporter infers
+    # orientation from the first three orthogonal face normals.
+    world_vertices = [(x0, y1, z1), (x0, y0, z1), (x0, y0, z0), (x0, y1, z0),
+                      (x1, y1, z1), (x1, y0, z1), (x1, y0, z0), (x1, y1, z0)]
     inverse = collider.matrix_world.inverted_safe()
     vertices = [inverse @ Vector(point) for point in world_vertices]
     faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
-             (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+             (2, 3, 7, 6), (0, 4, 7, 3), (5, 1, 2, 6)]
     result = bpy.data.meshes.new("Fitted" + collider.name)
     result.from_pydata(vertices, [], faces)
     result.update()
@@ -171,9 +207,122 @@ def fit_collision_box(collider, weapon):
     return {"before": [old_min, old_max], "after": [minimum, maximum]}
 
 
+def fit_collision_convex(collider, weapon):
+    """Fit the template Havok shape to a convex hull of the adjusted weapon."""
+    old_min, old_max = bounds(collider)
+    weapon_min, weapon_max = bounds(weapon)
+    mesh = weapon.data.copy()
+    mesh.transform(collider.matrix_world.inverted_safe() @ weapon.matrix_world)
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    hull = bmesh.ops.convex_hull(bm, input=list(bm.verts), use_existing_faces=False)
+    interior = [element for element in hull["geom_interior"]
+                if isinstance(element, bmesh.types.BMVert) and element.is_valid]
+    if interior:
+        bmesh.ops.delete(bm, geom=interior, context="VERTS")
+    unused = [element for element in hull["geom_unused"]
+              if isinstance(element, bmesh.types.BMVert) and element.is_valid]
+    if unused:
+        bmesh.ops.delete(bm, geom=unused, context="VERTS")
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    collider.data = mesh
+    return {"before": [old_min, old_max], "after": [weapon_min, weapon_max]}
+
+
+def find_axe_blade_side(weapon, head_start_y):
+    points = [weapon.matrix_world @ vertex.co for vertex in weapon.data.vertices]
+    lower = [point.x for point in points if point.y < head_start_y]
+    upper = [point.x for point in points if point.y >= head_start_y]
+    if not lower or not upper:
+        raise ValueError("Axe needs distinct shaft and head regions")
+    shaft_x = sorted(lower)[len(lower) // 2]
+    left = shaft_x - min(upper)
+    right = max(upper) - shaft_x
+    if min(left, right) <= 0 or max(left, right) < 1.2 * min(left, right):
+        raise ValueError("Axe blade side is ambiguous; adjust orientation or choose another model")
+    if left > right:
+        return ("left", shaft_x - 0.16 * left)
+    return ("right", shaft_x + 0.16 * right)
+
+
+def detect_head_band(weapon):
+    """Locate the broad striking region from horizontal sections of the fitted mesh."""
+    mesh = weapon.data
+    world = weapon.matrix_world
+    mesh.calc_loop_triangles()
+    triangles = [[world @ mesh.vertices[index].co for index in tri.vertices]
+                 for tri in mesh.loop_triangles]
+    bottom, top = bounds(weapon)[0][1], bounds(weapon)[1][1]
+    span = top - bottom
+    sections = []
+    steps = 48
+    for level in range(1, steps):
+        y = bottom + span * level / steps
+        section = []
+        for tri in triangles:
+            for a, b in ((0, 1), (1, 2), (2, 0)):
+                start, end = tri[a], tri[b]
+                if min(start.y, end.y) <= y <= max(start.y, end.y) and abs(end.y - start.y) > 1e-8:
+                    section.append(start.lerp(end, (y - start.y) / (end.y - start.y)))
+        if len(section) >= 2:
+            width = max(max(point.x for point in section) - min(point.x for point in section),
+                        max(point.z for point in section) - min(point.z for point in section))
+            sections.append((level, y, width))
+    shaft_widths = sorted(width for _, y, width in sections if y < bottom + 0.4 * span)
+    if len(shaft_widths) < 3 or shaft_widths[len(shaft_widths) // 2] <= 0:
+        raise ValueError("Cannot measure weapon shaft for blood placement")
+    shaft_width = shaft_widths[len(shaft_widths) // 2]
+    candidates = [(level, y, width) for level, y, width in sections
+                  if y >= bottom + 0.35 * span and width >= 2 * shaft_width]
+    runs = []
+    for entry in candidates:
+        if not runs or entry[0] > runs[-1][-1][0] + 1:
+            runs.append([])
+        runs[-1].append(entry)
+    runs = [run for run in runs if len(run) >= 2]
+    if not runs:
+        raise ValueError("Selected weapon type needs a wider striking head than its shaft")
+    run = max(runs, key=lambda group: sum(item[2] for item in group))
+    margin = span / steps
+    return (max(bottom, run[0][1] - margin), min(top, run[-1][1] + margin),
+            max(item[2] for item in run) / shaft_width)
+
+
+def apply_weapon_textures(weapon, config):
+    diffuse = config.get("diffuse_texture")
+    normal = config.get("normal_texture")
+    if not diffuse and not normal:
+        return None
+    if not diffuse or not normal or not config.get("texture_root"):
+        raise ValueError("Diffuse and normal textures must be supplied together")
+    material = weapon.active_material
+    if material is None or not material.use_nodes:
+        raise ValueError("Weapon template has no usable shader material")
+    result = {}
+    for slot, relative, node_name in (("Diffuse", diffuse, "Diffuse_Texture"),
+                                      ("Normal", normal, "Normal_Texture")):
+        absolute = os.path.join(config["texture_root"], *relative.split("/"))
+        if not os.path.isfile(absolute):
+            raise FileNotFoundError(absolute)
+        material["BSShaderTextureSet_" + slot] = relative.replace("/", "\\")
+        node = material.node_tree.nodes.get(node_name)
+        if node is None or node.type != "TEX_IMAGE":
+            raise ValueError("Template lacks texture node: " + node_name)
+        node.image = bpy.data.images.load(absolute, check_existing=True)
+        if slot == "Normal":
+            node.image.colorspace_settings.name = "Non-Color"
+        result[slot] = relative
+    return result
+
+
 def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mode="keep",
-            adjustments=None):
+            adjustments=None, template_config=None):
     adjustments = adjustments or {}
+    template_config = template_config or {"weapon_mesh": "IronLongSword01:0",
+                                          "blood_effect": "BloodEffects",
+                                          "blood_lighting": "BloodLighting"}
     if scabbard_mode not in {"keep", "omit"}:
         raise ValueError("Scabbard mode must be 'keep' or 'omit'")
     sys.path.insert(0, addon_parent)
@@ -186,7 +335,7 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
     template_objects = [obj for obj in bpy.context.scene.objects if obj not in source_objects]
     collision_names = [obj.name for obj in template_objects if obj.name.startswith("bhk")]
     weapon = next((obj for obj in template_objects
-                   if obj.type == "MESH" and obj.name.startswith("IronLongSword")), None)
+                   if obj.type == "MESH" and obj.name == template_config["weapon_mesh"]), None)
     if weapon is None:
         raise ValueError("Vanilla sword mesh was not found")
 
@@ -206,6 +355,19 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
         target_min[1] - rotated_min[1],
         (target_min[2] + target_max[2] - rotated_min[2] - rotated_max[2]) / 2,
     ))
+    grip_fraction = float(adjustments.get("SourceGripFraction", 0.11))
+    if not math.isfinite(grip_fraction) or not 0 <= grip_fraction <= 1:
+        raise ValueError("Grip fraction must be between 0 and 1")
+    handle_collision = min((obj for obj in template_objects
+                            if obj.type == "MESH" and obj.name.startswith("bhkBoxShape")),
+                           key=lambda obj: bounds(obj)[0][1], default=None)
+    if handle_collision is None or not template_config.get("grip_from_collision", True):
+        template_grip_y = target_min[1] + grip_fraction * (target_max[1] - target_min[1])
+    else:
+        handle_min, handle_max = bounds(handle_collision)
+        template_grip_y = (handle_min[1] + handle_max[1]) / 2
+    source_grip_y = rotated_min[1] + grip_fraction * (rotated_max[1] - rotated_min[1])
+    offset.y = template_grip_y - source_grip_y
     fit = Matrix.Translation(offset) @ scaled
     multiplier = float(adjustments.get("ScaleMultiplier", 1))
     rotations = [math.radians(float(adjustments.get("Rotation" + axis + "Degrees", 0)))
@@ -225,26 +387,48 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
     fit = adjustment_fit @ fit
     weapon_counts = replace_geometry(weapon, source, fit,
                                      [slot.material for slot in weapon.material_slots])
+    texture_paths = apply_weapon_textures(weapon, template_config)
     collision_bounds = {}
     for collider in template_objects:
         if collider.type == "MESH" and collider.name.startswith("bhkBoxShape"):
             collision_bounds[collider.name] = fit_collision_box(collider, weapon)
-    blood_start = min(bounds(obj)[0][1] for obj in template_objects
-                      if obj.name in {"BloodEffects", "BloodLighting"})
+        elif collider.type == "MESH" and collider.name == "bhkConvexVerticesShape":
+            collision_bounds[collider.name] = fit_collision_convex(collider, weapon)
+    blood_names = (template_config["blood_effect"], template_config["blood_lighting"])
+    template_blood_start = min(bounds(obj)[0][1] for obj in template_objects
+                               if obj.name in blood_names)
+    blood_mode = template_config.get("blood_mode", "blade")
+    head_band = (detect_head_band(weapon)
+                 if blood_mode in {"head", "bounded_head", "side_head"} else None)
+    head_width_ratio = head_band[2] if head_band else None
+    blood_cut_start = head_band[0] if head_band else template_blood_start
+    blood_cut_end = head_band[1] if blood_mode == "bounded_head" else None
+    blade_side = (find_axe_blade_side(weapon, blood_cut_start)
+                  if blood_mode == "side_head" else None)
     blood_counts = {}
-    for name, offset_distance in (("BloodEffects", 0.025), ("BloodLighting", 0.045)):
+    for name, offset_distance in zip(blood_names, (0.025, 0.045)):
         effect = next((obj for obj in template_objects if obj.name == name), None)
         if effect is None or effect.type != "MESH":
             raise ValueError("Template lacks required blood effect: " + name)
         blood_counts[name] = replace_geometry(effect, source, fit,
                                               [slot.material for slot in effect.material_slots],
-                                              blade_start_y=blood_start,
+                                              blade_start_y=blood_cut_start,
+                                              blade_end_y=blood_cut_end,
+                                              blade_side=blade_side,
                                               offset=offset_distance)
+    blood_start = min(bounds(obj)[0][1] for obj in template_objects
+                      if obj.name in blood_names)
 
     scabbard = next((obj for obj in template_objects if obj.name == "Scb"), None)
     if scabbard_mode == "keep" and (scabbard is None or scabbard.type != "MESH"):
         raise ValueError("Selected template has no scabbard to keep")
-    scabbard_counts = fit_scabbard(scabbard, weapon, blood_start) if scabbard_mode == "keep" else None
+    scabbard_counts = None
+    if scabbard_mode == "keep":
+        if template_config.get("scabbard_fit") == "template_scaled":
+            scabbard_counts = fit_axe_scabbard(scabbard, (target_min, target_max), weapon, blade_side)
+        else:
+            scabbard_counts = fit_scabbard(scabbard, weapon, blood_start)
+    scabbard_bounds = bounds(scabbard) if scabbard_counts else None
     if scabbard_mode == "omit" and scabbard is not None:
         bpy.data.objects.remove(scabbard, do_unlink=True)
     for obj in source_objects:
@@ -266,16 +450,23 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
             "fit_scale": scale, "fit_rotation_x_degrees": -90,
             "effective_fit_scale": scale * multiplier,
             "fit_translation": list(offset),
+            "source_grip_fraction": grip_fraction,
+            "template_grip_y": template_grip_y,
             "adjustments": adjustments,
             "exported_weapon_bounds": [actual_min, actual_max],
             "weapon_geometry": {"vertices": weapon_counts[0], "polygons": weapon_counts[1]},
+            "weapon_textures": texture_paths,
             "blood_geometry": {name: {"vertices": value[0], "polygons": value[1]}
                                for name, value in blood_counts.items()},
             "blood_start_y": blood_start,
+            "detected_head_band": head_band,
+            "blood_side": blade_side,
+            "head_to_shaft_width_ratio": head_width_ratio,
             "scabbard_mode": scabbard_mode,
             "scabbard_geometry": ({"vertices": scabbard_counts[0],
                                     "polygons": scabbard_counts[1]}
                                    if scabbard_counts else None),
+            "scabbard_bounds": scabbard_bounds,
             "collision_objects": collision_names,
             "collision_bounds": collision_bounds,
             "output_nif": output_path,
@@ -285,14 +476,21 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
 
 def main():
     args = sys.argv[sys.argv.index("--") + 1:]
-    if len(args) not in (6, 7):
-        raise ValueError("Expected addon, archive, template, output, report, scabbard mode, [adjustments JSON]")
+    if len(args) not in (6, 7, 8):
+        raise ValueError("Expected addon, archive, template, output, report, scabbard mode, [adjustments JSON], [template config JSON]")
     addon, archive, template, output, report, scabbard_mode = args[:6]
     adjustments = {}
     if len(args) == 7:
         with open(args[6], "r", encoding="utf-8") as stream:
             adjustments = json.load(stream)
-    result = prepare(addon, archive, template, output, scabbard_mode, adjustments)
+    elif len(args) == 8:
+        with open(args[6], "r", encoding="utf-8") as stream:
+            adjustments = json.load(stream)
+    config = None
+    if len(args) == 8:
+        with open(args[7], "r", encoding="utf-8") as stream:
+            config = json.load(stream)
+    result = prepare(addon, archive, template, output, scabbard_mode, adjustments, config)
     with open(report, "w", encoding="utf-8") as stream:
         json.dump(result, stream, indent=2, ensure_ascii=False)
     print("MODEL_PREPARATION_EXPORT_PROBE_OK " + output)

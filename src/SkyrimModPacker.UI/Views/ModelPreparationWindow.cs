@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Globalization;
+using System.IO.Compression;
 using Microsoft.Win32;
 using SkyrimModPacker.Infrastructure.ModelPreparation;
 
@@ -15,6 +16,12 @@ public sealed class ModelPreparationWindow : Window
     private readonly TextBox _blender = new();
     private readonly TextBox _addon = new();
     private readonly TextBox _output = new();
+    private readonly ComboBox _weaponType = new() { DisplayMemberPath = "DisplayName" };
+    private readonly CheckBox _useTextures = new() { Content = "Створити DDS та підключити текстури зброї" };
+    private readonly TextBox _diffuseEntry = new();
+    private readonly TextBox _normalEntry = new();
+    private readonly TextBox _texconv = new();
+    private readonly CheckBox _invertNormalY = new() { Content = "Інвертувати зелений канал normal map (якщо джерело OpenGL)" };
     private readonly CheckBox _scabbard = new() { Content = "Створити піхви за формою клинка" };
     private readonly TextBox _scale = new() { Text = "1" };
     private readonly TextBox _rotationX = new() { Text = "0" };
@@ -23,6 +30,7 @@ public sealed class ModelPreparationWindow : Window
     private readonly TextBox _offsetX = new() { Text = "0" };
     private readonly TextBox _offsetY = new() { Text = "0" };
     private readonly TextBox _offsetZ = new() { Text = "0" };
+    private readonly TextBox _gripFraction = new() { Text = "0.11" };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Button _run = new() { Content = "Підготувати два NIF", MinWidth = 170 };
     private readonly Button _cancel = new() { Content = "Скасувати", IsEnabled = false, Margin = new Thickness(8, 0, 0, 0) };
@@ -32,6 +40,9 @@ public sealed class ModelPreparationWindow : Window
         Margin = new Thickness(8, 0, 0, 0) };
     private ModelPreparationDraft? _draft;
     private string? _resultFolder;
+    private string? _thirdPersonPath;
+    private string? _firstPersonPath;
+    private WeaponTemplateDefinition? _preparedDefinition;
     private CancellationTokenSource? _cancellation;
     private bool _closed;
 
@@ -43,23 +54,70 @@ public sealed class ModelPreparationWindow : Window
         MinWidth = 640;
         MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Background = new SolidColorBrush(Color.FromRgb(29, 34, 43));
+        Foreground = Brushes.White;
+        FontSize = 14;
+        var textStyle = new Style(typeof(TextBox));
+        textStyle.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(44, 53, 66))));
+        textStyle.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+        textStyle.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(101, 118, 138))));
+        textStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
+        Resources.Add(typeof(TextBox), textStyle);
+        var buttonStyle = new Style(typeof(Button));
+        buttonStyle.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(58, 69, 83))));
+        buttonStyle.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+        buttonStyle.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(113, 131, 152))));
+        buttonStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
+        Resources.Add(typeof(Button), buttonStyle);
+        var labelStyle = new Style(typeof(TextBlock));
+        labelStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Brushes.White));
+        Resources.Add(typeof(TextBlock), labelStyle);
+        var checkStyle = new Style(typeof(CheckBox));
+        checkStyle.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+        Resources.Add(typeof(CheckBox), checkStyle);
         _blender.Text = @"C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe";
         _gameData.Text = @"E:\SteamLibrary\steamapps\common\Skyrim Special Edition\Data";
         var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(new TextBlock { Text = "Підготовка статичного одноручного меча з ZIP/FBX за шаблоном Skyrim SE/AE.",
+        foreach (var weapon in WeaponTemplateCatalog.All.Where(item => item.ExportEnabled))
+            _weaponType.Items.Add(weapon);
+        _weaponType.SelectedIndex = 0;
+        _weaponType.SelectionChanged += (_, _) =>
+        {
+            var supportsScabbard = (_weaponType.SelectedItem as WeaponTemplateDefinition)?.SupportsScabbard == true;
+            _scabbard.IsEnabled = supportsScabbard;
+            if (!supportsScabbard) _scabbard.IsChecked = false;
+        };
+        panel.Children.Add(new TextBlock { Text = "Тип зброї", Margin = new Thickness(0, 0, 0, 4) });
+        _weaponType.Margin = new Thickness(0, 0, 0, 12);
+        panel.Children.Add(_weaponType);
+        panel.Children.Add(new TextBlock { Text = "Підготовка статичної зброї з ZIP/FBX або ZIP/GLB за шаблоном Skyrim SE/AE.",
             TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) });
-        panel.Children.Add(new TextBlock { Text = "Ефекти BloodEffects і BloodLighting підганяються до геометрії клинка. Піхви можна додати або прибрати. Вигляд і колізія в грі ще не перевірені; текстури не перетворюються.",
+        panel.Children.Add(new TextBlock { Text = "Шари крові підганяються до робочої частини моделі. Піхви можна додати або прибрати для підтримуваного типу. Вигляд і колізія в грі ще не перевірені; для текстур потрібен texconv.exe.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DarkOrange, Margin = new Thickness(0, 0, 0, 15) });
-        AddPath(panel, "ZIP з моделлю FBX", _archive, false, "ZIP (*.zip)|*.zip");
+        AddPath(panel, "ZIP з моделлю FBX або GLB", _archive, false, "ZIP (*.zip)|*.zip");
         AddPath(panel, "Папка Data встановленого Skyrim SE/AE", _gameData, true);
         AddPath(panel, "Blender executable", _blender, false, "Executable (*.exe)|*.exe");
         AddPath(panel, "Папка, що містить io_scene_nifly", _addon, true);
         AddPath(panel, "Вихідна папка поза грою", _output, true);
+        _useTextures.Margin = new Thickness(0, 8, 0, 6);
+        panel.Children.Add(_useTextures);
+        panel.Children.Add(new TextBlock { Text = "Точні шляхи зображень усередині ZIP. Metallic зберігається лише у звіті.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(new TextBlock { Text = "Diffuse / BaseColor у ZIP" });
+        panel.Children.Add(_diffuseEntry);
+        panel.Children.Add(new TextBlock { Text = "Normal у ZIP", Margin = new Thickness(0, 6, 0, 0) });
+        panel.Children.Add(_normalEntry);
+        AddPath(panel, "texconv.exe", _texconv, false, "Executable (*.exe)|*.exe");
+        var suggestTextures = new Button { Content = "Знайти BaseColor і Normal у ZIP",
+            Margin = new Thickness(0, 0, 0, 6) };
+        suggestTextures.Click += (_, _) => SuggestTextures();
+        panel.Children.Add(suggestTextures);
+        panel.Children.Add(_invertNormalY);
         _scabbard.Margin = new Thickness(0, 7, 0, 12);
         panel.Children.Add(_scabbard);
         panel.Children.Add(new TextBlock { Text = "Коригування після автоматичної підгонки",
             FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 6) });
-        panel.Children.Add(new TextBlock { Text = "Поворот у градусах, зсув у NIF-одиницях. Зміни застосовуються також до крові, піхов і колізії.",
+        panel.Children.Add(new TextBlock { Text = "Точка хвата: частка довжини джерела від основи до вістря (0–1). Поворот у градусах, зсув у NIF-одиницях. Зміни застосовуються також до крові, піхов і колізії.",
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
         var numbers = new WrapPanel();
         AddNumber(numbers, "Масштаб ×", _scale);
@@ -69,11 +127,13 @@ public sealed class ModelPreparationWindow : Window
         AddNumber(numbers, "Зсув X", _offsetX);
         AddNumber(numbers, "Зсув Y", _offsetY);
         AddNumber(numbers, "Зсув Z", _offsetZ);
+        AddNumber(numbers, "Точка хвата", _gripFraction);
         panel.Children.Add(numbers);
         var reset = new Button { Content = "Скинути коригування", Margin = new Thickness(0, 3, 0, 12) };
         reset.Click += (_, _) =>
         {
             _scale.Text = "1";
+            _gripFraction.Text = "0.11";
             foreach (var field in new[] { _rotationX, _rotationY, _rotationZ, _offsetX, _offsetY, _offsetZ })
                 field.Text = "0";
         };
@@ -84,8 +144,11 @@ public sealed class ModelPreparationWindow : Window
         _compare.Click += (_, _) =>
         {
             var folder = _draft?.StagingDirectory ?? _resultFolder;
-            if (folder != null)
-                new ModelPreparationComparisonWindow(folder, _gameData.Text.Trim())
+            if (folder != null && _thirdPersonPath != null && _firstPersonPath != null)
+                new ModelPreparationComparisonWindow(folder, _gameData.Text.Trim(),
+                    _thirdPersonPath, _firstPersonPath,
+                    _preparedDefinition!.ThirdPerson.Source,
+                    _preparedDefinition.FirstPerson.Source)
                     { Owner = this }.ShowDialog();
         };
         _save.Click += (_, _) =>
@@ -130,7 +193,33 @@ public sealed class ModelPreparationWindow : Window
             throw new FormatException("Введіть числові значення масштабу, повороту та зсуву.");
         }
         return new ModelPreparationAdjustments(Number(_scale), Number(_rotationX), Number(_rotationY),
-            Number(_rotationZ), Number(_offsetX), Number(_offsetY), Number(_offsetZ));
+            Number(_rotationZ), Number(_offsetX), Number(_offsetY), Number(_offsetZ), Number(_gripFraction));
+    }
+
+    private void SuggestTextures()
+    {
+        try
+        {
+            using var archive = ZipFile.OpenRead(_archive.Text.Trim());
+            var images = archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name) &&
+                new[] { ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds" }
+                    .Contains(System.IO.Path.GetExtension(entry.Name).ToLowerInvariant())).ToArray();
+            static string? Unique(ZipArchiveEntry[] entries, string[] markers)
+            {
+                var found = entries.Where(entry => markers.Any(marker =>
+                        System.IO.Path.GetFileNameWithoutExtension(entry.Name)
+                            .Contains(marker, StringComparison.OrdinalIgnoreCase)))
+                    .Select(entry => entry.FullName).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(2).ToArray();
+                return found.Length == 1 ? found[0] : null;
+            }
+            _diffuseEntry.Text = Unique(images, ["basecolor", "albedo", "diffuse"]) ?? "";
+            _normalEntry.Text = Unique(images, ["normal", "_n"]) ?? "";
+            _status.Text = string.IsNullOrWhiteSpace(_diffuseEntry.Text) || string.IsNullOrWhiteSpace(_normalEntry.Text)
+                ? "Не вдалося однозначно знайти BaseColor і Normal. Вкажіть точні шляхи файлів у ZIP."
+                : "Знайдено BaseColor і Normal. Перевірте вибір перед підготовкою.";
+        }
+        catch (Exception error) { _status.Text = "Помилка читання ZIP: " + error.Message; }
     }
 
     private void AddPath(Panel panel, string label, TextBox textBox, bool folder, string? filter = null)
@@ -166,6 +255,9 @@ public sealed class ModelPreparationWindow : Window
         _draft = null;
         _cancellation = new CancellationTokenSource();
         _resultFolder = null;
+        _thirdPersonPath = null;
+        _firstPersonPath = null;
+        _preparedDefinition = null;
         _compare.IsEnabled = false;
         _save.IsEnabled = false;
         _run.IsEnabled = false;
@@ -180,11 +272,19 @@ public sealed class ModelPreparationWindow : Window
             var output = _output.Text.Trim();
             var scabbard = _scabbard.IsChecked == true;
             var adjustments = ReadAdjustments();
+            var weaponType = ((WeaponTemplateDefinition)_weaponType.SelectedItem).Id;
+            var textures = _useTextures.IsChecked == true
+                ? new ModelPreparationTextureOptions(_diffuseEntry.Text.Trim(), _normalEntry.Text.Trim(),
+                    _texconv.Text.Trim(), _invertNormalY.IsChecked == true)
+                : null;
             var draft = await Task.Run(() => ModelPreparationRunner.PrepareDraftAsync(
                 archive, data, blender, addon, output, scabbard, _cancellation.Token,
-                adjustments: adjustments));
+                adjustments: adjustments, weaponType: weaponType, textures: textures));
             if (_closed) { draft.Dispose(); return; }
             _draft = draft;
+            _preparedDefinition = WeaponTemplateCatalog.GetExportable(weaponType);
+            _thirdPersonPath = draft.ThirdPersonPath;
+            _firstPersonPath = draft.FirstPersonPath;
             _compare.IsEnabled = true;
             _save.IsEnabled = true;
             _status.Text = "Обидва NIF пройшли структурну перевірку. Порівняйте їх із шаблоном, потім натисніть «Зберегти комплект». Ігрова перевірка ще не проведена.";

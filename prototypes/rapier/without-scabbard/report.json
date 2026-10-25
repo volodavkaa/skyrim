@@ -1,6 +1,7 @@
 {
   "status": "experimental; Skyrim game test pending",
   "source": "C:\\Users\\volod\\OneDrive\\Desktop\\rapier_swordTest.zip",
+  "model": "rapier_swordtest",
   "adjustments": {
     "ScaleMultiplier": 1,
     "RotationXDegrees": 0,
@@ -8,7 +9,8 @@
     "RotationZDegrees": 0,
     "OffsetX": 0,
     "OffsetY": 0,
-    "OffsetZ": 0
+    "OffsetZ": 0,
+    "SourceGripFraction": 0.11
   },
   "scabbard": "omitted",
   "blood": "BloodEffects and BloodLighting fitted to blade geometry",
@@ -51,9 +53,11 @@
       "effective_fit_scale": 8.704929339914774,
       "fit_translation": [
         5.3882598876953125e-05,
-        -2.2934036254882812,
+        -2.3209288120269775,
         -0.12585324048995972
       ],
+      "source_grip_fraction": 0.11,
+      "template_grip_y": -3.515815496444702,
       "adjustments": {
         "ScaleMultiplier": 1,
         "RotationXDegrees": 0,
@@ -61,17 +65,18 @@
         "RotationZDegrees": 0,
         "OffsetX": 0,
         "OffsetY": 0,
-        "OffsetZ": 0
+        "OffsetZ": 0,
+        "SourceGripFraction": 0.11
       },
       "exported_weapon_bounds": [
         [
           -8.415473937988281,
-          -11.724499702453613,
+          -11.75202465057373,
           -3.284809112548828
         ],
         [
           8.415583610534668,
-          63.15011978149414,
+          63.12259292602539,
           3.2492330074310303
         ]
       ],
@@ -81,12 +86,12 @@
       },
       "blood_geometry": {
         "BloodEffects": {
-          "vertices": 437,
-          "polygons": 431
+          "vertices": 435,
+          "polygons": 430
         },
         "BloodLighting": {
-          "vertices": 437,
-          "polygons": 431
+          "vertices": 435,
+          "polygons": 430
         }
       },
       "blood_start_y": 5.2361249923706055,
@@ -142,7 +147,7 @@
             [
               -3.93110954284668,
               4.777082920074463,
-              -3.1223198127746583
+              -3.1140717220306398
             ],
             [
               3.931217784881592,
@@ -166,20 +171,20 @@
           ],
           "after": [
             [
-              -3.59503399848938,
+              -3.5771189880371095,
               6.090103626251221,
-              -2.3305956077575685
+              -2.304241771697998
             ],
             [
-              3.595141763687134,
+              3.5772267532348634,
               63.078346252441406,
-              1.9622272205352784
+              1.923806781768799
             ]
           ]
         }
       },
-      "output_nif": "meshes/rapier/rapier.nif",
-      "output_bytes": 178066,
+      "output_nif": "meshes/rapier_swordtest/rapier_swordtest.nif",
+      "output_bytes": 177818,
       "export_operator_result": []
     },
     {
@@ -216,9 +221,11 @@
       "effective_fit_scale": 8.704932666142037,
       "fit_translation": [
         5.412101745605469e-05,
-        -2.292933464050293,
+        -2.7018215656280518,
         -0.1079106330871582
       ],
+      "source_grip_fraction": 0.11,
+      "template_grip_y": -3.8967090845108032,
       "adjustments": {
         "ScaleMultiplier": 1,
         "RotationXDegrees": 0,
@@ -226,17 +233,18 @@
         "RotationZDegrees": 0,
         "OffsetX": 0,
         "OffsetY": 0,
-        "OffsetZ": 0
+        "OffsetZ": 0,
+        "SourceGripFraction": 0.11
       },
       "exported_weapon_bounds": [
         [
-          -8.41547679901123,
-          -11.72403335571289,
+          -8.415477752685547,
+          -12.13292121887207,
           -3.266867160797119
         ],
         [
           8.415586471557617,
-          63.15061569213867,
+          62.741729736328125,
           3.267176866531372
         ]
       ],
@@ -246,12 +254,12 @@
       },
       "blood_geometry": {
         "BloodEffects": {
-          "vertices": 437,
-          "polygons": 431
+          "vertices": 375,
+          "polygons": 366
         },
         "BloodLighting": {
-          "vertices": 437,
-          "polygons": 431
+          "vertices": 375,
+          "polygons": 366
         }
       },
       "blood_start_y": 5.236044883728027,
@@ -279,9 +287,9 @@
           ],
           "after": [
             [
-              -8.53547679901123,
+              -8.535477752685546,
               -10.901150703430176,
-              -3.380887145996094
+              -3.3868671607971192
             ],
             [
               8.535586471557616,
@@ -307,7 +315,7 @@
             [
               -3.931110496520996,
               4.396190643310547,
-              -3.2186571311950685
+              -3.0961309623718263
             ],
             [
               3.9312192153930665,
@@ -331,25 +339,25 @@
           ],
           "after": [
             [
-              -3.842886562347412,
+              -3.57712947845459,
               5.709198474884033,
-              -2.658856029510498
+              -2.2863146018981935
             ],
             [
-              3.8429945659637452,
+              3.5772381973266603,
               62.69744110107422,
-              2.5125185203552247
+              1.9417706680297853
             ]
           ]
         }
       },
-      "output_nif": "meshes/rapier/rapier_1stperson.nif",
-      "output_bytes": 178062,
+      "output_nif": "meshes/rapier_swordtest/rapier_swordtest_1stperson.nif",
+      "output_bytes": 169662,
       "export_operator_result": []
     }
   ],
   "sha256": {
-    "meshes/rapier/rapier.nif": "17D91C883156CE0242D9BD3B2C7327C69BD04254AE2D4FF7EA8AD40E5BE611EB",
-    "meshes/rapier/rapier_1stperson.nif": "4DDD4D9F930649228D9C0C95204CD0AEC4C062A3A6ED8567B6EEDBABC6D15027"
+    "meshes/rapier_swordtest/rapier_swordtest.nif": "97CBED8EBD08AFC8DC48148D5ED5D8449FC2C05B5F569683B783798458F3D266",
+    "meshes/rapier_swordtest/rapier_swordtest_1stperson.nif": "298A4FB9E8BC5D28F6F1F3346240CF875BF50EE5D40550BC12E902A98ABFF717"
   }
 }

@@ -29,31 +29,34 @@
   ],
   "fit_scale": 8.704929339914774,
   "fit_rotation_x_degrees": -90,
-  "effective_fit_scale": 8.704929339914774,
+  "effective_fit_scale": 9.140175806910513,
   "fit_translation": [
     5.3882598876953125e-05,
-    -2.2934036254882812,
+    -5.315914154052734,
     -0.12585324048995972
   ],
+  "source_grip_fraction": 0.15,
+  "template_grip_y": -3.515815496444702,
   "adjustments": {
-    "ScaleMultiplier": 1,
+    "ScaleMultiplier": 1.05,
     "RotationXDegrees": 0,
     "RotationYDegrees": 0,
-    "RotationZDegrees": 0,
-    "OffsetX": 0,
+    "RotationZDegrees": 3,
+    "OffsetX": 0.5,
     "OffsetY": 0,
-    "OffsetZ": 0
+    "OffsetZ": 0.1,
+    "SourceGripFraction": 0.15
   },
   "exported_weapon_bounds": [
     [
-      -8.415473937988281,
-      -11.724499702453613,
-      -3.284809112548828
+      -8.313294410705566,
+      -15.489272117614746,
+      -3.3481600284576416
     ],
     [
-      8.415583610534668,
-      63.15011978149414,
-      3.2492330074310303
+      9.3802490234375,
+      63.047584533691406,
+      3.5125837326049805
     ]
   ],
   "weapon_geometry": {
@@ -62,17 +65,20 @@
   },
   "blood_geometry": {
     "BloodEffects": {
-      "vertices": 437,
-      "polygons": 431
+      "vertices": 144,
+      "polygons": 146
     },
     "BloodLighting": {
-      "vertices": 437,
-      "polygons": 431
+      "vertices": 144,
+      "polygons": 146
     }
   },
   "blood_start_y": 5.2361249923706055,
-  "scabbard_mode": "omit",
-  "scabbard_geometry": null,
+  "scabbard_mode": "keep",
+  "scabbard_geometry": {
+    "vertices": 396,
+    "polygons": 386
+  },
   "collision_objects": [
     "bhkListShape",
     "bhkBoxShape",
@@ -95,14 +101,14 @@
       ],
       "after": [
         [
-          -8.53547393798828,
+          -8.433294410705566,
           -10.520256996154785,
-          -3.4048091125488282
+          -3.4681600284576417
         ],
         [
-          8.535583610534667,
+          9.5002490234375,
           3.488626003265381,
-          2.0581920099258424
+          3.6325837326049806
         ]
       ]
     },
@@ -121,14 +127,14 @@
       ],
       "after": [
         [
-          -3.93110954284668,
+          -1.2720861387252809,
           4.777082920074463,
-          -3.1223198127746583
+          -0.47863298177719116
         ],
         [
-          3.931217784881592,
+          1.648472900390625,
           6.306152820587158,
-          3.3692330074310304
+          0.41611483216285705
         ]
       ]
     },
@@ -147,19 +153,19 @@
       ],
       "after": [
         [
-          -3.59503399848938,
+          -3.5049244117736817,
           6.090103626251221,
-          -2.3305956077575685
+          -0.4786423099040985
         ],
         [
-          3.595141763687134,
+          1.6223597478866578,
           63.078346252441406,
-          1.9622272205352784
+          0.4161145341396332
         ]
       ]
     }
   },
-  "output_nif": "meshes/rapier/rapier.nif",
-  "output_bytes": 178066,
+  "output_nif": "meshes/rapier_swordtest/rapier_swordtest.nif",
+  "output_bytes": 156147,
   "export_operator_result": []
 }

@@ -20,6 +20,13 @@ def main():
                "parent": obj.parent.name if obj.parent else None,
                "materials": [slot.material.name if slot.material else None for slot in obj.material_slots],
                "custom_properties": sorted(key for key in obj.keys() if not key.startswith("_"))}
+        if obj.type == "MESH" and not obj.name.startswith("bhk"):
+            row["material_nodes"] = [{"material": slot.material.name,
+                                      "nodes": [{"name": node.name, "type": node.bl_idname,
+                                                 "image": node.image.filepath if node.type == "TEX_IMAGE" and node.image else None}
+                                                for node in slot.material.node_tree.nodes]}
+                                     for slot in obj.material_slots
+                                     if slot.material and slot.material.use_nodes]
         if obj.type == "MESH":
             points = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
             row.update(vertices=len(obj.data.vertices), polygons=len(obj.data.polygons),

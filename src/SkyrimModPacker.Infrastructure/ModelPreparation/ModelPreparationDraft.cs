@@ -6,16 +6,23 @@ namespace SkyrimModPacker.Infrastructure.ModelPreparation;
 public sealed class ModelPreparationDraft : IDisposable
 {
     private readonly string _outputDirectory;
+    private readonly string _slug;
     private bool _disposed;
     private bool _published;
 
-    internal ModelPreparationDraft(string stagingDirectory, string outputDirectory)
+    internal ModelPreparationDraft(string stagingDirectory, string outputDirectory, string slug,
+        string thirdPersonPath, string firstPersonPath)
     {
         StagingDirectory = stagingDirectory;
         _outputDirectory = outputDirectory;
+        _slug = slug;
+        ThirdPersonPath = thirdPersonPath;
+        FirstPersonPath = firstPersonPath;
     }
 
     public string StagingDirectory { get; }
+    public string ThirdPersonPath { get; }
+    public string FirstPersonPath { get; }
 
     public string Publish()
     {
@@ -24,7 +31,7 @@ public sealed class ModelPreparationDraft : IDisposable
         PackingPathGuard.EnsureNoLinks(_outputDirectory);
         PackingPathGuard.EnsureNoLinks(StagingDirectory);
         var destination = Path.Combine(_outputDirectory,
-            "prepared-rapier-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
+            "prepared-" + _slug + "-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.Move(StagingDirectory, destination);
         _published = true;
         return destination;
