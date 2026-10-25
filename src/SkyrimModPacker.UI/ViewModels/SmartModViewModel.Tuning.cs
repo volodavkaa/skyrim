@@ -9,7 +9,11 @@ using SkyrimModPacker.Core.Models.PluginBuilder;
 namespace SkyrimModPacker.UI.ViewModels;
 
 public sealed record SmartTuningPreview(SmartModItemDraft Before, SmartModItemDraft After, string Description, bool VerifyMaterialSource = false)
-{ public string? ExpectedSourceFingerprint { get; init; } }
+{
+    public string? ExpectedSourceFingerprint { get; init; }
+    public Guid? ComparisonSourceId { get; init; }
+    public string? ComparisonSourceJson { get; init; }
+}
 
 public sealed partial class SmartModViewModel
 {
@@ -167,6 +171,8 @@ public sealed partial class SmartModViewModel
     {
         var item = SelectedItem ?? throw new InvalidOperationException(Label("Smart_SelectTemplate"));
         if (JsonSerializer.Serialize(item.Capture()) != JsonSerializer.Serialize(preview.Before)) throw new IOException(Label("Smart_TuningStale"));
+        if (preview.ComparisonSourceId is { } sourceId && (Items.FirstOrDefault(i => i.Id == sourceId) is not { } source || JsonSerializer.Serialize(source.Capture()) != preview.ComparisonSourceJson))
+            throw new IOException(Label("Smart_TuningStale"));
         await CheckWorkspaceAsync(token);
         var fingerprint = preview.ExpectedSourceFingerprint;
         if (preview.VerifyMaterialSource && preview.After.Tuning?.PresetId != null)

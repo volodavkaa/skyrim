@@ -9,6 +9,8 @@ using SkyrimModPacker.UI.Services;
 
 namespace SkyrimModPacker.UI.Controls;
 
+public sealed record PreviewViewState(double Yaw, double Pitch, double Zoom);
+
 /// <summary>Single interactive viewport; stale or unsupported models never leave the previous scene visible.</summary>
 public sealed class ModelPreviewControl : UserControl, IDisposable
 {
@@ -29,6 +31,22 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
     private Point? _drag;
     public bool HasScene => _model != null;
     public string Status => _status.Text;
+    public double OriginalExtent { get; private set; }
+    private double? _normalizationExtent;
+    private double _light = 1;
+    private bool _settingView;
+    public PreviewViewState ViewState => new(_yaw, _pitch, _zoom.Value);
+    public event Action? SceneChanged;
+    public event Action<PreviewViewState>? ViewChanged;
+    public void SetView(PreviewViewState state)
+    {
+        _settingView = true;
+        try { _yaw = state.Yaw; _pitch = Math.Clamp(state.Pitch, -89, 89); _zoom.Value = Math.Clamp(state.Zoom, _zoom.Minimum, _zoom.Maximum); Render(); }
+        finally { _settingView = false; }
+    }
+    public void SetNormalizationExtent(double? extent) { _normalizationExtent = extent is > 0 && double.IsFinite(extent.Value) ? extent : null; Render(); }
+    public void SetEnvironment(double light, Color background)
+    { _light = Math.Clamp(light, 0.05, 1); if (_surface != null) _surface.Background = new SolidColorBrush(background); Render(); }
     public ModelPreviewControl(IModelPreviewService service)
     {
         _service = service; MinHeight = 380;
@@ -78,14 +96,14 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
         _source.FontSize = compact ? 11 : 14;
         _source.Margin = compact ? new Thickness(8, 2, 8, 4) : new Thickness(10);
     }
-    public Task LoadAsync(ModelPreviewRequest? request)
+    public Task LoadAsync(ModelPreviewRequest? request, bool preserveView = false)
     {
-        _request = request; _first = false; _yaw = 25; _pitch = -10; _zoom.Value = 4; return ReloadAsync();
+        _request = request; _first = false; if (!preserveView) SetView(new(25, -10, 4)); return ReloadAsync();
     }
     private async Task ReloadAsync()
     {
         var generation = ++_generation; _cts?.Cancel(); _cts?.Dispose(); _cts = new(); var token = _cts.Token;
-        _model = null; _viewport.Children.Clear();
+        _model = null; OriginalExtent = 0; _viewport.Children.Clear(); SceneChanged?.Invoke();
         _empty.Visibility = Visibility.Visible; _empty.SetResourceReference(TextBlock.TextProperty, "Smart_PreviewEmpty");
         if (_request == null) { _source.Text = ""; _status.Text = Label("Preview_NoModel"); return; }
         var request = _request; var path = _first ? request.FirstPersonPath : request.ThirdPersonPath;
@@ -96,8 +114,9 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
         {
             var scene = await _service.LoadAsync(request.ProjectDirectory, path, request.GameDataPath, token);
             if (_disposed || token.IsCancellationRequested || generation != _generation) return;
-            _model = PreviewSceneRenderer.Create(scene, true, out var warnings);
+            _model = PreviewSceneRenderer.Create(scene, true, out var warnings, out var extent); OriginalExtent = extent;
             _status.Text = string.Join(Environment.NewLine, warnings.Where(w => !w.StartsWith("Static geometry and diffuse texture only.", StringComparison.Ordinal))); Render();
+            SceneChanged?.Invoke();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!_disposed && generation == _generation) { _model = null; _viewport.Children.Clear(); _empty.SetResourceReference(TextBlock.TextProperty, "Preview_Failed"); _status.Text = Label("Preview_Failed") + " " + ex.Message; } }
@@ -107,13 +126,15 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
         if (_model == null || _disposed) return;
         _empty.Visibility = Visibility.Collapsed;
         var lights = new Model3DGroup(); lights.Children.Add(new AmbientLight(Color.FromRgb(55, 55, 55)));
-        lights.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-1, -1, -2)));
+        var brightness = (byte)(_light * 255); lights.Children.Add(new DirectionalLight(Color.FromRgb(brightness, brightness, brightness), new Vector3D(-1, -1, -2)));
         var rotation = new Transform3DGroup();
+        if (_normalizationExtent is > 0) { var scale = OriginalExtent / _normalizationExtent.Value; rotation.Children.Add(new ScaleTransform3D(scale, scale, scale)); }
         rotation.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 1, 0), _yaw)));
         rotation.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(1, 0, 0), _pitch)));
         _viewport.Children.Clear(); _viewport.Children.Add(new ModelVisual3D { Content = lights });
         _viewport.Children.Add(new ModelVisual3D { Content = _model, Transform = rotation });
         _viewport.Camera = new PerspectiveCamera(new Point3D(0, 0, _zoom.Value), new Vector3D(0, 0, -1), new Vector3D(0, 1, 0), 45) { NearPlaneDistance = 0.01, FarPlaneDistance = 100 };
+        if (!_settingView) ViewChanged?.Invoke(ViewState);
     }
     private string Label(string key) => TryFindResource(key) as string ?? key;
     public void Dispose() { _disposed = true; _generation++; _cts?.Cancel(); _cts?.Dispose(); _model = null; _viewport.Children.Clear(); }

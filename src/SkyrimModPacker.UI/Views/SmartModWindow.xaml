@@ -98,6 +98,7 @@
       </StackPanel>
       <StackPanel Visibility="{Binding IsEditing, Converter={StaticResource Visible}}">
        <TextBlock Text="{Binding SelectedItem.Name}" Style="{StaticResource Heading}"/>
+       <Button Content="{DynamicResource Smart_CompareTitle}" Click="OnCompare" HorizontalAlignment="Left"/>
        <TextBlock Text="{Binding SelectedItem.StepText}" FontSize="16" Margin="0,0,0,12"/>
        <ItemsControl ItemsSource="{Binding StepLinks}" Margin="0,0,0,14"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.GoToStepCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Step}" Content="{Binding Name}" FontSize="12" Padding="9,7"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SmartNav}"><Style.Triggers><DataTrigger Binding="{Binding IsCurrent}" Value="True"><Setter Property="Background" Value="#24424D"/><Setter Property="BorderBrush" Value="#80D8CF"/><Setter Property="Foreground" Value="#B9FFF3"/></DataTrigger></Style.Triggers></Style></Button.Style></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
        <TextBlock Text="{Binding StepHelp}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,14"/>

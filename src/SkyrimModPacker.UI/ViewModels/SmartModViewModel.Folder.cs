@@ -17,7 +17,15 @@ public sealed partial class SmartModViewModel
     public async Task<WeaponFolderScan> ScanWeaponFolderAsync(string folder, CancellationToken cancellationToken = default)
     { using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken); return Require(await _projects.ScanWeaponFolderAsync(folder, linked.Token)); }
     public async Task<WeaponFolderPlan> PreviewWeaponFolderAsync(WeaponFolderRequest request, CancellationToken cancellationToken = default)
-    { using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken); return Require(await _projects.PreviewWeaponFolderAsync(request, _gameData, linked.Token)); }
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
+        foreach (var entry in request.Items.Where(i => i.EditorId != null))
+        {
+            if (Items.Any(i => i.EditorId.Equals(entry.EditorId, StringComparison.OrdinalIgnoreCase))) throw new IOException(Label("Smart_IdDraftConflict"));
+            if (Options.ExistingEditorIds.Any(i => i.EditorId.Equals(entry.EditorId, StringComparison.OrdinalIgnoreCase))) throw new IOException(Label("Smart_IdMasterConflict") + " " + entry.EditorId);
+        }
+        return Require(await _projects.PreviewWeaponFolderAsync(request, _gameData, linked.Token));
+    }
     public Task ImportWeaponFolderAsync(WeaponFolderPlan plan, bool createNew, WeaponKind kind) => RunAsync(async token =>
         await ImportWeaponFolderCoreAsync(plan, createNew, kind, token));
     public string ProposedProjectPath => Path.Combine(OutputDirectory.Trim(), Name.Trim(), "mod-project.json");
@@ -28,11 +36,25 @@ public sealed partial class SmartModViewModel
         if (plan.Items.Any(i => Templates.All(t => t.Kind != i.Kind))) throw new IOException(Label("Smart_SelectTemplate"));
         var fresh = Require(await _projects.PreviewWeaponFolderAsync(plan.Request, _gameData, token));
         if (!fresh.CanImport || JsonSerializer.Serialize(fresh) != JsonSerializer.Serialize(plan)) throw new IOException(Label("Smart_TuningStale"));
-        await CreateProjectCoreAsync(true, token);
-        // Recheck against the newly created empty workspace; never create a placeholder weapon.
-        var actual = Require(await _projects.PreviewWeaponFolderAsync(plan.Request with { NewProjectPluginName = null }, _gameData, token));
-        if (JsonSerializer.Serialize(plan with { Request = actual.Request, ProjectSha256 = actual.ProjectSha256 }) != JsonSerializer.Serialize(actual)) throw new IOException(Label("Smart_TuningStale"));
-        await ImportWeaponFolderCoreAsync(actual, true, kind, token);
+        var before = Capture();
+        NewWeaponProjectRollback? created = null;
+        try
+        {
+            await CreateProjectCoreAsync(true, token, () => created = new NewWeaponProjectRollback(ProjectDirectory));
+            created = new NewWeaponProjectRollback(ProjectDirectory);
+            // Recheck against the newly created empty workspace; never create a placeholder weapon.
+            var actual = Require(await _projects.PreviewWeaponFolderAsync(plan.Request with { NewProjectPluginName = null }, _gameData, token));
+            if (JsonSerializer.Serialize(plan with { Request = actual.Request, ProjectSha256 = actual.ProjectSha256 }) != JsonSerializer.Serialize(actual)) throw new IOException(Label("Smart_TuningStale"));
+            await ImportWeaponFolderCoreAsync(actual, true, kind, token);
+        }
+        catch (Exception failure)
+        {
+            _autosave.Cancel();
+            if (created == null) throw;
+            try { created.Rollback(); ApplyDocument(before); HasProject = false; Resources.Clear(); Dependencies = ""; OnPropertyChanged(nameof(ProjectPath)); OnPropertyChanged(nameof(PluginPath)); OnPropertyChanged(nameof(ProjectDirectory)); PreviewChanged?.Invoke(); }
+            catch (Exception cleanup) { throw new IOException(failure.Message + Environment.NewLine + cleanup.Message, failure); }
+            throw;
+        }
     });
     private async Task ImportWeaponFolderCoreAsync(WeaponFolderPlan plan, bool createNew, WeaponKind kind, CancellationToken token)
     {
@@ -50,19 +72,20 @@ public sealed partial class SmartModViewModel
                 try
                 {
                     var selected = new List<SmartModItemRow>();
-                    async Task Assign(SmartModItemRow item, string third, string? first, string? name)
+                    async Task Assign(SmartModItemRow item, string third, string? first, string? name, string? editorId = null)
                     {
                     ct.ThrowIfCancellationRequested();
                     item.Replace(item.Capture() with { LastFolderPlanId = imported.PlanId, ValidateFolderDependencies = true,
                         State = imported.Incomplete ? SmartModItemState.NeedsCorrection : SmartModItemState.InProgress,
-                        Weapon = item.Fields with { Name = name ?? item.Name, ModelPath = third,
+                        Weapon = item.Fields with { Name = name ?? item.Name, EditorId = editorId ?? item.EditorId, ModelPath = third,
                             FirstPersonPath = first ?? item.FirstPersonPath, FirstPersonEdited = first != null || item.Fields.FirstPersonEdited,
                             UseSharedModel = first != null && first.Equals(third, StringComparison.OrdinalIgnoreCase),
                             RestoreFirstPerson = first == null && item.Fields.RestoreFirstPerson } });
+                    var conflict = IdentifierConflict(item); if (conflict.Length > 0) throw new IOException(conflict);
                     await ResolveFirstPersonAsync(item, ct); item.Step = SmartModItemStep.Appearance; _tuningUndo.Remove(item.Id); selected.Add(item);
                     }
                     if (imported.Items.Count > 0)
-                        foreach (var entry in imported.Items) await Assign(AddItemCore(entry.Kind), entry.ThirdPersonPath, entry.FirstPersonPath, entry.Name);
+                        foreach (var entry in imported.Items) await Assign(AddItemCore(entry.Kind, entry.Subtype), entry.ThirdPersonPath, entry.FirstPersonPath, entry.Name, entry.EditorId);
                     else
                     {
                         if (createNew) target = AddItemCore(kind);

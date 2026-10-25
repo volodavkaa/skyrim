@@ -17,11 +17,12 @@ public sealed partial class SmartModViewModel
         Keywords = details.Keywords.ToArray(), Sound = details.AttackSound, Sounds = details.Sounds,
         Enchantment = details.Enchantment, EnchantmentCharge = details.EnchantmentCharge.ToString()
     };
-    private SmartModItemRow AddItemCore(WeaponKind kind)
+    private SmartModItemRow AddItemCore(WeaponKind kind, SmartWeaponSubtype? subtype = null)
     {
-        var template = Templates.Where(t => t.Kind == kind && !string.IsNullOrWhiteSpace(t.Details.ModelPath))
+        var candidates = Templates.Where(t => t.Kind == kind && (subtype == null || t.Details.Keywords.Any(k => Options.Keywords.Any(o => WeaponComparison.SameRecord(k, o.Reference) && o.EditorId == (subtype == SmartWeaponSubtype.Warhammer ? "WeapTypeWarhammer" : "WeapTypeBattleaxe"))))).ToArray();
+        var template = candidates.Where(t => !string.IsNullOrWhiteSpace(t.Details.ModelPath))
             .OrderBy(t => t.EditorId.StartsWith("Iron", StringComparison.OrdinalIgnoreCase) ? 0 : 1).FirstOrDefault()
-            ?? Templates.FirstOrDefault(t => t.Kind == kind) ?? throw new InvalidOperationException(Label("Smart_SelectTemplate"));
+            ?? candidates.FirstOrDefault() ?? throw new InvalidOperationException(Label("Smart_SelectTemplate"));
         var draft = new SmartModItemDraft { Kind = kind, Template = new(template.PluginName, template.FormId) };
         var ordinal = Items.Count(i => i.Kind == kind) + 1;
         var fields = Fields("SMP_" + draft.Id.ToString("N"), Label("WeaponType_" + kind) + " " + ordinal,

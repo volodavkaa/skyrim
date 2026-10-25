@@ -20,6 +20,7 @@ public interface IPluginBuilderService
     Task<Result<WeaponOptions>> GetWeaponOptionsAsync(string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SmartMaterialPreset>>> GetSmartMaterialPresetsAsync(string gameDataPath, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<CraftingRecipe>>> GetRecipesAsync(string pluginPath, uint weaponFormId, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<WeaponComparisonRecipe>>> GetComparisonRecipesAsync(string pluginPath, uint weaponFormId, CancellationToken cancellationToken = default);
     Task<Result<CraftingRecipe>> SaveRecipeAsync(SaveRecipeRequest request, CancellationToken cancellationToken = default);
     Task<Result> DeleteRecipeAsync(string pluginPath, string gameDataPath, uint recipeFormId, CancellationToken cancellationToken = default);
     Task<Result> AddToLeveledListAsync(LeveledListRequest request, CancellationToken cancellationToken = default);

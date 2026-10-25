@@ -38,7 +38,7 @@ public sealed partial class SmartModViewModel
 
     [RelayCommand]
     private Task CreateProjectAsync() => RunAsync(token => CreateProjectCoreAsync(false, token));
-    private async Task CreateProjectCoreAsync(bool empty, CancellationToken token)
+    private async Task CreateProjectCoreAsync(bool empty, CancellationToken token, Action? projectCreated = null)
     {
         if (HasProject) throw new InvalidOperationException(Label("Smart_ProjectAlreadyOpen"));
         var planned = new List<(WeaponKind Kind, int Count)>();
@@ -55,6 +55,7 @@ public sealed partial class SmartModViewModel
         }, token));
         _document = new() { ProjectFilePath = project.ProjectFilePath, PluginPath = project.PluginPath, Name = Name, EnableEsl = EnableEsl };
         HasProject = true;
+        projectCreated?.Invoke();
         _applying = true;
         try
         {

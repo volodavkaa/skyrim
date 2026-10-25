@@ -34,9 +34,8 @@ public sealed partial class SmartModWindowTests
                 var content = (FrameworkElement)window.Content;
                 T Find<T>(string name) where T : FrameworkElement => Descendants<T>(content).Single(e => e.Name == name);
                 var name = Find<TextBox>("ImportProjectName"); Assert.NotEqual("Taken", name.Text); Assert.Contains("DarkSister_HD", name.Text);
-                var first = Assert.Single(window.ItemRows); first.Name = "Dark Sister 1H"; first.ThirdModel = window.Models.Single(m => m.Source.SourcePath == sword);
-                Find<Button>("ImportAddItem").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(2, window.ItemRows.Count);
-                var second = window.ItemRows[1]; second.Name = "Dark Sister 2H"; Find<ComboBox>("ImportItemKind").SelectedValue = WeaponKind.Greatsword; second.ThirdModel = window.Models.Single(m => m.Source.SourcePath == greatsword);
+                Assert.Equal(2, window.ItemRows.Count); var first = window.ItemRows[0]; first.Name = "Dark Sister 1H"; first.ThirdModel = window.Models.Single(m => m.Source.SourcePath == sword);
+                var second = window.ItemRows[1]; second.Name = "Dark Sister 2H"; Find<ListBox>("ImportItemQueue").SelectedItem = second; Find<ComboBox>("ImportItemKind").SelectedValue = WeaponKind.Greatsword; second.ThirdModel = window.Models.Single(m => m.Source.SourcePath == greatsword);
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); Assert.Equal(WeaponKind.Greatsword, second.Kind);
                 Find<Button>("ImportPreview").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Assert.NotNull(window.Plan); Assert.True(window.Plan.CanImport); Assert.Equal(2, window.Plan.Items.Count); Assert.True(Find<Button>("ImportConfirm").IsEnabled);

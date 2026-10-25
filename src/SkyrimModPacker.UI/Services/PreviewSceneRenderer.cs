@@ -10,6 +10,8 @@ namespace SkyrimModPacker.UI.Services;
 public static class PreviewSceneRenderer
 {
     public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings)
+        => Create(scene, textured, out warnings, out _);
+    public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings, out double originalExtent)
     {
         var messages = scene.Warnings.ToList(); var textures = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
         long pixels = 0;
@@ -47,6 +49,7 @@ public static class PreviewSceneRenderer
             var model = new GeometryModel3D(geometry, material) { BackMaterial = material }; model.Freeze(); group.Children.Add(model);
         }
         var bounds = group.Bounds; var extent = Math.Max(bounds.SizeX, Math.Max(bounds.SizeY, bounds.SizeZ));
+        originalExtent = extent;
         if (bounds.IsEmpty || !double.IsFinite(extent) || extent < 1e-8) throw new InvalidDataException("The model has no measurable geometry.");
         var transform = new Transform3DGroup();
         transform.Children.Add(new TranslateTransform3D(-bounds.X - bounds.SizeX / 2, -bounds.Y - bounds.SizeY / 2, -bounds.Z - bounds.SizeZ / 2));

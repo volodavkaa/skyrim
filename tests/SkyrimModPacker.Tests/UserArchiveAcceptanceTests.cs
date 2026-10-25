@@ -31,8 +31,11 @@ public sealed class UserArchiveAcceptanceTests
         await vm.InitializeAsync(); Assert.Equal("", vm.Error); vm.Name = name; vm.OutputDirectory = root;
         await using var source = await vm.ExtractWeaponArchiveAsync(input); Assert.NotNull(source);
         var models = Directory.GetFiles(source.Root, "*.nif", SearchOption.AllDirectories); var sword = models.Single(p => Path.GetFileName(p) == "DarkSister_HD.nif"); var greatsword = models.Single(p => Path.GetFileName(p) == "DarkSister_HD_2h.nif");
+        var recognition = WeaponModelRecognition.Analyze(await vm.ScanWeaponFolderAsync(source.Root)); Assert.Equal(2, recognition.Count);
+        Assert.Contains(recognition, r => r.Model.SourcePath == sword && r.Status == ModelRecognitionStatus.NeedsChoice);
+        Assert.Contains(recognition, r => r.Model.SourcePath == greatsword && r.Kind == WeaponKind.Greatsword && r.Status == ModelRecognitionStatus.Suggested);
         var request = new WeaponFolderRequest(Guid.NewGuid(), vm.ProposedProjectPath, source.Root, sword, null, true) { NewProjectPluginName = name + ".esp", Items = [
-            new(Guid.NewGuid(), "Dark Sister", WeaponKind.OneHandSword, sword, null, true), new(Guid.NewGuid(), "Dark Sister — Two-handed", WeaponKind.Greatsword, greatsword, null, true)] };
+            new(Guid.NewGuid(), "Dark Sister", WeaponKind.OneHandSword, sword, null, true) { EditorId = "Author_DarkSister_1H" }, new(Guid.NewGuid(), "Dark Sister — Two-handed", WeaponKind.Greatsword, greatsword, null, true) { EditorId = "Author_DarkSister_2H" }] };
         var plan = await vm.PreviewWeaponFolderAsync(request); Assert.True(plan.CanImport, string.Join("; ", plan.Warnings.Concat(plan.Dependencies.Select(d => d.Path + ": " + d.Status)))); Assert.False(plan.Incomplete);
         Assert.Equal(2, plan.Items.Count); Assert.Equal(2, plan.Files.Count(f => f.RelativePath.EndsWith(".nif"))); Assert.Equal(3, plan.Files.Count(f => f.RelativePath.EndsWith(".dds")));
         await vm.CreateFromWeaponFolderAsync(plan, WeaponKind.OneHandSword); Assert.Equal("", vm.Error); Assert.True(File.Exists(vm.PluginPath)); Assert.Equal(2, vm.Items.Count);
@@ -46,6 +49,6 @@ public sealed class UserArchiveAcceptanceTests
         Assert.Equal(zipHash, SHA256.HashData(File.ReadAllBytes(input)));
         var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/audit")); Directory.CreateDirectory(output);
         File.WriteAllText(Path.Combine(output, "user-archive-acceptance.json"), JsonSerializer.Serialize(new { archive = input, sourceSha256 = Convert.ToHexString(zipHash), vm.ProjectPath, vm.PluginPath, vm.LastArchivePath,
-            items = vm.Items.Select(i => new { i.Name, i.Kind, i.EditorId, i.ConfirmedFormId, i.ModelPath, i.FirstPersonPath }), plan.Files, plan.Dependencies }, new JsonSerializerOptions { WriteIndented = true }));
+            items = vm.Items.Select(i => new { i.Name, i.Kind, i.EditorId, i.ConfirmedFormId, i.ModelPath, i.FirstPersonPath }), recognition, plan.Files, plan.Dependencies, plan.ModelReports }, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
