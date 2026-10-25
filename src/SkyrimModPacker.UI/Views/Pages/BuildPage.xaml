@@ -52,6 +52,9 @@
 
                 <!-- Action Buttons -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <ui:Button Content="Підготовка моделі"
+                               Click="OnPrepareModel"
+                               Margin="0,0,8,0" />
                     <ui:Button Content="{DynamicResource Build_Scan}"
                                Icon="{ui:SymbolIcon Search24}"
                                Command="{Binding ScanCommand}"

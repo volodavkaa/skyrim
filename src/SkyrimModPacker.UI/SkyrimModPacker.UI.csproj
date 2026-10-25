@@ -32,6 +32,12 @@
     <ProjectReference Include="..\SkyrimModPacker.Infrastructure\SkyrimModPacker.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\scripts\model_preparation_export_probe.py" Link="ModelPreparation\model_preparation_export_probe.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\scripts\model_preparation_probe.py" Link="ModelPreparation\model_preparation_probe.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\scripts\model_preparation_template_inspect.py" Link="ModelPreparation\model_preparation_template_inspect.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Roslyn editors can request CoreCompile without the Visual Studio WPF build hooks. -->
   <Target Name="PrepareWpfEditorMarkup"
           BeforeTargets="CoreCompile"

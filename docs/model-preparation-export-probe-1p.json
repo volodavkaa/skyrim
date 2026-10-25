@@ -1,0 +1,58 @@
+{
+  "archive_sha256": "9E31FEA76471DCF66B190254CE92F4802D66955AC05FCAE661A8A0A690752767",
+  "selected_model": "rapier_swordTest/Rapier.fbx",
+  "selected_mesh": "RapierLOD0",
+  "template": "C:\\Users\\volod\\AppData\\Local\\Temp\\skyrim-template-ironsword-1p.nif",
+  "source_bounds": [
+    [
+      -0.9667543172836304,
+      -0.3877212703227997,
+      -1.0834201574325562
+    ],
+    [
+      0.9667544364929199,
+      0.3628927171230316,
+      7.5179853439331055
+    ]
+  ],
+  "template_weapon_bounds": [
+    [
+      -6.338862895965576,
+      -11.724032402038574,
+      -1.7135545015335083
+    ],
+    [
+      6.338972091674805,
+      63.1506233215332,
+      1.713863492012024
+    ]
+  ],
+  "fit_scale": 8.704932666142037,
+  "fit_rotation_x_degrees": -90,
+  "fit_translation": [
+    5.412101745605469e-05,
+    -2.292933464050293,
+    -0.1079106330871582
+  ],
+  "exported_weapon_bounds": [
+    [
+      -8.41547679901123,
+      -11.72403335571289,
+      -3.266867160797119
+    ],
+    [
+      8.415586471557617,
+      63.15061569213867,
+      3.267176866531372
+    ]
+  ],
+  "collision_objects": [
+    "bhkListShape",
+    "bhkBoxShape",
+    "bhkBoxShape.001",
+    "bhkBoxShape.002"
+  ],
+  "output_nif": "C:\\Users\\volod\\AppData\\Local\\Temp\\skyrim-rapier-probe-1p.nif",
+  "output_bytes": 142079,
+  "export_operator_result": []
+}

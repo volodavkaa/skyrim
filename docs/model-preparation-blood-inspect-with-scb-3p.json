@@ -1,0 +1,214 @@
+[
+  {
+    "name": "IronLongSword01:ROOT",
+    "type": "EMPTY",
+    "parent": null,
+    "materials": [],
+    "custom_properties": [
+      "PYN_GAME",
+      "childCount",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynRoot",
+      "pyn_export"
+    ]
+  },
+  {
+    "name": "bhkListShape",
+    "type": "MESH",
+    "parent": null,
+    "materials": [],
+    "custom_properties": [
+      "pynCollisionBlockname",
+      "pyn_collisionobj",
+      "pyn_collisionobj_migrated",
+      "pyn_rigidbody",
+      "pyn_rigidbody_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "bhkBoxShape",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "bhkBoxShape.001",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "bhkBoxShape.002",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "NiStringExtraData:Prn",
+    "type": "EMPTY",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_nistrdata",
+      "pyn_nistrdata_migrated"
+    ]
+  },
+  {
+    "name": "BSXFlags:BSX",
+    "type": "EMPTY",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_bsxflags",
+      "pyn_bsxflags_migrated"
+    ]
+  },
+  {
+    "name": "BSInvMarker:INV",
+    "type": "CAMERA",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_invmarker",
+      "pyn_invmarker_migrated"
+    ]
+  },
+  {
+    "name": "BloodEffects",
+    "type": "MESH",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [
+      "BloodEffects.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 790,
+    "polygons": 810,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "BloodLighting",
+    "type": "MESH",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [
+      "BloodLighting.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 790,
+    "polygons": 810,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "IronLongSword01:0",
+    "type": "MESH",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [
+      "IronLongSword01:0.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 3447,
+    "polygons": 4189,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ]
+  },
+  {
+    "name": "Scb",
+    "type": "MESH",
+    "parent": "IronLongSword01:ROOT",
+    "materials": [
+      "Scb.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 151,
+    "polygons": 178,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ]
+  }
+]

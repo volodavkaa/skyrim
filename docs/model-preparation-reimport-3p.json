@@ -1,0 +1,172 @@
+{
+  "blender_version": "4.2.23 LTS",
+  "pynifly_version": [
+    29,
+    1,
+    0
+  ],
+  "source": "C:\\Users\\volod\\AppData\\Local\\Temp\\skyrim-rapier-probe-3p.nif",
+  "exported_bytes": 134339,
+  "objects": [
+    {
+      "name": "IronLongSword01:ROOT",
+      "type": "EMPTY"
+    },
+    {
+      "name": "bhkListShape",
+      "type": "MESH",
+      "vertices": 8,
+      "polygons": 6,
+      "uv_layers": 1,
+      "has_custom_normals": false,
+      "bounds_min": [
+        -0.004999999888241291,
+        -0.004999999888241291,
+        -0.004999999888241291
+      ],
+      "bounds_max": [
+        0.004999999888241291,
+        0.004999999888241291,
+        0.004999999888241291
+      ]
+    },
+    {
+      "name": "bhkBoxShape",
+      "type": "MESH",
+      "vertices": 8,
+      "polygons": 6,
+      "uv_layers": 0,
+      "has_custom_normals": false,
+      "bounds_min": [
+        -2.2080278396606445,
+        -10.520256042480469,
+        -0.5158113241195679
+      ],
+      "bounds_max": [
+        2.207211494445801,
+        3.4886250495910645,
+        0.5167604684829712
+      ]
+    },
+    {
+      "name": "bhkBoxShape.001",
+      "type": "MESH",
+      "vertices": 8,
+      "polygons": 6,
+      "uv_layers": 0,
+      "has_custom_normals": false,
+      "bounds_min": [
+        -5.471921443939209,
+        4.777085781097412,
+        -0.9423410296440125
+      ],
+      "bounds_max": [
+        5.471107006072998,
+        6.306149959564209,
+        0.9140724539756775
+      ]
+    },
+    {
+      "name": "bhkBoxShape.002",
+      "type": "MESH",
+      "vertices": 8,
+      "polygons": 6,
+      "uv_layers": 0,
+      "has_custom_normals": false,
+      "bounds_min": [
+        -2.6495840549468994,
+        6.0901031494140625,
+        -0.13989152014255524
+      ],
+      "bounds_max": [
+        2.648801565170288,
+        63.078346252441406,
+        0.1402018815279007
+      ]
+    },
+    {
+      "name": "NiStringExtraData:Prn",
+      "type": "EMPTY"
+    },
+    {
+      "name": "BSXFlags:BSX",
+      "type": "EMPTY"
+    },
+    {
+      "name": "BSInvMarker:INV",
+      "type": "CAMERA"
+    },
+    {
+      "name": "BloodEffects",
+      "type": "MESH",
+      "vertices": 61,
+      "polygons": 96,
+      "uv_layers": 1,
+      "has_custom_normals": true,
+      "bounds_min": [
+        -2.859633445739746,
+        5.236294746398926,
+        -0.2877501845359802
+      ],
+      "bounds_max": [
+        2.8597350120544434,
+        63.150123596191406,
+        0.28806301951408386
+      ]
+    },
+    {
+      "name": "BloodLighting",
+      "type": "MESH",
+      "vertices": 61,
+      "polygons": 96,
+      "uv_layers": 1,
+      "has_custom_normals": true,
+      "bounds_min": [
+        -2.8788511753082275,
+        5.2361249923706055,
+        -0.3077491521835327
+      ],
+      "bounds_max": [
+        2.878952741622925,
+        63.17012023925781,
+        0.30806198716163635
+      ]
+    },
+    {
+      "name": "IronLongSword01:0",
+      "type": "MESH",
+      "vertices": 3447,
+      "polygons": 4189,
+      "uv_layers": 1,
+      "has_custom_normals": true,
+      "bounds_min": [
+        -8.415474891662598,
+        -11.724499702453613,
+        -3.284809112548828
+      ],
+      "bounds_max": [
+        8.415582656860352,
+        63.150123596191406,
+        3.2492330074310303
+      ]
+    },
+    {
+      "name": "Scb",
+      "type": "MESH",
+      "vertices": 151,
+      "polygons": 178,
+      "uv_layers": 1,
+      "has_custom_normals": true,
+      "bounds_min": [
+        -3.06658673286438,
+        -1.2934082746505737,
+        -0.9759222269058228
+      ],
+      "bounds_max": [
+        9.940691947937012,
+        17.49808692932129,
+        6.936346530914307
+      ]
+    }
+  ]
+}

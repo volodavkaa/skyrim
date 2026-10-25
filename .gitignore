@@ -10,3 +10,5 @@ TestResults/
 artifacts/
 publish/
 *_wpftmp.csproj
+__pycache__/
+*.pyc

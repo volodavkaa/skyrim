@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using SkyrimModPacker.UI.ViewModels;
+using SkyrimModPacker.UI.Views;
 
 namespace SkyrimModPacker.UI.Views.Pages;
 
@@ -9,6 +10,11 @@ namespace SkyrimModPacker.UI.Views.Pages;
 /// </summary>
 public partial class BuildPage : Page
 {
+    private void OnPrepareModel(object sender, RoutedEventArgs e)
+    {
+        new ModelPreparationWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+    }
+
     public BuildPage(BuildViewModel viewModel)
     {
         DataContext = viewModel;

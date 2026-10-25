@@ -1,0 +1,84 @@
+{
+  "blender_version": "4.2.23 LTS",
+  "pynifly_version": [
+    29,
+    1,
+    0
+  ],
+  "source": "C:\\Users\\volod\\AppData\\Local\\Temp\\skyrim-template-ironsword.nif",
+  "exported_bytes": 24143,
+  "objects": [
+    {
+      "name": "IronLongSword01:ROOT",
+      "type": "EMPTY",
+      "vertices": null,
+      "uv_layers": null
+    },
+    {
+      "name": "bhkListShape",
+      "type": "MESH",
+      "vertices": 8,
+      "uv_layers": 1
+    },
+    {
+      "name": "bhkBoxShape",
+      "type": "MESH",
+      "vertices": 8,
+      "uv_layers": 0
+    },
+    {
+      "name": "bhkBoxShape.001",
+      "type": "MESH",
+      "vertices": 8,
+      "uv_layers": 0
+    },
+    {
+      "name": "bhkBoxShape.002",
+      "type": "MESH",
+      "vertices": 8,
+      "uv_layers": 0
+    },
+    {
+      "name": "BSInvMarker:INV",
+      "type": "CAMERA",
+      "vertices": null,
+      "uv_layers": null
+    },
+    {
+      "name": "BSXFlags:BSX",
+      "type": "EMPTY",
+      "vertices": null,
+      "uv_layers": null
+    },
+    {
+      "name": "NiStringExtraData:Prn",
+      "type": "EMPTY",
+      "vertices": null,
+      "uv_layers": null
+    },
+    {
+      "name": "Scb",
+      "type": "MESH",
+      "vertices": 151,
+      "uv_layers": 1
+    },
+    {
+      "name": "BloodLighting",
+      "type": "MESH",
+      "vertices": 61,
+      "uv_layers": 1
+    },
+    {
+      "name": "BloodEffects",
+      "type": "MESH",
+      "vertices": 61,
+      "uv_layers": 1
+    },
+    {
+      "name": "IronLongSword01:0",
+      "type": "MESH",
+      "vertices": 318,
+      "uv_layers": 1
+    }
+  ]
+}

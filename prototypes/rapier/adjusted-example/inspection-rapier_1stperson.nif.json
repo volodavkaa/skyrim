@@ -1,0 +1,514 @@
+[
+  {
+    "name": "IronLongSword:ROOT",
+    "type": "EMPTY",
+    "parent": null,
+    "materials": [],
+    "custom_properties": [
+      "PYN_GAME",
+      "childCount",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynRoot",
+      "pyn_export"
+    ]
+  },
+  {
+    "name": "bhkListShape",
+    "type": "MESH",
+    "parent": null,
+    "materials": [],
+    "custom_properties": [
+      "pynCollisionBlockname",
+      "pyn_collisionobj",
+      "pyn_collisionobj_migrated",
+      "pyn_rigidbody",
+      "pyn_rigidbody_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -0.004999999888241291,
+      -0.004999999888241291,
+      -0.004999999888241291
+    ],
+    "bounds_max": [
+      0.004999999888241291,
+      0.004999999888241291,
+      0.004999999888241291
+    ],
+    "matrix_world": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "dimensions": [
+      0.009999999776482582,
+      0.009999999776482582,
+      0.009999999776482582
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "rigid_body": {
+      "type": "ACTIVE",
+      "collision_shape": "COMPOUND"
+    },
+    "properties": {
+      "pyn_rigidbody_migrated": "True",
+      "pyn_rigidbody": {
+        "collisionFilter_layer": "WEAPON",
+        "collisionFilterCopy_layer": "WEAPON",
+        "processContactCallbackDelay2": 65535,
+        "inertiaMatrix": [
+          9.82020092010498,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.3302448987960815,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          10.230958938598633,
+          0.0
+        ],
+        "center": [
+          7.735283702459128e-07,
+          0.16891320049762726,
+          -6.428980123018846e-05,
+          0.0
+        ],
+        "rollingFrictionMult": 0.0,
+        "penetrationDepth": 0.016790004447102547,
+        "motionSystem": "SPHERE_STABILIZED",
+        "solverDeactivation": "LOW",
+        "qualityType": "MOVING",
+        "numShapeKeysInContactPointProps": 3
+      },
+      "pyn_collisionobj": {
+        "flags": "ACTIVE | SYNC_ON_UPDATE"
+      },
+      "pyn_collisionobj_migrated": "True",
+      "pynCollisionBlockname": "bhkCollisionObject"
+    }
+  },
+  {
+    "name": "bhkBoxShape",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -8.5994234085083,
+      -10.901155471801758,
+      -3.4425857067108154
+    ],
+    "bounds_max": [
+      9.334134101867676,
+      3.1077373027801514,
+      2.273937225341797
+    ],
+    "matrix_world": [
+      [
+        3.1391647326017846e-07,
+        3.894144242622133e-07,
+        1.0,
+        0.3673553168773651
+      ],
+      [
+        0.0,
+        -1.0000001192092896,
+        3.8941436741879443e-07,
+        -3.8967089653015137
+      ],
+      [
+        1.0,
+        -1.2224360521236044e-13,
+        -3.1391647326017846e-07,
+        -0.5843242406845093
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "dimensions": [
+      5.7312703132629395,
+      14.023637771606445,
+      17.94478988647461
+    ],
+    "scale": [
+      1.0,
+      1.0000001192092896,
+      1.0
+    ],
+    "rigid_body": {
+      "type": "ACTIVE",
+      "collision_shape": "CONVEX_HULL"
+    },
+    "properties": {
+      "pyn_collshape": {
+        "bhkMaterial": "MATERIAL_BLADE_1HAND",
+        "bhkRadius": 0.007376427296549082
+      },
+      "pyn_collshape_migrated": "True"
+    }
+  },
+  {
+    "name": "bhkBoxShape.001",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -3.8897600173950195,
+      4.396189212799072,
+      -3.335149049758911
+    ],
+    "bounds_max": [
+      4.360486030578613,
+      5.925262928009033,
+      3.650529146194458
+    ],
+    "matrix_world": [
+      [
+        3.1391647326017846e-07,
+        3.894144242622133e-07,
+        1.0,
+        0.23536308109760284
+      ],
+      [
+        0.0,
+        -1.0000001192092896,
+        3.8941436741879443e-07,
+        5.160726070404053
+      ],
+      [
+        1.0,
+        -1.2224360521236044e-13,
+        -3.1391647326017846e-07,
+        0.15769004821777344
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "dimensions": [
+      7.007522106170654,
+      1.5509166717529297,
+      8.272089958190918
+    ],
+    "scale": [
+      1.0,
+      1.0000001192092896,
+      1.0
+    ],
+    "rigid_body": {
+      "type": "ACTIVE",
+      "collision_shape": "CONVEX_HULL"
+    },
+    "properties": {
+      "pyn_collshape": {
+        "bhkMaterial": "MATERIAL_BLADE_1HAND",
+        "bhkRadius": 0.010923254303634167
+      },
+      "pyn_collshape_migrated": "True"
+    }
+  },
+  {
+    "name": "bhkBoxShape.002",
+    "type": "MESH",
+    "parent": "bhkListShape",
+    "materials": [],
+    "custom_properties": [
+      "pyn_collshape",
+      "pyn_collshape_migrated"
+    ],
+    "vertices": 8,
+    "polygons": 6,
+    "uv_layers": 0,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -3.842355966567993,
+      5.709192752838135,
+      -2.813663959503174
+    ],
+    "bounds_max": [
+      4.294007301330566,
+      62.697444915771484,
+      3.2799935340881348
+    ],
+    "matrix_world": [
+      [
+        3.1391647326017846e-07,
+        3.894144242622133e-07,
+        1.0,
+        0.2258257418870926
+      ],
+      [
+        0.0,
+        -1.0000001192092896,
+        3.8941436741879443e-07,
+        34.20331954956055
+      ],
+      [
+        1.0,
+        -1.2224360521236044e-13,
+        -3.1391647326017846e-07,
+        0.23316475749015808
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "dimensions": [
+      6.097656726837158,
+      56.992252349853516,
+      8.140340805053711
+    ],
+    "scale": [
+      1.0,
+      1.0000001192092896,
+      1.0
+    ],
+    "rigid_body": {
+      "type": "ACTIVE",
+      "collision_shape": "CONVEX_HULL"
+    },
+    "properties": {
+      "pyn_collshape": {
+        "bhkMaterial": "MATERIAL_BLADE_1HAND",
+        "bhkRadius": 0.0020008867140859365
+      },
+      "pyn_collshape_migrated": "True"
+    }
+  },
+  {
+    "name": "NiStringExtraData:Prn",
+    "type": "EMPTY",
+    "parent": "IronLongSword:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_nistrdata",
+      "pyn_nistrdata_migrated"
+    ]
+  },
+  {
+    "name": "BSXFlags:BSX",
+    "type": "EMPTY",
+    "parent": "IronLongSword:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_bsxflags",
+      "pyn_bsxflags_migrated"
+    ]
+  },
+  {
+    "name": "BSInvMarker:INV",
+    "type": "CAMERA",
+    "parent": "IronLongSword:ROOT",
+    "materials": [],
+    "custom_properties": [
+      "pyn_invmarker",
+      "pyn_invmarker_migrated"
+    ]
+  },
+  {
+    "name": "BloodEffects",
+    "type": "MESH",
+    "parent": "IronLongSword:ROOT",
+    "materials": [
+      "BloodEffects.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 865,
+    "polygons": 889,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -3.739161968231201,
+      5.23012638092041,
+      -2.5842390060424805
+    ],
+    "bounds_max": [
+      4.24740743637085,
+      66.23880004882812,
+      3.54508638381958
+    ]
+  },
+  {
+    "name": "BloodLighting",
+    "type": "MESH",
+    "parent": "IronLongSword:ROOT",
+    "materials": [
+      "BloodLighting.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 865,
+    "polygons": 889,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -3.7565996646881104,
+      5.212893009185791,
+      -2.5977118015289307
+    ],
+    "bounds_max": [
+      4.267160415649414,
+      66.25594329833984,
+      3.5567333698272705
+    ]
+  },
+  {
+    "name": "IronLongSword:0",
+    "type": "MESH",
+    "parent": "IronLongSword:ROOT",
+    "materials": [
+      "IronLongSword:0.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 3447,
+    "polygons": 4189,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -8.479419708251953,
+      -12.319496154785156,
+      -3.3302180767059326
+    ],
+    "bounds_max": [
+      9.214128494262695,
+      66.21739196777344,
+      3.5305278301239014
+    ]
+  },
+  {
+    "name": "Scb",
+    "type": "MESH",
+    "parent": "IronLongSword:ROOT",
+    "materials": [
+      "Scb.Mat"
+    ],
+    "custom_properties": [
+      "PYN_BLENDER_XF",
+      "PYN_GAME",
+      "PYN_RENAME_BONES",
+      "PYN_RENAME_BONES_NIFTOOLS",
+      "pynBlockName",
+      "pynNodeFlags",
+      "pynNodeName",
+      "pynVertexDesc",
+      "vertexDesc"
+    ],
+    "vertices": 396,
+    "polygons": 788,
+    "uv_layers": 1,
+    "polygon_material_indices": [
+      0
+    ],
+    "bounds_min": [
+      -4.0044636726379395,
+      5.236042499542236,
+      -3.1939196586608887
+    ],
+    "bounds_max": [
+      4.451797962188721,
+      66.21739196777344,
+      3.777435064315796
+    ]
+  }
+]

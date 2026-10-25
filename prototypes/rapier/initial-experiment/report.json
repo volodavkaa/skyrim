@@ -1,0 +1,34 @@
+{
+  "status": "prototype_not_game_validated",
+  "source_archive_sha256": "9E31FEA76471DCF66B190254CE92F4802D66955AC05FCAE661A8A0A690752767",
+  "selected_archive_entry": "rapier_swordTest/Rapier.fbx",
+  "selected_mesh": "RapierLOD0",
+  "blender_version": "4.2.23 LTS",
+  "pynifly_version": "29.1.0",
+  "nifskope_version": "2.0.dev7",
+  "third_person": {
+    "template": "meshes/weapons/iron/longsword.nif",
+    "template_sha256": "876D2351AB5583180552F8B986B5193ABD82385F12FEAA603DB330928EE0FAF6",
+    "path": "meshes/rapier/rapier.nif",
+    "sha256": "E1A3092C7C709A2F8E7B870876E66527E2647AA3047D5F2C440FE0AF9E0E1AE1",
+    "scale": 8.704929339914774,
+    "rotation_x_degrees": -90,
+    "geometry_reopened": true,
+    "collision_objects_reimported": 4,
+    "game_verified": false
+  },
+  "first_person": {
+    "template": "meshes/weapons/iron/1stpersonlongsword.nif",
+    "template_sha256": "21C0D8EED7A7377756461CE248EF608FC46BE10E68DDE46FFE6308B65A55A067",
+    "path": "meshes/rapier/rapier_1stperson.nif",
+    "sha256": "21C072D0EFF27BFDF79FEBD7756F96772606E14CD62530BD3606CFEFB0C8DAA1",
+    "scale": 8.704932666142037,
+    "rotation_x_degrees": -90,
+    "geometry_reopened": true,
+    "collision_objects_reimported": 4,
+    "game_verified": false
+  },
+  "textures_checked": false,
+  "grip_confirmed": false,
+  "collision_fit_confirmed": false
+}
