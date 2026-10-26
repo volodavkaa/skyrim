@@ -40,7 +40,15 @@ public sealed class ModelPreparationDraft : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        if (!_published)
+        {
+            for (var attempt = 0; attempt < 10 && Directory.Exists(StagingDirectory); attempt++)
+            {
+                try { Directory.Delete(StagingDirectory, true); }
+                catch (IOException) when (attempt < 9) { Thread.Sleep(250); }
+                catch (UnauthorizedAccessException) when (attempt < 9) { Thread.Sleep(250); }
+            }
+        }
         _disposed = true;
-        if (!_published && Directory.Exists(StagingDirectory)) Directory.Delete(StagingDirectory, true);
     }
 }

@@ -14,14 +14,36 @@ namespace SkyrimModPacker.Infrastructure.ModelPreparation;
 /// <summary>Independent experimental export; never edits a mod project or the game.</summary>
 public static class ModelPreparationRunner
 {
+    public static async Task<string> InspectSourceMaterialsAsync(string archivePath, string blenderPath,
+        string? addonParent = null, CancellationToken cancellationToken = default, string? scriptPath = null,
+        string? modelEntry = null)
+    {
+        if (!File.Exists(archivePath) || !archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            throw new FileNotFoundException("Choose a ZIP archive with one model", archivePath);
+        if (!File.Exists(blenderPath)) throw new FileNotFoundException("Blender was not found", blenderPath);
+        var script = scriptPath ?? Path.Combine(AppContext.BaseDirectory, "ModelPreparation",
+            "model_preparation_export_probe.py");
+        var materialScript = Path.Combine(Path.GetDirectoryName(script)!, "model_preparation_material_probe.py");
+        if (!File.Exists(materialScript)) throw new FileNotFoundException("Material inspection script was not packaged", materialScript);
+        var report = Path.Combine(Path.GetTempPath(), "skyrim-material-audit-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            await RunBlenderAsync(blenderPath, materialScript, cancellationToken,
+                archivePath, report, addonParent ?? "", modelEntry ?? "");
+            return await File.ReadAllTextAsync(report, cancellationToken);
+        }
+        finally { if (File.Exists(report)) File.Delete(report); }
+    }
+
     public static async Task<string> RunAsync(string archivePath, string gameDataDirectory,
         string blenderPath, string addonParent, string outputDirectory, bool includeScabbard,
         CancellationToken cancellationToken = default, string? scriptPath = null,
         ModelPreparationAdjustments? adjustments = null, string weaponType = "sword1h",
-        ModelPreparationTextureOptions? textures = null)
+        ModelPreparationTextureOptions? textures = null, string? modelEntry = null)
     {
         using var draft = await PrepareDraftAsync(archivePath, gameDataDirectory, blenderPath,
-            addonParent, outputDirectory, includeScabbard, cancellationToken, scriptPath, adjustments, weaponType, textures);
+            addonParent, outputDirectory, includeScabbard, cancellationToken, scriptPath, adjustments,
+            weaponType, textures, modelEntry);
         cancellationToken.ThrowIfCancellationRequested();
         return draft.Publish();
     }
@@ -30,7 +52,7 @@ public static class ModelPreparationRunner
         string blenderPath, string addonParent, string outputDirectory, bool includeScabbard,
         CancellationToken cancellationToken = default, string? scriptPath = null,
         ModelPreparationAdjustments? adjustments = null, string weaponType = "sword1h",
-        ModelPreparationTextureOptions? textures = null)
+        ModelPreparationTextureOptions? textures = null, string? modelEntry = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var definition = WeaponTemplateCatalog.GetExportable(weaponType);
@@ -46,7 +68,7 @@ public static class ModelPreparationRunner
         if (!Directory.Exists(Path.Combine(addonParent, "io_scene_nifly")))
             throw new DirectoryNotFoundException("PyNifly add-on folder was not found: " + addonParent);
         if (!archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("The current exporter accepts ZIP with one FBX or GLB model.");
+            throw new ArgumentException("The current exporter accepts ZIP with one BLEND, FBX, OBJ, GLB, glTF or NIF model.");
         var fullOutput = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDirectory));
         var fullData = Path.TrimEndingDirectorySeparator(Path.GetFullPath(gameDataDirectory));
         if (fullOutput.Equals(fullData, StringComparison.OrdinalIgnoreCase) ||
@@ -72,27 +94,47 @@ public static class ModelPreparationRunner
             await File.WriteAllTextAsync(adjustmentsPath,
                 JsonSerializer.Serialize(adjustments, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
             var materialReport = Path.Combine(staging, "source-materials.json");
-            await RunBlenderAsync(blenderPath, materialScript, cancellationToken, archivePath, materialReport);
+            await RunBlenderAsync(blenderPath, materialScript, cancellationToken,
+                archivePath, materialReport, addonParent, modelEntry ?? "");
             if (!File.Exists(materialReport))
                 throw new InvalidOperationException("Blender material inspection did not produce a report.");
             using var materialDocument = JsonDocument.Parse(await File.ReadAllTextAsync(materialReport, cancellationToken));
+            var selectedMesh = materialDocument.RootElement.GetProperty("selected_mesh").GetString();
             var sourceMesh = materialDocument.RootElement.GetProperty("meshes").EnumerateArray()
-                .FirstOrDefault(item => item.GetProperty("name").GetString()!.EndsWith("LOD0", StringComparison.OrdinalIgnoreCase));
-            if (sourceMesh.ValueKind == JsonValueKind.Undefined)
-                sourceMesh = materialDocument.RootElement.GetProperty("meshes").EnumerateArray().FirstOrDefault();
+                .FirstOrDefault(item => item.GetProperty("name").GetString() == selectedMesh);
             if (sourceMesh.ValueKind != JsonValueKind.Object || sourceMesh.GetProperty("uv_layers").GetInt32() < 1)
                 throw new InvalidDataException("Source weapon mesh needs UV coordinates for materials.");
             var sourceMaterialCount = sourceMesh.GetProperty("materials").GetArrayLength();
-            if (sourceMaterialCount > 1)
-                throw new InvalidDataException("Source weapon has multiple material slots; splitting them into NIF shapes is not supported yet.");
-            if (textures != null && sourceMaterialCount != 1)
-                throw new InvalidDataException("Textured export currently needs one source material slot.");
-            var texturePaths = textures == null ? ((string Diffuse, string Normal)?)null :
-                await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug, textures, cancellationToken);
+            if (sourceMaterialCount > 8)
+                throw new InvalidDataException("At most eight source material slots are supported.");
+            if (sourceMaterialCount > 1 && !sourceMesh.GetProperty("polygon_material_indices").EnumerateArray()
+                .Select(item => item.GetInt32()).ToHashSet().SetEquals(Enumerable.Range(0, sourceMaterialCount)))
+                throw new InvalidDataException("Every source material slot must be used by weapon faces.");
+            if (sourceMaterialCount > 1 && (textures?.Materials == null ||
+                textures.Materials.Count != sourceMaterialCount ||
+                textures.Materials.Select(item => item.Slot).Distinct().Count() != sourceMaterialCount ||
+                textures.Materials.Any(item => item.Slot < 0 || item.Slot >= sourceMaterialCount)))
+                throw new InvalidDataException("Every source material slot needs its own BaseColor and Normal ZIP entries.");
+            if (sourceMaterialCount <= 1 && textures?.Materials is { Count: > 0 })
+                throw new InvalidDataException("Per-slot texture mapping requires multiple source materials.");
+            var texturePaths = new List<(string Diffuse, string Normal)>();
+            if (textures != null)
+            {
+                if (sourceMaterialCount > 1)
+                {
+                    foreach (var item in textures.Materials!.OrderBy(item => item.Slot))
+                        texturePaths.Add(await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug,
+                            new ModelPreparationTextureOptions(item.DiffuseEntry, item.NormalEntry,
+                                textures.TexconvPath, textures.InvertNormalY), cancellationToken, item.Slot));
+                }
+                else
+                    texturePaths.Add(await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug,
+                        textures, cancellationToken));
+            }
             var reports = new List<JsonElement>();
             var hashes = new Dictionary<string, string>();
-            if (texturePaths != null)
-                foreach (var path in new[] { texturePaths.Value.Diffuse, texturePaths.Value.Normal })
+            foreach (var pair in texturePaths)
+                foreach (var path in new[] { pair.Diffuse, pair.Normal })
                     hashes[path] = Convert.ToHexString(SHA256.HashData(
                         File.ReadAllBytes(Path.Combine(staging, path.Replace('/', Path.DirectorySeparatorChar)))));
             foreach (var (view, suffix) in new[]
@@ -116,9 +158,12 @@ public static class ModelPreparationRunner
                     blood_mode = definition.BloodMode,
                     grip_from_collision = definition.GripFromCollision,
                     scabbard_fit = definition.ScabbardFit,
-                    diffuse_texture = texturePaths?.Diffuse,
-                    normal_texture = texturePaths?.Normal,
-                    texture_root = texturePaths == null ? null : staging
+                    diffuse_texture = texturePaths.Count == 1 ? texturePaths[0].Diffuse : null,
+                    normal_texture = texturePaths.Count == 1 ? texturePaths[0].Normal : null,
+                    material_textures = texturePaths.Count > 1 ? texturePaths.Select(pair => new
+                        { diffuse_texture = pair.Diffuse, normal_texture = pair.Normal }).ToArray() : null,
+                    texture_root = texturePaths.Count == 0 ? null : staging,
+                    selected_model_entry = modelEntry
                 }), cancellationToken);
                 await RunBlenderAsync(blenderPath, script, cancellationToken, addonParent, archivePath,
                     template, output, report, includeScabbard ? "keep" : "omit", adjustmentsPath, configPath);
@@ -127,7 +172,7 @@ public static class ModelPreparationRunner
                 await RunBlenderAsync(blenderPath, inspectScript, cancellationToken, addonParent, output, inspection);
                 ValidateReimport(inspection, report, includeScabbard, view,
                     definition.ConvexCollision ? 1 : definition.CollisionBoxCount,
-                    definition.BloodMode, definition.ScabbardFit);
+                    definition.BloodMode, definition.ScabbardFit, texturePaths);
                 hashes[relativeOutput] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(output)));
                 var normalized = JsonNode.Parse(await File.ReadAllTextAsync(report, cancellationToken))!.AsObject();
                 normalized["template"] = relativePath;
@@ -148,9 +193,15 @@ public static class ModelPreparationRunner
                 scabbard = includeScabbard ? definition.ScabbardFit : "omitted",
                 blood = "Template blood effect and lighting fitted to source geometry",
                 source_materials = "source-materials.json",
-                textures = texturePaths == null ? null : new { diffuse = texturePaths.Value.Diffuse,
-                    normal = texturePaths.Value.Normal, invert_normal_y = textures!.InvertNormalY },
-                limitations = texturePaths == null
+                textures = texturePaths.Count == 0 ? null : new
+                {
+                    diffuse = texturePaths.Count == 1 ? texturePaths[0].Diffuse : null,
+                    normal = texturePaths.Count == 1 ? texturePaths[0].Normal : null,
+                    material_slots = texturePaths.Select(pair => new
+                    { diffuse = pair.Diffuse, normal = pair.Normal }).ToArray(),
+                    invert_normal_y = textures!.InvertNormalY
+                },
+                limitations = texturePaths.Count == 0
                     ? new[] { "Game appearance and collision behavior not verified", "Textures not converted or copied" }
                     : new[] { "Game appearance and collision behavior not verified", "Texture appearance not game tested" },
                 views = reports,
@@ -164,7 +215,7 @@ public static class ModelPreparationRunner
         }
         catch
         {
-            if (Directory.Exists(staging)) Directory.Delete(staging, true);
+            await ModelPreparationTextures.DeleteTemporaryDirectoryAsync(staging);
             throw;
         }
     }
@@ -204,7 +255,7 @@ public static class ModelPreparationRunner
     {
         var start = new ProcessStartInfo(blender) { UseShellExecute = false, RedirectStandardOutput = true,
             RedirectStandardError = true, CreateNoWindow = true };
-        foreach (var argument in new[] { "-b", "--factory-startup", "--python", script, "--" }
+        foreach (var argument in new[] { "-b", "--factory-startup", "--disable-autoexec", "--python", script, "--" }
                      .Concat(scriptArguments))
             start.ArgumentList.Add(argument);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -237,7 +288,8 @@ public static class ModelPreparationRunner
     }
 
     private static void ValidateReimport(string inspectionPath, string exportReportPath, bool includeScabbard,
-        WeaponTemplateView view, int collisionShapeCount, string bloodMode, string scabbardFit)
+        WeaponTemplateView view, int collisionShapeCount, string bloodMode, string scabbardFit,
+        IReadOnlyList<(string Diffuse, string Normal)> textures)
     {
         using var imported = JsonDocument.Parse(File.ReadAllText(inspectionPath));
         using var exported = JsonDocument.Parse(File.ReadAllText(exportReportPath));
@@ -247,7 +299,31 @@ public static class ModelPreparationRunner
             item.GetProperty("type").GetString() == "MESH");
         if (weapon.ValueKind != JsonValueKind.Object)
             throw new InvalidDataException("Reimported NIF lacks the weapon mesh");
-        var weaponTop = weapon.GetProperty("bounds_max")[1].GetDouble();
+        var partNames = exported.RootElement.GetProperty("weapon_parts").EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString()!).ToArray();
+        foreach (var name in partNames)
+            if (!objects.TryGetValue(name, out var part) || part.GetProperty("type").GetString() != "MESH" ||
+                part.GetProperty("vertices").GetInt32() < 1 || part.GetProperty("uv_layers").GetInt32() < 1)
+                throw new InvalidDataException("Reimported NIF lacks usable weapon material shape: " + name);
+        if (textures.Count != 0 && textures.Count != partNames.Length)
+            throw new InvalidDataException("Weapon material shape and texture mapping counts differ");
+        for (var slot = 0; slot < textures.Count; slot++)
+        {
+            var nodes = objects[partNames[slot]].GetProperty("material_nodes").EnumerateArray()
+                .SelectMany(material => material.GetProperty("nodes").EnumerateArray())
+                .ToArray();
+            foreach (var (nodeName, texturePath) in new[]
+                     { ("Diffuse_Texture", textures[slot].Diffuse), ("Normal_Texture", textures[slot].Normal) })
+            {
+                var image = nodes.FirstOrDefault(node => node.GetProperty("name").GetString() == nodeName);
+                var path = image.ValueKind == JsonValueKind.Object &&
+                    image.GetProperty("image").ValueKind == JsonValueKind.String
+                    ? image.GetProperty("image").GetString()!.Replace('\\', '/') : "";
+                if (!path.EndsWith(texturePath, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Reimported material shape has wrong " + nodeName + ": " + partNames[slot]);
+            }
+        }
+        var weaponTop = exported.RootElement.GetProperty("exported_weapon_bounds")[1][1].GetDouble();
         var bladeStart = exported.RootElement.GetProperty("blood_start_y").GetDouble();
         foreach (var name in new[] { view.BloodEffect, view.BloodLighting })
         {
@@ -309,7 +385,7 @@ public static class ModelPreparationRunner
     }
 
     private static void Validate(string nif, string reportPath, bool includeScabbard,
-        WeaponTemplateView view, (string Diffuse, string Normal)? textures)
+        WeaponTemplateView view, IReadOnlyList<(string Diffuse, string Normal)> textures)
     {
         if (NifCompatibilityInspector.Read(nif).Family != NifFormatFamily.SkyrimSe)
             throw new InvalidDataException("Exported NIF is not Skyrim SE format: " + nif);
@@ -317,11 +393,26 @@ public static class ModelPreparationRunner
         var scene = SseNifReader.Read(bytes);
         if (scene.Meshes.Count == 0 || scene.Meshes.Sum(mesh => mesh.Indices.Length) == 0)
             throw new InvalidDataException("Exported NIF has no visible weapon geometry: " + nif);
-        if (textures != null)
-            foreach (var expected in new[] { textures.Value.Diffuse, textures.Value.Normal })
+        foreach (var pair in textures)
+            foreach (var expected in new[] { pair.Diffuse, pair.Normal })
                 if (!scene.TexturePaths.Any(path => path.Replace('\\', '/').Equals(expected,
                         StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("Exported NIF does not reference generated texture: " + expected);
+        if (textures.Count > 1)
+        {
+            using var materialReport = JsonDocument.Parse(File.ReadAllText(reportPath));
+            var parts = materialReport.RootElement.GetProperty("weapon_parts").EnumerateArray().ToArray();
+            if (parts.Length != textures.Count)
+                throw new InvalidDataException("Exported weapon material shape count differs from texture mapping");
+            for (var slot = 0; slot < parts.Length; slot++)
+            {
+                var name = parts[slot].GetProperty("name").GetString();
+                var mesh = scene.Meshes.FirstOrDefault(item => item.Name == name);
+                if (mesh?.DiffuseTexture == null || !mesh.DiffuseTexture.Replace('\\', '/').Equals(
+                        textures[slot].Diffuse, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Exported weapon shape has wrong diffuse texture: " + name);
+            }
+        }
         var strings = Encoding.Latin1.GetString(bytes);
         foreach (var name in new[] { view.BloodEffect, view.BloodLighting })
             if (!strings.Contains(name, StringComparison.Ordinal))

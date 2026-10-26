@@ -9,7 +9,8 @@ public sealed record ModelPreparationAdjustments(
     double OffsetX = 0,
     double OffsetY = 0,
     double OffsetZ = 0,
-    double SourceGripFraction = 0.11)
+    double SourceGripFraction = 0.11,
+    bool ReverseLongAxis = false)
 {
     public void Validate()
     {

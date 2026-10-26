@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Globalization;
 using System.IO.Compression;
+using System.Text.Json;
 using Microsoft.Win32;
 using SkyrimModPacker.Infrastructure.ModelPreparation;
 
@@ -12,6 +13,7 @@ namespace SkyrimModPacker.UI.Views;
 public sealed class ModelPreparationWindow : Window
 {
     private readonly TextBox _archive = new();
+    private readonly ComboBox _modelEntry = new() { IsEditable = true, MinWidth = 420 };
     private readonly TextBox _gameData = new();
     private readonly TextBox _blender = new();
     private readonly TextBox _addon = new();
@@ -20,6 +22,9 @@ public sealed class ModelPreparationWindow : Window
     private readonly CheckBox _useTextures = new() { Content = "Створити DDS та підключити текстури зброї" };
     private readonly TextBox _diffuseEntry = new();
     private readonly TextBox _normalEntry = new();
+    private readonly TextBox _materialEntries = new() { AcceptsReturn = true, Height = 78,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TextBlock _materialAudit = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _texconv = new();
     private readonly CheckBox _invertNormalY = new() { Content = "Інвертувати зелений канал normal map (якщо джерело OpenGL)" };
     private readonly CheckBox _scabbard = new() { Content = "Створити піхви за формою клинка" };
@@ -31,6 +36,7 @@ public sealed class ModelPreparationWindow : Window
     private readonly TextBox _offsetY = new() { Text = "0" };
     private readonly TextBox _offsetZ = new() { Text = "0" };
     private readonly TextBox _gripFraction = new() { Text = "0.11" };
+    private readonly CheckBox _reverseAxis = new() { Content = "Поміняти місцями основу й вістря джерельної моделі" };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Button _run = new() { Content = "Підготувати два NIF", MinWidth = 170 };
     private readonly Button _cancel = new() { Content = "Скасувати", IsEnabled = false, Margin = new Thickness(8, 0, 0, 0) };
@@ -90,11 +96,37 @@ public sealed class ModelPreparationWindow : Window
         panel.Children.Add(new TextBlock { Text = "Тип зброї", Margin = new Thickness(0, 0, 0, 4) });
         _weaponType.Margin = new Thickness(0, 0, 0, 12);
         panel.Children.Add(_weaponType);
-        panel.Children.Add(new TextBlock { Text = "Підготовка статичної зброї з ZIP/FBX або ZIP/GLB за шаблоном Skyrim SE/AE.",
+        panel.Children.Add(new TextBlock { Text = "Підготовка статичної зброї з BLEND, FBX, OBJ, GLB, glTF або NIF у ZIP за шаблоном Skyrim SE/AE.",
             TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) });
-        panel.Children.Add(new TextBlock { Text = "Шари крові підганяються до робочої частини моделі. Піхви можна додати або прибрати для підтримуваного типу. Вигляд і колізія в грі ще не перевірені; для текстур потрібен texconv.exe.",
+        panel.Children.Add(new TextBlock { Text = "Шари крові підганяються до робочої частини моделі. Піхви можна додати або прибрати для підтримуваного типу; окремі піхви з джерела замінюються новими за формою зброї. Вигляд і колізія в грі ще не перевірені; для текстур потрібен texconv.exe.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DarkOrange, Margin = new Thickness(0, 0, 0, 15) });
-        AddPath(panel, "ZIP з моделлю FBX або GLB", _archive, false, "ZIP (*.zip)|*.zip");
+        AddPath(panel, "ZIP з моделлю BLEND, FBX, OBJ, GLB, glTF або NIF", _archive, false, "ZIP (*.zip)|*.zip");
+        panel.Children.Add(new TextBlock { Text = "Модель усередині ZIP (для архіву з кількома файлами)",
+            Margin = new Thickness(0, 0, 0, 4) });
+        var modelPicker = new StackPanel { Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 12) };
+        modelPicker.Children.Add(_modelEntry);
+        var listModels = new Button { Content = "Знайти моделі",
+            Margin = new Thickness(8, 0, 0, 0) };
+        listModels.Click += (_, _) =>
+        {
+            try
+            {
+                using var zip = ZipFile.OpenRead(_archive.Text.Trim());
+                var entries = zip.Entries.Where(item => !string.IsNullOrEmpty(item.Name) &&
+                    new[] { ".blend", ".fbx", ".obj", ".glb", ".gltf", ".nif" }
+                        .Contains(System.IO.Path.GetExtension(item.Name).ToLowerInvariant()))
+                    .Select(item => item.FullName).ToArray();
+                _modelEntry.Items.Clear();
+                foreach (var name in entries) _modelEntry.Items.Add(name);
+                _modelEntry.Text = entries.Length == 1 ? entries[0] : "";
+                _status.Text = entries.Length == 1 ? "Знайдено одну модель: " + entries[0] :
+                    "Знайдено моделей: " + entries.Length + ". Оберіть потрібну зі списку.";
+            }
+            catch (Exception error) { _status.Text = "Помилка читання ZIP: " + error.Message; }
+        };
+        modelPicker.Children.Add(listModels);
+        panel.Children.Add(modelPicker);
         AddPath(panel, "Папка Data встановленого Skyrim SE/AE", _gameData, true);
         AddPath(panel, "Blender executable", _blender, false, "Executable (*.exe)|*.exe");
         AddPath(panel, "Папка, що містить io_scene_nifly", _addon, true);
@@ -107,6 +139,42 @@ public sealed class ModelPreparationWindow : Window
         panel.Children.Add(_diffuseEntry);
         panel.Children.Add(new TextBlock { Text = "Normal у ZIP", Margin = new Thickness(0, 6, 0, 0) });
         panel.Children.Add(_normalEntry);
+        panel.Children.Add(new TextBlock { Text = "Для кількох матеріалів: по одному рядку «номер слота | BaseColor у ZIP | Normal у ZIP». Нумерація від 0. Поля вище використовуються для моделі з 0–1 слотом.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 7, 0, 3) });
+        panel.Children.Add(_materialEntries);
+        var inspectMaterials = new Button { Content = "Переглянути матеріальні слоти ZIP",
+            Margin = new Thickness(0, 6, 0, 5) };
+        inspectMaterials.Click += async (_, _) =>
+        {
+            inspectMaterials.IsEnabled = false;
+            _materialAudit.Text = "Читаю матеріали моделі…";
+            try
+            {
+                var report = await ModelPreparationRunner.InspectSourceMaterialsAsync(
+                    _archive.Text.Trim(), _blender.Text.Trim(), _addon.Text.Trim(),
+                    modelEntry: _modelEntry.Text.Trim());
+                using var document = JsonDocument.Parse(report);
+                var meshes = document.RootElement.GetProperty("meshes").EnumerateArray().ToArray();
+                var selectedMesh = document.RootElement.GetProperty("selected_mesh").GetString();
+                var mesh = meshes.First(item => item.GetProperty("name").GetString() == selectedMesh);
+                var slots = mesh.GetProperty("materials").EnumerateArray()
+                    .Select((item, index) => index + ": " +
+                        (item.GetProperty("name").GetString() ?? "без назви")).ToArray();
+                var applied = mesh.GetProperty("applied_modifiers").EnumerateArray()
+                    .Select(item => item.GetString()).ToArray();
+                _materialAudit.Text = "Mesh: " + mesh.GetProperty("name").GetString() +
+                    "; UV: " + mesh.GetProperty("uv_layers").GetInt32() +
+                    "; слоти: " + (slots.Length == 0 ? "немає" : string.Join("; ", slots)) +
+                    "; застосовані модифікатори: " + (applied.Length == 0 ? "немає" :
+                        string.Join(", ", applied)) +
+                    ". Зображення ZIP: " + string.Join(", ", document.RootElement.GetProperty("images")
+                        .EnumerateArray().Select(item => item.GetProperty("name").GetString()));
+            }
+            catch (Exception error) { _materialAudit.Text = "Помилка аудиту: " + error.Message; }
+            finally { inspectMaterials.IsEnabled = true; }
+        };
+        panel.Children.Add(inspectMaterials);
+        panel.Children.Add(_materialAudit);
         AddPath(panel, "texconv.exe", _texconv, false, "Executable (*.exe)|*.exe");
         var suggestTextures = new Button { Content = "Знайти BaseColor і Normal у ZIP",
             Margin = new Thickness(0, 0, 0, 6) };
@@ -129,11 +197,13 @@ public sealed class ModelPreparationWindow : Window
         AddNumber(numbers, "Зсув Z", _offsetZ);
         AddNumber(numbers, "Точка хвата", _gripFraction);
         panel.Children.Add(numbers);
+        panel.Children.Add(_reverseAxis);
         var reset = new Button { Content = "Скинути коригування", Margin = new Thickness(0, 3, 0, 12) };
         reset.Click += (_, _) =>
         {
             _scale.Text = "1";
             _gripFraction.Text = "0.11";
+            _reverseAxis.IsChecked = false;
             foreach (var field in new[] { _rotationX, _rotationY, _rotationZ, _offsetX, _offsetY, _offsetZ })
                 field.Text = "0";
         };
@@ -193,7 +263,25 @@ public sealed class ModelPreparationWindow : Window
             throw new FormatException("Введіть числові значення масштабу, повороту та зсуву.");
         }
         return new ModelPreparationAdjustments(Number(_scale), Number(_rotationX), Number(_rotationY),
-            Number(_rotationZ), Number(_offsetX), Number(_offsetY), Number(_offsetZ), Number(_gripFraction));
+            Number(_rotationZ), Number(_offsetX), Number(_offsetY), Number(_offsetZ), Number(_gripFraction),
+            _reverseAxis.IsChecked == true);
+    }
+
+    private IReadOnlyList<ModelPreparationMaterialTexture>? ReadMaterialEntries()
+    {
+        if (string.IsNullOrWhiteSpace(_materialEntries.Text)) return null;
+        var result = new List<ModelPreparationMaterialTexture>();
+        foreach (var line in _materialEntries.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.Trim().Split('|', StringSplitOptions.TrimEntries);
+            if (fields.Length != 3 || !int.TryParse(fields[0], out var slot) || slot < 0 ||
+                string.IsNullOrWhiteSpace(fields[1]) || string.IsNullOrWhiteSpace(fields[2]))
+                throw new FormatException("Для кожного матеріалу введіть: номер слота | BaseColor у ZIP | Normal у ZIP.");
+            if (result.Any(item => item.Slot == slot))
+                throw new FormatException("Номер матеріального слота повторюється: " + slot);
+            result.Add(new ModelPreparationMaterialTexture(slot, fields[1], fields[2]));
+        }
+        return result;
     }
 
     private void SuggestTextures()
@@ -275,11 +363,12 @@ public sealed class ModelPreparationWindow : Window
             var weaponType = ((WeaponTemplateDefinition)_weaponType.SelectedItem).Id;
             var textures = _useTextures.IsChecked == true
                 ? new ModelPreparationTextureOptions(_diffuseEntry.Text.Trim(), _normalEntry.Text.Trim(),
-                    _texconv.Text.Trim(), _invertNormalY.IsChecked == true)
+                    _texconv.Text.Trim(), _invertNormalY.IsChecked == true, ReadMaterialEntries())
                 : null;
             var draft = await Task.Run(() => ModelPreparationRunner.PrepareDraftAsync(
                 archive, data, blender, addon, output, scabbard, _cancellation.Token,
-                adjustments: adjustments, weaponType: weaponType, textures: textures));
+                adjustments: adjustments, weaponType: weaponType, textures: textures,
+                modelEntry: _modelEntry.Text.Trim()));
             if (_closed) { draft.Dispose(); return; }
             _draft = draft;
             _preparedDefinition = WeaponTemplateCatalog.GetExportable(weaponType);

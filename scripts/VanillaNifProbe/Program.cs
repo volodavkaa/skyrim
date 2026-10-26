@@ -3,11 +3,33 @@ using Mutagen.Bethesda.Archives;
 using SkyrimModPacker.Infrastructure.Preview;
 using SkyrimModPacker.Infrastructure.ModelPreparation;
 using System.Globalization;
+using System.Text.Json;
 
-if (args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 && args[0] is "--prepare" or "--prepare-draft" or "--prepare-discard")
+if (args.Length is 4 or 5 or 6 && args[0] == "--inspect-materials")
 {
-    var weaponType = args.Length is 9 or 12 or 13 ? args[8] : args.Length == 17 ? args[^1] : "sword1h";
-    var textures = args.Length is 12 or 13
+    var report = await ModelPreparationRunner.InspectSourceMaterialsAsync(args[1], args[2],
+        addonParent: args.Length >= 5 ? args[4] : null, scriptPath: args[3],
+        modelEntry: args.Length == 6 ? args[5] : null);
+    using var document = JsonDocument.Parse(report);
+    foreach (var mesh in document.RootElement.GetProperty("meshes").EnumerateArray())
+        Console.WriteLine(mesh.GetProperty("name").GetString() + ": " +
+            mesh.GetProperty("materials").GetArrayLength() + " material slots");
+    return 0;
+}
+
+if ((args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 &&
+     args[0] is "--prepare" or "--prepare-draft" or "--prepare-discard") ||
+    (args.Length == 11 && args[0] is "--prepare-multi-discard" or "--prepare-multi-draft") ||
+    (args.Length == 10 && args[0] == "--prepare-model-discard") ||
+    (args.Length == 12 && args[0] == "--prepare-multi-model-discard"))
+{
+    var weaponType = args.Length is 9 or 10 or 11 or 12 or 13 ? args[8] : args.Length == 17 ? args[^1] : "sword1h";
+    var modelEntry = args[0] == "--prepare-model-discard" ? args[9] :
+        args[0] == "--prepare-multi-model-discard" ? args[11] : null;
+    var textures = args[0] is "--prepare-multi-discard" or "--prepare-multi-draft" or "--prepare-multi-model-discard"
+        ? new ModelPreparationTextureOptions("", "", args[10], false,
+            JsonSerializer.Deserialize<List<ModelPreparationMaterialTexture>>(File.ReadAllText(args[9]))!)
+        : args.Length is 12 or 13
         ? new ModelPreparationTextureOptions(args[9], args[10], args[11], args.Length == 13 && args[12] == "invert")
         : null;
     var adjustments = args.Length >= 15
@@ -25,7 +47,7 @@ if (args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 && args[0] is "--prepare
     {
         var folder = await ModelPreparationRunner.RunAsync(args[1], args[2], args[3], args[4],
             args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments,
-            weaponType: weaponType, textures: textures);
+            weaponType: weaponType, textures: textures, modelEntry: modelEntry);
         Console.WriteLine(folder);
     }
     else
@@ -33,14 +55,15 @@ if (args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 && args[0] is "--prepare
         string staging;
         using (var draft = await ModelPreparationRunner.PrepareDraftAsync(args[1], args[2], args[3],
                    args[4], args[5], args[6] == "keep", scriptPath: args[7], adjustments: adjustments,
-                   weaponType: weaponType, textures: textures))
+                   weaponType: weaponType, textures: textures, modelEntry: modelEntry))
         {
             staging = draft.StagingDirectory;
             if (!File.Exists(Path.Combine(staging, "report.json"))) throw new IOException("Draft report is missing");
             Console.WriteLine("Draft: " + staging);
-            if (args[0] == "--prepare-draft") Console.WriteLine("Published: " + draft.Publish());
+            if (args[0] is "--prepare-draft" or "--prepare-multi-draft")
+                Console.WriteLine("Published: " + draft.Publish());
         }
-        if (args[0] == "--prepare-discard" && Directory.Exists(staging))
+        if (args[0] is "--prepare-discard" or "--prepare-multi-discard" or "--prepare-model-discard" or "--prepare-multi-model-discard" && Directory.Exists(staging))
             throw new IOException("Discard left a staging directory");
     }
     return 0;
@@ -61,6 +84,8 @@ if (relativePath == "--validate")
     Console.WriteLine($"{Path.GetFileName(outputPath)}: {header.Family}, {data.Length} bytes, " +
         $"{scene.Meshes.Count} visible meshes, {scene.Meshes.Sum(m => m.Positions.Length)} vertices, " +
         $"{scene.Meshes.Sum(m => m.Indices.Length / 3)} triangles");
+    foreach (var mesh in scene.Meshes)
+        Console.WriteLine($"  {mesh.Name}: {mesh.Positions.Length} vertices, diffuse={mesh.DiffuseTexture}");
     return header.Family == NifFormatFamily.SkyrimSe ? 0 : 1;
 }
 if ((!relativePath.StartsWith("meshes\\", StringComparison.OrdinalIgnoreCase) && !relativePath.StartsWith("--find=")) ||

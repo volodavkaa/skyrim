@@ -5,21 +5,26 @@ using SkyrimModPacker.Infrastructure.Preview;
 
 namespace SkyrimModPacker.Infrastructure.ModelPreparation;
 
+public sealed record ModelPreparationMaterialTexture(int Slot, string DiffuseEntry, string NormalEntry);
+
 public sealed record ModelPreparationTextureOptions(string DiffuseEntry, string NormalEntry,
-    string TexconvPath, bool InvertNormalY = false);
+    string TexconvPath, bool InvertNormalY = false,
+    IReadOnlyList<ModelPreparationMaterialTexture>? Materials = null);
 
 internal static class ModelPreparationTextures
 {
     internal static async Task<(string Diffuse, string Normal)> PrepareAsync(string archivePath,
-        string staging, string slug, ModelPreparationTextureOptions options, CancellationToken token)
+        string staging, string slug, ModelPreparationTextureOptions options, CancellationToken token,
+        int? materialSlot = null)
     {
         if (!File.Exists(options.TexconvPath))
             throw new FileNotFoundException("Texconv executable was not found", options.TexconvPath);
         if (string.IsNullOrWhiteSpace(options.DiffuseEntry) || string.IsNullOrWhiteSpace(options.NormalEntry) ||
             options.DiffuseEntry.Equals(options.NormalEntry, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Choose distinct diffuse and normal images from the ZIP archive.");
-        var relativeDiffuse = $"textures/{slug}/{slug}.dds";
-        var relativeNormal = $"textures/{slug}/{slug}_n.dds";
+        var stem = slug + (materialSlot is null ? "" : "_m" + materialSlot.Value);
+        var relativeDiffuse = $"textures/{slug}/{stem}.dds";
+        var relativeNormal = $"textures/{slug}/{stem}_n.dds";
         var output = Path.Combine(staging, "textures", slug);
         var input = Path.Combine(staging, ".source-textures");
         var convertedFolder = Path.Combine(input, "converted");
@@ -31,8 +36,8 @@ internal static class ModelPreparationTextures
             using var archive = ZipFile.OpenRead(archivePath);
             foreach (var (entryName, role, format, destination) in new[]
                      {
-                         (options.DiffuseEntry, "diffuse", "BC7_UNORM_SRGB", Path.Combine(output, slug + ".dds")),
-                         (options.NormalEntry, "normal", "BC7_UNORM", Path.Combine(output, slug + "_n.dds"))
+                         (options.DiffuseEntry, "diffuse", "BC7_UNORM_SRGB", Path.Combine(output, stem + ".dds")),
+                         (options.NormalEntry, "normal", "BC7_UNORM", Path.Combine(output, stem + "_n.dds"))
                      })
             {
                 token.ThrowIfCancellationRequested();
@@ -72,7 +77,28 @@ internal static class ModelPreparationTextures
             var fullStage = Path.GetFullPath(staging) + Path.DirectorySeparatorChar;
             if (!Path.GetFullPath(input).StartsWith(fullStage, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Temporary texture path escaped staging directory.");
-            if (Directory.Exists(input)) Directory.Delete(input, true);
+            await DeleteTemporaryDirectoryAsync(input);
+        }
+    }
+
+    internal static async Task DeleteTemporaryDirectoryAsync(string path)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            if (!Directory.Exists(path)) return;
+            try
+            {
+                Directory.Delete(path, true);
+                return;
+            }
+            catch (IOException) when (attempt < 7)
+            {
+                await Task.Delay(100);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 7)
+            {
+                await Task.Delay(100);
+            }
         }
     }
 

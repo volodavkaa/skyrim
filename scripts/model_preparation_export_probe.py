@@ -3,7 +3,6 @@
 import json
 import math
 import os
-import re
 import sys
 import traceback
 
@@ -12,7 +11,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(__file__))
-from model_preparation_probe import inspect_archive
+from model_preparation_probe import inspect_archive, select_weapon_mesh
 
 
 def bounds(obj):
@@ -22,13 +21,7 @@ def bounds(obj):
 
 
 def select_source_mesh():
-    meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
-    level_zero = [obj for obj in meshes if re.search(r"LOD0$", obj.name, re.IGNORECASE)]
-    selected = level_zero if level_zero else meshes
-    if len(selected) != 1:
-        raise ValueError("Choose a model with one mesh or one LOD0 mesh; found " +
-                         ", ".join(obj.name for obj in selected))
-    source = selected[0]
+    source = select_weapon_mesh()
     if not source.data.vertices or not source.data.polygons:
         raise ValueError("Selected mesh has no usable geometry")
     if source.parent and source.parent.type == "ARMATURE":
@@ -78,6 +71,47 @@ def replace_geometry(target, source, fit, material_slots, blade_start_y=None, of
     return len(geometry.vertices), len(geometry.polygons)
 
 
+def split_weapon_materials(weapon, source):
+    """Keep the fitted whole for blood/collision, then partition visible faces by slot."""
+    slot_count = len(source.material_slots)
+    if slot_count <= 1:
+        return [weapon]
+    if slot_count > 8:
+        raise ValueError("At most eight source material slots are supported")
+    if len(weapon.data.polygons) != len(source.data.polygons):
+        raise ValueError("Weapon face order changed before material partition")
+    original = weapon.data
+    for fitted_face, source_face in zip(original.polygons, source.data.polygons):
+        fitted_face.material_index = source_face.material_index
+    shader = weapon.active_material
+    if shader is None:
+        raise ValueError("Weapon template has no material to duplicate")
+    result = []
+    for slot in range(slot_count):
+        part = weapon if slot == 0 else weapon.copy()
+        if slot:
+            name = weapon.name
+            part.name = (name[:-2] + "_Material" + str(slot) + ":0"
+                         if name.endswith(":0") else name + "_Material" + str(slot))
+            bpy.context.collection.objects.link(part)
+        mesh = original.copy()
+        edit = bmesh.new()
+        edit.from_mesh(mesh)
+        unwanted = [face for face in edit.faces if face.material_index != slot]
+        bmesh.ops.delete(edit, geom=unwanted, context="FACES")
+        edit.to_mesh(mesh)
+        edit.free()
+        if not mesh.polygons:
+            raise ValueError("Source material slot has no weapon faces: " + str(slot))
+        mesh.materials.clear()
+        mesh.materials.append(shader if slot == 0 else shader.copy())
+        for face in mesh.polygons:
+            face.material_index = 0
+        part.data = mesh
+        result.append(part)
+    return result
+
+
 def fit_scabbard(scabbard, blade, blade_start_y):
     """Build an open sheath around blade cross sections, retaining template shader data."""
     mesh = blade.data
@@ -100,7 +134,9 @@ def fit_scabbard(scabbard, blade, blade_start_y):
     for level in range(segments + 1):
         y = blade_start_y + (blade_tip - blade_start_y) * level / segments
         section = []
+        half_step = (blade_tip - blade_start_y) / (2 * segments) + 1e-6
         for triangle in triangles:
+            section.extend(point for point in triangle if abs(point.y - y) <= half_step)
             for first, second in ((0, 1), (1, 2), (2, 0)):
                 a, b = triangle[first], triangle[second]
                 if min(a.y, b.y) <= y <= max(a.y, b.y):
@@ -113,11 +149,12 @@ def fit_scabbard(scabbard, blade, blade_start_y):
         x_min, x_max = min(p.x for p in section), max(p.x for p in section)
         z_min, z_max = min(p.z for p in section), max(p.z for p in section)
         center_x, center_z = (x_min + x_max) / 2, (z_min + z_max) / 2
-        radius_x = max((x_max - x_min) / 2 + 0.25, 0.35)
-        radius_z = max((z_max - z_min) / 2 + 0.25, 0.35)
+        radius_x = max((x_max - x_min) / 2 + 0.5, 0.35)
+        radius_z = max((z_max - z_min) / 2 + 0.5, 0.35)
         for side in range(sides):
             angle = 2 * math.pi * side / sides
-            point = Vector((center_x + radius_x * math.cos(angle), y,
+            sheath_y = y - 0.15 if level == 0 else y + 0.15 if level == segments else y
+            point = Vector((center_x + radius_x * math.cos(angle), sheath_y,
                             center_z + radius_z * math.sin(angle)))
             vertices.append(inverse @ point)
         if level:
@@ -327,10 +364,13 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
         raise ValueError("Scabbard mode must be 'keep' or 'omit'")
     sys.path.insert(0, addon_parent)
     bpy.ops.preferences.addon_enable(module="io_scene_nifly")
-    archive_hash, selected_model = inspect_archive(archive_path)
+    archive_hash, selected_model = inspect_archive(
+        archive_path, addon_parent, template_config.get("selected_model_entry"))
     source = select_source_mesh()
     selected_mesh = source.name
     source_objects = list(bpy.context.scene.objects)
+    for index, obj in enumerate(source_objects):
+        obj.name = "SourceObject_" + str(index)
     bpy.ops.import_scene.pynifly(filepath=template_path, import_collisions=True)
     template_objects = [obj for obj in bpy.context.scene.objects if obj not in source_objects]
     collision_names = [obj.name for obj in template_objects if obj.name.startswith("bhk")]
@@ -341,11 +381,22 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
 
     source_min, source_max = bounds(source)
     target_min, target_max = bounds(weapon)
-    if source_max[2] - source_min[2] <= 1e-6 or not all(
-            math.isfinite(value) for value in source_min + source_max):
-        raise ValueError("Source needs a finite, nonzero Z length")
-    scale = (target_max[1] - target_min[1]) / (source_max[2] - source_min[2])
-    rotate = Matrix.Rotation(-math.pi / 2, 4, "X")
+    if not all(math.isfinite(value) for value in source_min + source_max):
+        raise ValueError("Source needs finite mesh coordinates")
+    dimensions = [source_max[axis] - source_min[axis] for axis in range(3)]
+    long_axis = max(range(3), key=lambda axis: dimensions[axis])
+    if dimensions[long_axis] <= 1e-6:
+        raise ValueError("Source needs a nonzero length")
+    if long_axis != 2 and dimensions[long_axis] < 1.4 * max(
+            dimensions[axis] for axis in range(3) if axis != long_axis):
+        raise ValueError("Cannot determine the weapon long axis unambiguously")
+    scale = (target_max[1] - target_min[1]) / dimensions[long_axis]
+    rotation_axis, rotation_degrees = (("Z", 90) if long_axis == 0 else
+                                       ("Z", 0) if long_axis == 1 else ("X", -90))
+    if adjustments.get("ReverseLongAxis", False):
+        rotation_axis, rotation_degrees = (("Z", -90) if long_axis == 0 else
+                                           ("Z", 180) if long_axis == 1 else ("X", 90))
+    rotate = Matrix.Rotation(math.radians(rotation_degrees), 4, rotation_axis)
     scaled = rotate @ Matrix.Scale(scale, 4)
     rotated_points = [scaled @ (source.matrix_world @ v.co) for v in source.data.vertices]
     rotated_min = [min(p[i] for p in rotated_points) for i in range(3)]
@@ -387,7 +438,7 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
     fit = adjustment_fit @ fit
     weapon_counts = replace_geometry(weapon, source, fit,
                                      [slot.material for slot in weapon.material_slots])
-    texture_paths = apply_weapon_textures(weapon, template_config)
+    actual_min, actual_max = bounds(weapon)
     collision_bounds = {}
     for collider in template_objects:
         if collider.type == "MESH" and collider.name.startswith("bhkBoxShape"):
@@ -431,6 +482,19 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
     scabbard_bounds = bounds(scabbard) if scabbard_counts else None
     if scabbard_mode == "omit" and scabbard is not None:
         bpy.data.objects.remove(scabbard, do_unlink=True)
+    mappings = template_config.get("material_textures")
+    if len(source.material_slots) > 1 and (not mappings or
+            len(mappings) != len(source.material_slots)):
+        raise ValueError("Every source material slot needs a separate texture mapping")
+    parts = split_weapon_materials(weapon, source)
+    if sum(len(part.data.polygons) for part in parts) != weapon_counts[1]:
+        raise ValueError("Material partition lost or duplicated weapon faces")
+    texture_paths = []
+    for slot, part in enumerate(parts):
+        config = dict(template_config)
+        if mappings:
+            config.update(mappings[slot])
+        texture_paths.append(apply_weapon_textures(part, config))
     for obj in source_objects:
         bpy.data.objects.remove(obj, do_unlink=True)
 
@@ -442,12 +506,13 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
                                            export_animations=False)
     if "CANCELLED" in result or not os.path.isfile(output_path):
         raise RuntimeError("NIF export did not produce an output file")
-    actual_min, actual_max = bounds(weapon)
     return {"archive_sha256": archive_hash, "selected_model": selected_model,
             "selected_mesh": selected_mesh, "template": template_path,
             "source_bounds": [source_min, source_max],
             "template_weapon_bounds": [target_min, target_max],
-            "fit_scale": scale, "fit_rotation_x_degrees": -90,
+            "fit_scale": scale, "source_long_axis": "XYZ"[long_axis],
+            "fit_rotation_axis": rotation_axis, "fit_rotation_degrees": rotation_degrees,
+            "fit_rotation_x_degrees": rotation_degrees if long_axis == 2 else 0,
             "effective_fit_scale": scale * multiplier,
             "fit_translation": list(offset),
             "source_grip_fraction": grip_fraction,
@@ -455,6 +520,9 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
             "adjustments": adjustments,
             "exported_weapon_bounds": [actual_min, actual_max],
             "weapon_geometry": {"vertices": weapon_counts[0], "polygons": weapon_counts[1]},
+            "weapon_parts": [{"name": part.name, "vertices": len(part.data.vertices),
+                              "polygons": len(part.data.polygons), "uv_layers": len(part.data.uv_layers)}
+                             for part in parts],
             "weapon_textures": texture_paths,
             "blood_geometry": {name: {"vertices": value[0], "polygons": value[1]}
                                for name, value in blood_counts.items()},
