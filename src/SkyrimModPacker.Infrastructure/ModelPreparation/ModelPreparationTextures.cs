@@ -5,26 +5,44 @@ using SkyrimModPacker.Infrastructure.Preview;
 
 namespace SkyrimModPacker.Infrastructure.ModelPreparation;
 
-public sealed record ModelPreparationMaterialTexture(int Slot, string DiffuseEntry, string NormalEntry);
+public sealed record ModelPreparationMaterialTexture(int Slot, string DiffuseEntry, string NormalEntry,
+    string? MetallicEntry = null, string? CubemapEntry = null);
 
 public sealed record ModelPreparationTextureOptions(string DiffuseEntry, string NormalEntry,
     string TexconvPath, bool InvertNormalY = false,
-    IReadOnlyList<ModelPreparationMaterialTexture>? Materials = null);
+    IReadOnlyList<ModelPreparationMaterialTexture>? Materials = null,
+    string? MetallicEntry = null, string? CubemapEntry = null,
+    string? GameCubemapPath = null);
+
+internal sealed record PreparedMaterialTextures(string Diffuse, string Normal,
+    string? EnvMask = null, string? EnvMap = null);
 
 internal static class ModelPreparationTextures
 {
-    internal static async Task<(string Diffuse, string Normal)> PrepareAsync(string archivePath,
+    internal static async Task<PreparedMaterialTextures> PrepareAsync(string archivePath,
         string staging, string slug, ModelPreparationTextureOptions options, CancellationToken token,
-        int? materialSlot = null)
+        string gameDataDirectory, int? materialSlot = null)
     {
         if (!File.Exists(options.TexconvPath))
             throw new FileNotFoundException("Texconv executable was not found", options.TexconvPath);
         if (string.IsNullOrWhiteSpace(options.DiffuseEntry) || string.IsNullOrWhiteSpace(options.NormalEntry) ||
             options.DiffuseEntry.Equals(options.NormalEntry, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Choose distinct diffuse and normal images from the ZIP archive.");
+        var metallicEntry = string.IsNullOrWhiteSpace(options.MetallicEntry) ? null : options.MetallicEntry.Trim();
+        var cubemapEntry = string.IsNullOrWhiteSpace(options.CubemapEntry) ? null : options.CubemapEntry.Trim();
+        var gameCubemap = cubemapEntry == null && !string.IsNullOrWhiteSpace(options.GameCubemapPath)
+            ? options.GameCubemapPath.Trim() : null;
+        if ((cubemapEntry != null || gameCubemap != null) && metallicEntry == null)
+            throw new ArgumentException("Choose a metallic/environment mask before a custom cubemap.");
+        var entries = new[] { options.DiffuseEntry, options.NormalEntry, metallicEntry, cubemapEntry }
+            .Where(value => value != null).ToArray();
+        if (entries.Distinct(StringComparer.OrdinalIgnoreCase).Count() != entries.Length)
+            throw new ArgumentException("Each texture role needs a different ZIP image.");
         var stem = slug + (materialSlot is null ? "" : "_m" + materialSlot.Value);
         var relativeDiffuse = $"textures/{slug}/{stem}.dds";
         var relativeNormal = $"textures/{slug}/{stem}_n.dds";
+        var relativeEnvMask = metallicEntry == null ? null : $"textures/{slug}/{stem}_em.dds";
+        var relativeEnvMap = cubemapEntry == null && gameCubemap == null ? null : $"textures/{slug}/{stem}_e.dds";
         var output = Path.Combine(staging, "textures", slug);
         var input = Path.Combine(staging, ".source-textures");
         var convertedFolder = Path.Combine(input, "converted");
@@ -37,8 +55,9 @@ internal static class ModelPreparationTextures
             foreach (var (entryName, role, format, destination) in new[]
                      {
                          (options.DiffuseEntry, "diffuse", "BC7_UNORM_SRGB", Path.Combine(output, stem + ".dds")),
-                         (options.NormalEntry, "normal", "BC7_UNORM", Path.Combine(output, stem + "_n.dds"))
-                     })
+                         (options.NormalEntry, "normal", "BC7_UNORM", Path.Combine(output, stem + "_n.dds")),
+                         (metallicEntry, "metallic", "BC7_UNORM", Path.Combine(output, stem + "_em.dds"))
+                     }.Where(item => item.Item1 != null))
             {
                 token.ThrowIfCancellationRequested();
                 var matches = archive.Entries.Where(item => !string.IsNullOrEmpty(item.Name) &&
@@ -70,7 +89,32 @@ internal static class ModelPreparationTextures
                 if (actualFormat != expectedFormat)
                     throw new InvalidDataException("Converted DDS has the wrong color space: " + destination);
             }
-            return (relativeDiffuse, relativeNormal);
+            if (cubemapEntry != null)
+            {
+                token.ThrowIfCancellationRequested();
+                var matches = archive.Entries.Where(item => !string.IsNullOrEmpty(item.Name) &&
+                    item.FullName.Equals(cubemapEntry, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length != 1 || !cubemapEntry.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Choose one DDS cubemap from the ZIP archive: " + cubemapEntry);
+                var entry = matches[0];
+                if (entry.Length is <= 0 or > 64 * 1024 * 1024)
+                    throw new InvalidDataException("Cubemap size is outside the 64 MiB limit: " + cubemapEntry);
+                var destination = Path.Combine(output, stem + "_e.dds");
+                await using (var source = entry.Open())
+                await using (var target = File.Create(destination))
+                    await source.CopyToAsync(target, token);
+                ValidateCubemap(destination, token);
+            }
+            else if (gameCubemap != null)
+            {
+                token.ThrowIfCancellationRequested();
+                var destination = Path.Combine(output, stem + "_e.dds");
+                await File.WriteAllBytesAsync(destination,
+                    GameCubemapCatalog.Read(gameDataDirectory, gameCubemap), token);
+                ValidateCubemap(destination, token);
+            }
+            return new PreparedMaterialTextures(relativeDiffuse, relativeNormal,
+                relativeEnvMask, relativeEnvMap);
         }
         finally
         {
@@ -79,6 +123,23 @@ internal static class ModelPreparationTextures
                 throw new InvalidOperationException("Temporary texture path escaped staging directory.");
             await DeleteTemporaryDirectoryAsync(input);
         }
+    }
+
+    private static void ValidateCubemap(string path, CancellationToken token)
+    {
+        var info = DdsResourceInspector.Inspect(path, token);
+        if (info.Width != info.Height)
+            throw new InvalidDataException("Cubemap faces must be square: " + path);
+        using var input = File.OpenRead(path);
+        Span<byte> header = stackalloc byte[148];
+        input.ReadExactly(header[..128]);
+        var dx10 = System.Text.Encoding.ASCII.GetString(header[84..88]) == "DX10";
+        if (dx10) input.ReadExactly(header[128..]);
+        var isCube = dx10
+            ? (BinaryPrimitives.ReadUInt32LittleEndian(header[136..]) & 4) != 0
+            : (BinaryPrimitives.ReadUInt32LittleEndian(header[112..]) & 0xFE00) == 0xFE00;
+        if (!isCube)
+            throw new InvalidDataException("Selected DDS is not a complete six-face cubemap: " + path);
     }
 
     internal static async Task DeleteTemporaryDirectoryAsync(string path)

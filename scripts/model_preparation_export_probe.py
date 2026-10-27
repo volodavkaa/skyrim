@@ -330,6 +330,8 @@ def detect_head_band(weapon):
 def apply_weapon_textures(weapon, config):
     diffuse = config.get("diffuse_texture")
     normal = config.get("normal_texture")
+    env_mask = config.get("env_mask_texture")
+    env_map = config.get("env_map_texture")
     if not diffuse and not normal:
         return None
     if not diffuse or not normal or not config.get("texture_root"):
@@ -351,6 +353,23 @@ def apply_weapon_textures(weapon, config):
         if slot == "Normal":
             node.image.colorspace_settings.name = "Non-Color"
         result[slot] = relative
+    if env_mask:
+        if material.pyn_shader.Shader_Type != "Environment_Map" or "ENVIRONMENT_MAPPING" not in material.pyn_shader.Shader_Flags_1:
+            raise ValueError("Weapon template needs an Environment Map shader for metallic masks")
+        absolute = os.path.join(config["texture_root"], *env_mask.split("/"))
+        if not os.path.isfile(absolute):
+            raise FileNotFoundError(absolute)
+        material["BSShaderTextureSet_EnvMask"] = env_mask.replace("/", "\\")
+        result["EnvMask"] = env_mask
+        if env_map:
+            absolute = os.path.join(config["texture_root"], *env_map.split("/"))
+            if not os.path.isfile(absolute):
+                raise FileNotFoundError(absolute)
+            material["BSShaderTextureSet_EnvMap"] = env_map.replace("/", "\\")
+        inherited = material.get("BSShaderTextureSet_EnvMap")
+        if not inherited:
+            raise ValueError("Environment Map shader has no cubemap")
+        result["EnvMap"] = inherited.replace("\\", "/")
     return result
 
 

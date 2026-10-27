@@ -2,10 +2,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Globalization;
+using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.Win32;
+using SkyrimModPacker.Core.Models;
 using SkyrimModPacker.Infrastructure.ModelPreparation;
+using SkyrimModPacker.Infrastructure.Preview;
+using SkyrimModPacker.UI.Controls;
+using SkyrimModPacker.UI.Services;
 
 namespace SkyrimModPacker.UI.Views;
 
@@ -22,6 +27,11 @@ public sealed class ModelPreparationWindow : Window
     private readonly CheckBox _useTextures = new() { Content = "Створити DDS та підключити текстури зброї" };
     private readonly TextBox _diffuseEntry = new();
     private readonly TextBox _normalEntry = new();
+    private readonly TextBox _metallicEntry = new();
+    private readonly TextBox _cubemapEntry = new();
+    private readonly ComboBox _gameCubemap = new() { DisplayMemberPath = "Name" };
+    private readonly ModelPreviewControl _preview = new(new ModelPreviewService());
+    private readonly TextBlock _previewStatus = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _materialEntries = new() { AcceptsReturn = true, Height = 78,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly TextBlock _materialAudit = new() { TextWrapping = TextWrapping.Wrap };
@@ -51,13 +61,14 @@ public sealed class ModelPreparationWindow : Window
     private WeaponTemplateDefinition? _preparedDefinition;
     private CancellationTokenSource? _cancellation;
     private bool _closed;
+    private int _reflectionGeneration;
 
     public ModelPreparationWindow()
     {
         Title = "Підготовка моделі — експериментально";
-        Width = 750;
+        Width = 1340;
         Height = 760;
-        MinWidth = 640;
+        MinWidth = 900;
         MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(29, 34, 43));
@@ -133,13 +144,23 @@ public sealed class ModelPreparationWindow : Window
         AddPath(panel, "Вихідна папка поза грою", _output, true);
         _useTextures.Margin = new Thickness(0, 8, 0, 6);
         panel.Children.Add(_useTextures);
-        panel.Children.Add(new TextBlock { Text = "Точні шляхи зображень усередині ZIP. Metallic зберігається лише у звіті.",
+        panel.Children.Add(new TextBlock { Text = "Точні шляхи зображень усередині ZIP. Metallic стає маскою відбиття для Environment Map; без власного cubemap використовується cubemap ванільного шаблону.",
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
         panel.Children.Add(new TextBlock { Text = "Diffuse / BaseColor у ZIP" });
         panel.Children.Add(_diffuseEntry);
         panel.Children.Add(new TextBlock { Text = "Normal у ZIP", Margin = new Thickness(0, 6, 0, 0) });
         panel.Children.Add(_normalEntry);
-        panel.Children.Add(new TextBlock { Text = "Для кількох матеріалів: по одному рядку «номер слота | BaseColor у ZIP | Normal у ZIP». Нумерація від 0. Поля вище використовуються для моделі з 0–1 слотом.",
+        panel.Children.Add(new TextBlock { Text = "Metallic / маска відбиття у ZIP (за наявності)", Margin = new Thickness(0, 6, 0, 0) });
+        panel.Children.Add(_metallicEntry);
+        panel.Children.Add(new TextBlock { Text = "Кубічна карта з гри", Margin = new Thickness(0, 6, 0, 0) });
+        foreach (var cubemap in GameCubemapCatalog.Choices) _gameCubemap.Items.Add(cubemap);
+        _gameCubemap.SelectedIndex = 0;
+        panel.Children.Add(_gameCubemap);
+        panel.Children.Add(new TextBlock { Text = "Власний cubemap DDS у ZIP (необов’язково, шість граней)", Margin = new Thickness(0, 6, 0, 0) });
+        panel.Children.Add(_cubemapEntry);
+        panel.Children.Add(new TextBlock { Text = "Власний DDS має пріоритет над картою з гри. Після заміни карти підготуйте NIF знову, щоб зберегти новий вибір.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 5) });
+        panel.Children.Add(new TextBlock { Text = "Для кількох матеріалів: «слот | BaseColor | Normal | Metallic | cubemap DDS». Останні два поля необов’язкові. Нумерація від 0; поля вище використовуються для моделі з 0–1 слотом.",
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 7, 0, 3) });
         panel.Children.Add(_materialEntries);
         var inspectMaterials = new Button { Content = "Переглянути матеріальні слоти ZIP",
@@ -176,7 +197,7 @@ public sealed class ModelPreparationWindow : Window
         panel.Children.Add(inspectMaterials);
         panel.Children.Add(_materialAudit);
         AddPath(panel, "texconv.exe", _texconv, false, "Executable (*.exe)|*.exe");
-        var suggestTextures = new Button { Content = "Знайти BaseColor і Normal у ZIP",
+        var suggestTextures = new Button { Content = "Знайти текстури у ZIP",
             Margin = new Thickness(0, 0, 0, 6) };
         suggestTextures.Click += (_, _) => SuggestTextures();
         panel.Children.Add(suggestTextures);
@@ -221,7 +242,7 @@ public sealed class ModelPreparationWindow : Window
                     _preparedDefinition.FirstPerson.Source)
                     { Owner = this }.ShowDialog();
         };
-        _save.Click += (_, _) =>
+        _save.Click += async (_, _) =>
         {
             if (_draft == null) return;
             try
@@ -230,6 +251,10 @@ public sealed class ModelPreparationWindow : Window
                 _draft.Dispose();
                 _draft = null;
                 _save.IsEnabled = false;
+                if (_thirdPersonPath != null && _firstPersonPath != null)
+                    await _preview.LoadAsync(new ModelPreviewRequest(_resultFolder,
+                        _thirdPersonPath, _firstPersonPath, _gameData.Text.Trim()), preserveView: true);
+                await UpdateReflectionPreviewAsync(false);
                 _status.Text = "Збережено комплект: " + _resultFolder +
                     "\nПеревірка поведінки у Skyrim ще не проведена.";
             }
@@ -242,7 +267,25 @@ public sealed class ModelPreparationWindow : Window
         panel.Children.Add(actions);
         _status.Margin = new Thickness(0, 14, 0, 0);
         panel.Children.Add(_status);
-        Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var layout = new Grid();
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        layout.Children.Add(new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        var previewPanel = new DockPanel { Margin = new Thickness(8, 16, 16, 16) };
+        var heading = new TextBlock { Text = "Постійний 3D перегляд", FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(4, 0, 4, 6) };
+        DockPanel.SetDock(heading, Dock.Top); previewPanel.Children.Add(heading);
+        var note = new TextBlock { Text = "Модель з’явиться після першої підготовки. Відбиття тут наближене; точний результат перевіряйте у Skyrim.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 4, 8) };
+        DockPanel.SetDock(note, Dock.Top); previewPanel.Children.Add(note);
+        _previewStatus.Margin = new Thickness(4, 3, 4, 8);
+        DockPanel.SetDock(_previewStatus, Dock.Bottom); previewPanel.Children.Add(_previewStatus);
+        _preview.SetCompact(true);
+        previewPanel.Children.Add(_preview);
+        Grid.SetColumn(previewPanel, 1); layout.Children.Add(previewPanel);
+        Content = layout;
+        _gameCubemap.SelectionChanged += (_, _) => _ = UpdateReflectionPreviewAsync(true);
+        _cubemapEntry.TextChanged += (_, _) => _ = UpdateReflectionPreviewAsync(true);
     }
 
     private static void AddNumber(Panel panel, string label, TextBox box)
@@ -274,12 +317,13 @@ public sealed class ModelPreparationWindow : Window
         foreach (var line in _materialEntries.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = line.Trim().Split('|', StringSplitOptions.TrimEntries);
-            if (fields.Length != 3 || !int.TryParse(fields[0], out var slot) || slot < 0 ||
+            if (fields.Length is < 3 or > 5 || !int.TryParse(fields[0], out var slot) || slot < 0 ||
                 string.IsNullOrWhiteSpace(fields[1]) || string.IsNullOrWhiteSpace(fields[2]))
-                throw new FormatException("Для кожного матеріалу введіть: номер слота | BaseColor у ZIP | Normal у ZIP.");
+                throw new FormatException("Для кожного матеріалу введіть: слот | BaseColor | Normal | Metallic | cubemap DDS (останні два необов’язкові).");
             if (result.Any(item => item.Slot == slot))
                 throw new FormatException("Номер матеріального слота повторюється: " + slot);
-            result.Add(new ModelPreparationMaterialTexture(slot, fields[1], fields[2]));
+            result.Add(new ModelPreparationMaterialTexture(slot, fields[1], fields[2],
+                fields.Length >= 4 ? fields[3] : null, fields.Length >= 5 ? fields[4] : null));
         }
         return result;
     }
@@ -303,11 +347,78 @@ public sealed class ModelPreparationWindow : Window
             }
             _diffuseEntry.Text = Unique(images, ["basecolor", "albedo", "diffuse"]) ?? "";
             _normalEntry.Text = Unique(images, ["normal", "_n"]) ?? "";
+            _metallicEntry.Text = Unique(images, ["metallic", "metalness", "envmask", "_em"]) ?? "";
+            _cubemapEntry.Text = Unique(images.Where(entry =>
+                System.IO.Path.GetExtension(entry.Name).Equals(".dds", StringComparison.OrdinalIgnoreCase))
+                .ToArray(), ["cubemap", "envmap", "_e"]) ?? "";
             _status.Text = string.IsNullOrWhiteSpace(_diffuseEntry.Text) || string.IsNullOrWhiteSpace(_normalEntry.Text)
                 ? "Не вдалося однозначно знайти BaseColor і Normal. Вкажіть точні шляхи файлів у ZIP."
-                : "Знайдено BaseColor і Normal. Перевірте вибір перед підготовкою.";
+                : "Знайдено BaseColor і Normal" +
+                  (string.IsNullOrWhiteSpace(_metallicEntry.Text) ? "" : ", а також Metallic") +
+                  ". Перевірте вибір перед підготовкою.";
         }
         catch (Exception error) { _status.Text = "Помилка читання ZIP: " + error.Message; }
+    }
+
+    private async Task UpdateReflectionPreviewAsync(bool changedSelection)
+    {
+        var generation = ++_reflectionGeneration;
+        if (_closed) return;
+        var folder = _draft?.StagingDirectory ?? _resultFolder;
+        if (folder == null) return;
+        if (changedSelection && _draft != null)
+        {
+            _save.IsEnabled = false;
+            _previewStatus.Text = "Вибір карти змінено. Щоб записати його в NIF, натисніть «Підготувати два NIF» знову.";
+        }
+        var ownEntry = _cubemapEntry.Text.Trim();
+        var gamePath = (_gameCubemap.SelectedItem as GameCubemap)?.Path ?? "";
+        var archivePath = _archive.Text.Trim();
+        var gameData = _gameData.Text.Trim();
+        try
+        {
+            await Task.Delay(250);
+            if (generation != _reflectionGeneration || _closed) return;
+            var reflection = await Task.Run(() =>
+            {
+                using var report = JsonDocument.Parse(File.ReadAllText(System.IO.Path.Combine(folder, "report.json")));
+                var textures = report.RootElement.GetProperty("textures");
+                var maskRelative = textures.GetProperty("env_mask").GetString() ??
+                    textures.GetProperty("material_slots")[0].GetProperty("env_mask").GetString();
+                if (string.IsNullOrWhiteSpace(maskRelative)) return null;
+                var maskPath = System.IO.Path.Combine(folder, maskRelative.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                var mask = DdsPreviewDecoder.Decode(maskRelative, File.ReadAllBytes(maskPath));
+                byte[] cubeBytes;
+                string cubeName;
+                if (ownEntry.Length > 0)
+                {
+                    using var archive = ZipFile.OpenRead(archivePath);
+                    var entry = archive.Entries.Single(item => item.FullName.Equals(ownEntry, StringComparison.OrdinalIgnoreCase));
+                    if (entry.Length is <= 0 or > 64 * 1024 * 1024)
+                        throw new InvalidDataException("Cubemap DDS exceeds the 64 MiB limit.");
+                    using var stream = entry.Open(); using var memory = new MemoryStream();
+                    stream.CopyTo(memory); cubeBytes = memory.ToArray(); cubeName = ownEntry;
+                }
+                else
+                {
+                    cubeName = gamePath.Length > 0 ? gamePath : report.RootElement.GetProperty("views")[0]
+                        .GetProperty("weapon_textures")[0].GetProperty("EnvMap").GetString() ?? "";
+                    cubeBytes = GameCubemapCatalog.Read(gameData, cubeName);
+                }
+                var faces = DdsCubemapPreviewDecoder.Decode(cubeName, cubeBytes);
+                return new PreviewSceneRenderer.ReflectionPreview(mask, faces);
+            });
+            if (generation != _reflectionGeneration || _closed) return;
+            _preview.SetReflectionPreview(reflection);
+            if (reflection != null && !changedSelection)
+                _previewStatus.Text = "Показано наближений вплив Environment Map. Поверніть модель для огляду.";
+        }
+        catch (Exception error)
+        {
+            if (generation != _reflectionGeneration || _closed) return;
+            _preview.SetReflectionPreview(null);
+            _previewStatus.Text = "Відбиття в перегляді недоступне: " + error.Message;
+        }
     }
 
     private void AddPath(Panel panel, string label, TextBox textBox, bool folder, string? filter = null)
@@ -339,6 +450,8 @@ public sealed class ModelPreparationWindow : Window
 
     private async void OnRun(object sender, RoutedEventArgs e)
     {
+        ++_reflectionGeneration;
+        await _preview.LoadAsync(null);
         _draft?.Dispose();
         _draft = null;
         _cancellation = new CancellationTokenSource();
@@ -358,17 +471,21 @@ public sealed class ModelPreparationWindow : Window
             var blender = _blender.Text.Trim();
             var addon = _addon.Text.Trim();
             var output = _output.Text.Trim();
+            var modelEntry = _modelEntry.Text.Trim();
+            var cancellationToken = _cancellation.Token;
             var scabbard = _scabbard.IsChecked == true;
             var adjustments = ReadAdjustments();
             var weaponType = ((WeaponTemplateDefinition)_weaponType.SelectedItem).Id;
             var textures = _useTextures.IsChecked == true
                 ? new ModelPreparationTextureOptions(_diffuseEntry.Text.Trim(), _normalEntry.Text.Trim(),
-                    _texconv.Text.Trim(), _invertNormalY.IsChecked == true, ReadMaterialEntries())
+                    _texconv.Text.Trim(), _invertNormalY.IsChecked == true, ReadMaterialEntries(),
+                    _metallicEntry.Text.Trim(), _cubemapEntry.Text.Trim(),
+                    (_gameCubemap.SelectedItem as GameCubemap)?.Path)
                 : null;
             var draft = await Task.Run(() => ModelPreparationRunner.PrepareDraftAsync(
-                archive, data, blender, addon, output, scabbard, _cancellation.Token,
+                archive, data, blender, addon, output, scabbard, cancellationToken,
                 adjustments: adjustments, weaponType: weaponType, textures: textures,
-                modelEntry: _modelEntry.Text.Trim()));
+                modelEntry: modelEntry));
             if (_closed) { draft.Dispose(); return; }
             _draft = draft;
             _preparedDefinition = WeaponTemplateCatalog.GetExportable(weaponType);
@@ -376,6 +493,11 @@ public sealed class ModelPreparationWindow : Window
             _firstPersonPath = draft.FirstPersonPath;
             _compare.IsEnabled = true;
             _save.IsEnabled = true;
+            _preview.SetReflectionPreview(null);
+            await _preview.LoadAsync(new ModelPreviewRequest(draft.StagingDirectory,
+                draft.ThirdPersonPath, draft.FirstPersonPath, data));
+            _preview.SetView(new PreviewViewState(90, -10, 3.3));
+            await UpdateReflectionPreviewAsync(false);
             _status.Text = "Обидва NIF пройшли структурну перевірку. Порівняйте їх із шаблоном, потім натисніть «Зберегти комплект». Ігрова перевірка ще не проведена.";
         }
         catch (OperationCanceledException) { _status.Text = "Скасовано. Неповний комплект прибрано."; }
@@ -394,6 +516,7 @@ public sealed class ModelPreparationWindow : Window
         _closed = true;
         _cancellation?.Cancel();
         _draft?.Dispose();
+        _preview.Dispose();
         base.OnClosed(e);
     }
 }

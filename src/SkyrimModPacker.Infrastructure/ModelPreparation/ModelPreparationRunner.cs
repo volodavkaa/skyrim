@@ -117,7 +117,7 @@ public static class ModelPreparationRunner
                 throw new InvalidDataException("Every source material slot needs its own BaseColor and Normal ZIP entries.");
             if (sourceMaterialCount <= 1 && textures?.Materials is { Count: > 0 })
                 throw new InvalidDataException("Per-slot texture mapping requires multiple source materials.");
-            var texturePaths = new List<(string Diffuse, string Normal)>();
+            var texturePaths = new List<PreparedMaterialTextures>();
             if (textures != null)
             {
                 if (sourceMaterialCount > 1)
@@ -125,16 +125,19 @@ public static class ModelPreparationRunner
                     foreach (var item in textures.Materials!.OrderBy(item => item.Slot))
                         texturePaths.Add(await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug,
                             new ModelPreparationTextureOptions(item.DiffuseEntry, item.NormalEntry,
-                                textures.TexconvPath, textures.InvertNormalY), cancellationToken, item.Slot));
+                                textures.TexconvPath, textures.InvertNormalY, null,
+                                item.MetallicEntry, item.CubemapEntry, textures.GameCubemapPath),
+                            cancellationToken, gameDataDirectory, item.Slot));
                 }
                 else
                     texturePaths.Add(await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug,
-                        textures, cancellationToken));
+                        textures, cancellationToken, gameDataDirectory));
             }
             var reports = new List<JsonElement>();
             var hashes = new Dictionary<string, string>();
             foreach (var pair in texturePaths)
-                foreach (var path in new[] { pair.Diffuse, pair.Normal })
+                foreach (var path in new[] { pair.Diffuse, pair.Normal, pair.EnvMask, pair.EnvMap }
+                             .OfType<string>())
                     hashes[path] = Convert.ToHexString(SHA256.HashData(
                         File.ReadAllBytes(Path.Combine(staging, path.Replace('/', Path.DirectorySeparatorChar)))));
             foreach (var (view, suffix) in new[]
@@ -160,8 +163,11 @@ public static class ModelPreparationRunner
                     scabbard_fit = definition.ScabbardFit,
                     diffuse_texture = texturePaths.Count == 1 ? texturePaths[0].Diffuse : null,
                     normal_texture = texturePaths.Count == 1 ? texturePaths[0].Normal : null,
+                    env_mask_texture = texturePaths.Count == 1 ? texturePaths[0].EnvMask : null,
+                    env_map_texture = texturePaths.Count == 1 ? texturePaths[0].EnvMap : null,
                     material_textures = texturePaths.Count > 1 ? texturePaths.Select(pair => new
-                        { diffuse_texture = pair.Diffuse, normal_texture = pair.Normal }).ToArray() : null,
+                        { diffuse_texture = pair.Diffuse, normal_texture = pair.Normal,
+                          env_mask_texture = pair.EnvMask, env_map_texture = pair.EnvMap }).ToArray() : null,
                     texture_root = texturePaths.Count == 0 ? null : staging,
                     selected_model_entry = modelEntry
                 }), cancellationToken);
@@ -197,8 +203,13 @@ public static class ModelPreparationRunner
                 {
                     diffuse = texturePaths.Count == 1 ? texturePaths[0].Diffuse : null,
                     normal = texturePaths.Count == 1 ? texturePaths[0].Normal : null,
+                    env_mask = texturePaths.Count == 1 ? texturePaths[0].EnvMask : null,
+                    env_map = texturePaths.Count == 1 ? texturePaths[0].EnvMap : null,
+                    cubemap_fallback = texturePaths.Any(pair => pair.EnvMask != null && pair.EnvMap == null)
+                        ? "vanilla template" : null,
                     material_slots = texturePaths.Select(pair => new
-                    { diffuse = pair.Diffuse, normal = pair.Normal }).ToArray(),
+                    { diffuse = pair.Diffuse, normal = pair.Normal,
+                      env_mask = pair.EnvMask, env_map = pair.EnvMap }).ToArray(),
                     invert_normal_y = textures!.InvertNormalY
                 },
                 limitations = texturePaths.Count == 0
@@ -289,7 +300,7 @@ public static class ModelPreparationRunner
 
     private static void ValidateReimport(string inspectionPath, string exportReportPath, bool includeScabbard,
         WeaponTemplateView view, int collisionShapeCount, string bloodMode, string scabbardFit,
-        IReadOnlyList<(string Diffuse, string Normal)> textures)
+        IReadOnlyList<PreparedMaterialTextures> textures)
     {
         using var imported = JsonDocument.Parse(File.ReadAllText(inspectionPath));
         using var exported = JsonDocument.Parse(File.ReadAllText(exportReportPath));
@@ -309,7 +320,8 @@ public static class ModelPreparationRunner
             throw new InvalidDataException("Weapon material shape and texture mapping counts differ");
         for (var slot = 0; slot < textures.Count; slot++)
         {
-            var nodes = objects[partNames[slot]].GetProperty("material_nodes").EnumerateArray()
+            var materials = objects[partNames[slot]].GetProperty("material_nodes").EnumerateArray().ToArray();
+            var nodes = materials
                 .SelectMany(material => material.GetProperty("nodes").EnumerateArray())
                 .ToArray();
             foreach (var (nodeName, texturePath) in new[]
@@ -321,6 +333,22 @@ public static class ModelPreparationRunner
                     ? image.GetProperty("image").GetString()!.Replace('\\', '/') : "";
                 if (!path.EndsWith(texturePath, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Reimported material shape has wrong " + nodeName + ": " + partNames[slot]);
+            }
+            if (textures[slot].EnvMask != null)
+            {
+                if (materials.Length != 1 ||
+                    materials[0].GetProperty("shader_type").GetString() != "Environment_Map" ||
+                    !materials[0].GetProperty("shader_flags1").GetString()!
+                        .Contains("ENVIRONMENT_MAPPING", StringComparison.Ordinal))
+                    throw new InvalidDataException("Reimported weapon lost Environment Map shader: " + partNames[slot]);
+                var slots = materials[0].GetProperty("texture_paths");
+                var mask = slots.GetProperty("EnvMask").GetString()!.Replace('\\', '/');
+                var cube = slots.GetProperty("EnvMap").GetString()!.Replace('\\', '/');
+                var expectedCube = exported.RootElement.GetProperty("weapon_textures")[slot]
+                    .GetProperty("EnvMap").GetString();
+                if (!mask.Equals(textures[slot].EnvMask, StringComparison.OrdinalIgnoreCase) ||
+                    !cube.Equals(expectedCube, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Reimported weapon lost environment mask or cubemap: " + partNames[slot]);
             }
         }
         var weaponTop = exported.RootElement.GetProperty("exported_weapon_bounds")[1][1].GetDouble();
@@ -385,7 +413,7 @@ public static class ModelPreparationRunner
     }
 
     private static void Validate(string nif, string reportPath, bool includeScabbard,
-        WeaponTemplateView view, IReadOnlyList<(string Diffuse, string Normal)> textures)
+        WeaponTemplateView view, IReadOnlyList<PreparedMaterialTextures> textures)
     {
         if (NifCompatibilityInspector.Read(nif).Family != NifFormatFamily.SkyrimSe)
             throw new InvalidDataException("Exported NIF is not Skyrim SE format: " + nif);
@@ -394,10 +422,24 @@ public static class ModelPreparationRunner
         if (scene.Meshes.Count == 0 || scene.Meshes.Sum(mesh => mesh.Indices.Length) == 0)
             throw new InvalidDataException("Exported NIF has no visible weapon geometry: " + nif);
         foreach (var pair in textures)
-            foreach (var expected in new[] { pair.Diffuse, pair.Normal })
+            foreach (var expected in new[] { pair.Diffuse, pair.Normal, pair.EnvMask, pair.EnvMap }
+                         .OfType<string>())
                 if (!scene.TexturePaths.Any(path => path.Replace('\\', '/').Equals(expected,
                         StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("Exported NIF does not reference generated texture: " + expected);
+        if (textures.Any(pair => pair.EnvMask != null))
+        {
+            using var materialReport = JsonDocument.Parse(File.ReadAllText(reportPath));
+            foreach (var slot in materialReport.RootElement.GetProperty("weapon_textures").EnumerateArray())
+            {
+                if (slot.ValueKind != JsonValueKind.Object || !slot.TryGetProperty("EnvMap", out var cube))
+                    continue;
+                var expected = cube.GetString();
+                if (string.IsNullOrWhiteSpace(expected) || !scene.TexturePaths.Any(path =>
+                        path.Replace('\\', '/').Equals(expected, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("Exported Environment Map shader has no cubemap");
+            }
+        }
         if (textures.Count > 1)
         {
             using var materialReport = JsonDocument.Parse(File.ReadAllText(reportPath));

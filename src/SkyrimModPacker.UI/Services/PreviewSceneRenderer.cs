@@ -9,9 +9,15 @@ namespace SkyrimModPacker.UI.Services;
 
 public static class PreviewSceneRenderer
 {
+    public sealed record ReflectionPreview(PreviewTexture Mask, IReadOnlyList<PreviewTexture> Faces);
+
     public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings)
         => Create(scene, textured, out warnings, out _);
     public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings, out double originalExtent)
+        => Create(scene, textured, out warnings, out originalExtent, null);
+
+    public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings,
+        out double originalExtent, ReflectionPreview? reflection)
     {
         var messages = scene.Warnings.ToList(); var textures = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
         long pixels = 0;
@@ -47,6 +53,8 @@ public static class PreviewSceneRenderer
             Brush brush = mesh.DiffuseTexture != null && textures.TryGetValue(mesh.DiffuseTexture, out var image) ? image : new SolidColorBrush(Color.FromRgb(165, 181, 198));
             var material = new DiffuseMaterial(brush); material.Freeze();
             var model = new GeometryModel3D(geometry, material) { BackMaterial = material }; model.Freeze(); group.Children.Add(model);
+            if (reflection != null && mesh.Name is not ("BloodEffects" or "BloodLighting" or "Scb"))
+                AddReflection(group, mesh, reflection);
         }
         var bounds = group.Bounds; var extent = Math.Max(bounds.SizeX, Math.Max(bounds.SizeY, bounds.SizeZ));
         originalExtent = extent;
@@ -55,5 +63,61 @@ public static class PreviewSceneRenderer
         transform.Children.Add(new TranslateTransform3D(-bounds.X - bounds.SizeX / 2, -bounds.Y - bounds.SizeY / 2, -bounds.Z - bounds.SizeZ / 2));
         transform.Children.Add(new ScaleTransform3D(2 / extent, 2 / extent, 2 / extent)); transform.Freeze(); group.Transform = transform;
         group.Freeze(); warnings = messages; return group;
+    }
+
+    private static void AddReflection(Model3DGroup group, PreviewMesh mesh, ReflectionPreview reflection)
+    {
+        if (reflection.Faces.Count != 6 || mesh.Indices.Length > 30000) return;
+        for (var i = 0; i < mesh.Indices.Length; i += 3)
+        {
+            var a = mesh.Indices[i]; var b = mesh.Indices[i + 1]; var c = mesh.Indices[i + 2];
+            var p0 = Display(mesh.Positions[a]); var p1 = Display(mesh.Positions[b]); var p2 = Display(mesh.Positions[c]);
+            var normal = Vector3D.CrossProduct(p1 - p0, p2 - p0);
+            if (normal.LengthSquared < 1e-12) continue;
+            normal.Normalize();
+            var uv = (mesh.TextureCoordinates[a] + mesh.TextureCoordinates[b] + mesh.TextureCoordinates[c]) / 3;
+            var mask = Sample(reflection.Mask, uv.X, uv.Y);
+            var strength = (mask.R + mask.G + mask.B) / (3.0 * 255.0);
+            if (strength < 0.025) continue;
+            var incident = new Vector3D(0, 0, -1);
+            var direction = incident - 2 * Vector3D.DotProduct(incident, normal) * normal;
+            var color = SampleCube(reflection.Faces, direction);
+            var alpha = (byte)Math.Clamp(strength * 180, 0, 220);
+            var brush = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B)); brush.Freeze();
+            var material = new EmissiveMaterial(brush); material.Freeze();
+            var offset = normal * 0.002;
+            var geometry = new MeshGeometry3D
+            {
+                Positions = new Point3DCollection([p0 + offset, p1 + offset, p2 + offset]),
+                TriangleIndices = new Int32Collection([0, 1, 2])
+            };
+            geometry.Freeze();
+            var model = new GeometryModel3D(geometry, material) { BackMaterial = material };
+            model.Freeze(); group.Children.Add(model);
+        }
+    }
+
+    private static Point3D Display(System.Numerics.Vector3 value) => new(value.X, value.Z, -value.Y);
+
+    private static Color SampleCube(IReadOnlyList<PreviewTexture> faces, Vector3D vector)
+    {
+        var x = vector.X; var y = vector.Y; var z = vector.Z;
+        var ax = Math.Abs(x); var ay = Math.Abs(y); var az = Math.Abs(z);
+        int face; double u, v, major;
+        if (ax >= ay && ax >= az)
+        { major = ax; face = x >= 0 ? 0 : 1; u = x >= 0 ? -z : z; v = -y; }
+        else if (ay >= az)
+        { major = ay; face = y >= 0 ? 2 : 3; u = x; v = y >= 0 ? z : -z; }
+        else
+        { major = az; face = z >= 0 ? 4 : 5; u = z >= 0 ? x : -x; v = -y; }
+        return Sample(faces[face], 0.5 + u / (2 * major), 0.5 + v / (2 * major));
+    }
+
+    private static Color Sample(PreviewTexture texture, double u, double v)
+    {
+        var x = Math.Clamp((int)(Math.Abs(u % 1) * texture.Width), 0, texture.Width - 1);
+        var y = Math.Clamp((int)(Math.Abs(v % 1) * texture.Height), 0, texture.Height - 1);
+        var offset = (y * texture.Width + x) * 4;
+        return Color.FromRgb(texture.BgraPixels[offset + 2], texture.BgraPixels[offset + 1], texture.BgraPixels[offset]);
     }
 }

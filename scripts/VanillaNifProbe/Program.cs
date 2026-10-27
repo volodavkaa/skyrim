@@ -5,6 +5,49 @@ using SkyrimModPacker.Infrastructure.ModelPreparation;
 using System.Globalization;
 using System.Text.Json;
 
+if (args.Length == 2 && args[0] == "--list-cubemaps")
+{
+    foreach (var bsa in Directory.EnumerateFiles(args[1], "Skyrim - Textures*.bsa"))
+    {
+        var archive = Archive.CreateReader(GameRelease.SkyrimSE, bsa);
+        foreach (var file in archive.Files.Where(file =>
+                     file.Path.Contains("cubemaps", StringComparison.OrdinalIgnoreCase) &&
+                     file.Path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)))
+            Console.WriteLine(Path.GetFileName(bsa) + "|" + file.Path);
+        (archive as IDisposable)?.Dispose();
+    }
+    return 0;
+}
+
+if (args.Length == 3 && args[0] == "--extract-cubemaps")
+{
+    Directory.CreateDirectory(args[2]);
+    foreach (var item in GameCubemapCatalog.Choices.Where(item => item.Path.Length > 0))
+    {
+        var target = Path.Combine(args[2], Path.GetFileName(item.Path));
+        File.WriteAllBytes(target, GameCubemapCatalog.Read(args[1], item.Path));
+        Console.WriteLine(item.Name + "|" + target + "|" + new FileInfo(target).Length);
+    }
+    return 0;
+}
+
+if (args.Length == 2 && args[0] == "--decode-cubemaps")
+{
+    foreach (var file in Directory.EnumerateFiles(args[1], "*.dds"))
+    {
+        var faces = DdsCubemapPreviewDecoder.Decode(file, File.ReadAllBytes(file));
+        Console.WriteLine(Path.GetFileName(file) + "|" + faces.Count + "|" + faces[0].Width + "x" + faces[0].Height);
+    }
+    return 0;
+}
+
+if (args.Length == 2 && args[0] == "--decode-cubemap")
+{
+    var faces = DdsCubemapPreviewDecoder.Decode(args[1], File.ReadAllBytes(args[1]));
+    Console.WriteLine(Path.GetFileName(args[1]) + "|" + faces.Count + "|" + faces[0].Width + "x" + faces[0].Height);
+    return 0;
+}
+
 if (args.Length is 4 or 5 or 6 && args[0] == "--inspect-materials")
 {
     var report = await ModelPreparationRunner.InspectSourceMaterialsAsync(args[1], args[2],
@@ -20,19 +63,27 @@ if (args.Length is 4 or 5 or 6 && args[0] == "--inspect-materials")
 if ((args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 &&
      args[0] is "--prepare" or "--prepare-draft" or "--prepare-discard") ||
     (args.Length == 11 && args[0] is "--prepare-multi-discard" or "--prepare-multi-draft") ||
+    (args.Length == 14 && args[0] is "--prepare-env-discard" or "--prepare-env-draft") ||
+    (args.Length == 15 && args[0] is "--prepare-env-game-discard" or "--prepare-env-game-draft") ||
     (args.Length == 10 && args[0] == "--prepare-model-discard") ||
     (args.Length == 12 && args[0] == "--prepare-multi-model-discard"))
 {
-    var weaponType = args.Length is 9 or 10 or 11 or 12 or 13 ? args[8] : args.Length == 17 ? args[^1] : "sword1h";
+    var weaponType = args[0].StartsWith("--prepare-env", StringComparison.Ordinal) ||
+        args.Length is 9 or 10 or 11 or 12 or 13 or 14 ? args[8] : args.Length == 17 ? args[^1] : "sword1h";
     var modelEntry = args[0] == "--prepare-model-discard" ? args[9] :
         args[0] == "--prepare-multi-model-discard" ? args[11] : null;
     var textures = args[0] is "--prepare-multi-discard" or "--prepare-multi-draft" or "--prepare-multi-model-discard"
         ? new ModelPreparationTextureOptions("", "", args[10], false,
             JsonSerializer.Deserialize<List<ModelPreparationMaterialTexture>>(File.ReadAllText(args[9]))!)
+        : args[0] is "--prepare-env-discard" or "--prepare-env-draft" or
+            "--prepare-env-game-discard" or "--prepare-env-game-draft"
+        ? new ModelPreparationTextureOptions(args[9], args[10], args[11], false,
+            null, args[12], args[13] == "-" ? null : args[13],
+            args.Length == 15 ? args[14] : null)
         : args.Length is 12 or 13
         ? new ModelPreparationTextureOptions(args[9], args[10], args[11], args.Length == 13 && args[12] == "invert")
         : null;
-    var adjustments = args.Length >= 15
+    var adjustments = args.Length >= 15 && !args[0].StartsWith("--prepare-env", StringComparison.Ordinal)
         ? new ModelPreparationAdjustments(
             double.Parse(args[8], CultureInfo.InvariantCulture),
             double.Parse(args[9], CultureInfo.InvariantCulture),
@@ -60,10 +111,10 @@ if ((args.Length is 8 or 9 or 12 or 13 or 15 or 16 or 17 &&
             staging = draft.StagingDirectory;
             if (!File.Exists(Path.Combine(staging, "report.json"))) throw new IOException("Draft report is missing");
             Console.WriteLine("Draft: " + staging);
-            if (args[0] is "--prepare-draft" or "--prepare-multi-draft")
+            if (args[0] is "--prepare-draft" or "--prepare-multi-draft" or "--prepare-env-draft" or "--prepare-env-game-draft")
                 Console.WriteLine("Published: " + draft.Publish());
         }
-        if (args[0] is "--prepare-discard" or "--prepare-multi-discard" or "--prepare-model-discard" or "--prepare-multi-model-discard" && Directory.Exists(staging))
+        if (args[0] is "--prepare-discard" or "--prepare-multi-discard" or "--prepare-env-discard" or "--prepare-env-game-discard" or "--prepare-model-discard" or "--prepare-multi-model-discard" && Directory.Exists(staging))
             throw new IOException("Discard left a staging directory");
     }
     return 0;

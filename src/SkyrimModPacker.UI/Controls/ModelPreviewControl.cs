@@ -24,6 +24,8 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
     private UIElement[] _fullDetails = [];
     private Border? _surface;
     private Model3DGroup? _model;
+    private ModelPreview? _scene;
+    private PreviewSceneRenderer.ReflectionPreview? _reflection;
     private CancellationTokenSource? _cts;
     private int _generation;
     private bool _first, _disposed;
@@ -47,6 +49,21 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
     public void SetNormalizationExtent(double? extent) { _normalizationExtent = extent is > 0 && double.IsFinite(extent.Value) ? extent : null; Render(); }
     public void SetEnvironment(double light, Color background)
     { _light = Math.Clamp(light, 0.05, 1); if (_surface != null) _surface.Background = new SolidColorBrush(background); Render(); }
+    public void SetReflectionPreview(PreviewSceneRenderer.ReflectionPreview? reflection)
+    {
+        _reflection = reflection;
+        if (_scene == null || _disposed) return;
+        try
+        {
+            _model = PreviewSceneRenderer.Create(_scene, true, out var warnings,
+                out var extent, reflection);
+            OriginalExtent = extent;
+            _status.Text = string.Join(Environment.NewLine, warnings.Where(w =>
+                !w.StartsWith("Static geometry and diffuse texture only.", StringComparison.Ordinal)));
+            Render();
+        }
+        catch (Exception ex) { _status.Text = "Помилка відображення відбиття: " + ex.Message; }
+    }
     public ModelPreviewControl(IModelPreviewService service)
     {
         _service = service; MinHeight = 380;
@@ -103,7 +120,7 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
     private async Task ReloadAsync()
     {
         var generation = ++_generation; _cts?.Cancel(); _cts?.Dispose(); _cts = new(); var token = _cts.Token;
-        _model = null; OriginalExtent = 0; _viewport.Children.Clear(); SceneChanged?.Invoke();
+        _model = null; _scene = null; OriginalExtent = 0; _viewport.Children.Clear(); SceneChanged?.Invoke();
         _empty.Visibility = Visibility.Visible; _empty.SetResourceReference(TextBlock.TextProperty, "Smart_PreviewEmpty");
         if (_request == null) { _source.Text = ""; _status.Text = Label("Preview_NoModel"); return; }
         var request = _request; var path = _first ? request.FirstPersonPath : request.ThirdPersonPath;
@@ -114,7 +131,8 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
         {
             var scene = await _service.LoadAsync(request.ProjectDirectory, path, request.GameDataPath, token);
             if (_disposed || token.IsCancellationRequested || generation != _generation) return;
-            _model = PreviewSceneRenderer.Create(scene, true, out var warnings, out var extent); OriginalExtent = extent;
+            _scene = scene;
+            _model = PreviewSceneRenderer.Create(scene, true, out var warnings, out var extent, _reflection); OriginalExtent = extent;
             _status.Text = string.Join(Environment.NewLine, warnings.Where(w => !w.StartsWith("Static geometry and diffuse texture only.", StringComparison.Ordinal))); Render();
             SceneChanged?.Invoke();
         }
@@ -137,5 +155,5 @@ public sealed class ModelPreviewControl : UserControl, IDisposable
         if (!_settingView) ViewChanged?.Invoke(ViewState);
     }
     private string Label(string key) => TryFindResource(key) as string ?? key;
-    public void Dispose() { _disposed = true; _generation++; _cts?.Cancel(); _cts?.Dispose(); _model = null; _viewport.Children.Clear(); }
+    public void Dispose() { _disposed = true; _generation++; _cts?.Cancel(); _cts?.Dispose(); _model = null; _scene = null; _viewport.Children.Clear(); }
 }

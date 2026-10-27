@@ -22,6 +22,12 @@ def main():
                "custom_properties": sorted(key for key in obj.keys() if not key.startswith("_"))}
         if obj.type == "MESH" and not obj.name.startswith("bhk"):
             row["material_nodes"] = [{"material": slot.material.name,
+                                      "shader_type": slot.material.pyn_shader.Shader_Type,
+                                      "shader_flags1": slot.material.pyn_shader.Shader_Flags_1,
+                                      "texture_paths": {
+                                          key[len("BSShaderTextureSet_"):]: value
+                                          for key, value in slot.material.items()
+                                          if key.startswith("BSShaderTextureSet_")},
                                       "nodes": [{"name": node.name, "type": node.bl_idname,
                                                  "image": node.image.filepath if node.type == "TEX_IMAGE" and node.image else None}
                                                 for node in slot.material.node_tree.nodes]}
