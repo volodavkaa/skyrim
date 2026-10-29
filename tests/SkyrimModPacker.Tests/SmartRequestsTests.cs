@@ -11,6 +11,7 @@ using SkyrimModPacker.Application.Services;
 using SkyrimModPacker.Core.Models.PluginBuilder;
 using SkyrimModPacker.Infrastructure;
 using SkyrimModPacker.Infrastructure.Preview;
+using SkyrimModPacker.Infrastructure.PluginBuilder;
 using Xunit;
 
 namespace SkyrimModPacker.Tests;
@@ -151,5 +152,8 @@ public partial class AdvancedPluginBuilderTests
         Assert.True((await _builder.AddToLeveledListAsync(new() { PluginPath = Plugin, GameDataPath = Data, WeaponFormId = weapon.FormId, List = list.Reference, Level = 20, Count = 10, UpdateExisting = true })).IsSuccess);
         details = (await _builder.GetLeveledListDetailsAsync(Plugin, Data, list.Reference)).Value;
         added = Assert.Single(details.Entries, e => e.Reference?.PluginName == "Sword.esp"); Assert.Equal(20, added.Level); Assert.Equal(10, added.Count);
+        var overview = ItemOverviewInspector.ReadDirectLists(Plugin, weapon.FormId);
+        var link = Assert.Single(overview); Assert.Equal(list.Reference, link.List); Assert.Equal((short)20, link.Level); Assert.Equal((short)10, link.Count);
+        Assert.Empty(ItemOverviewInspector.ReadDirectLists(Plugin, weapon.FormId + 1));
     }
 }

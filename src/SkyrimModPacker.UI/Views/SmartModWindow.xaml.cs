@@ -179,6 +179,11 @@ public partial class SmartModWindow : Window
         if (!ViewModel.IsBusy && ViewModel.SelectedItem != null)
             new WeaponComparisonWindow(ViewModel, _previewService) { Owner = this }.ShowDialog();
     }
+    private void OnItemOverview(object sender, RoutedEventArgs e)
+    {
+        if (!ViewModel.IsBusy && ViewModel.SelectedItem is { } item)
+            new ItemOverviewWindow(ViewModel, item) { Owner = this }.ShowDialog();
+    }
     private async Task ShowTuningAsync(Func<bool, SmartTuningPreview> calculate, bool keepManual = true, bool recipeOnly = false)
     {
         if (ViewModel.IsBusy || ViewModel.SelectedItem == null) return;
