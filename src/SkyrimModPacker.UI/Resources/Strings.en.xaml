@@ -893,4 +893,15 @@
     <system:String x:Key="Smart_ItemOverviewUnsaved">Item not yet saved to plugin; lists not checked.</system:String>
     <system:String x:Key="Smart_ItemOverviewNoLists">No direct entries for this item in the plugin's lists.</system:String>
     <system:String x:Key="Smart_ItemOverviewListScope">Direct entries in this plugin only; other mods, nested lists and load order are not checked.</system:String>
+    <system:String x:Key="Smart_MaterialShort">Choose a material and review the suggested stats.</system:String>
+    <system:String x:Key="Smart_HandlingShort">Adjust weight or speed relative to the reference.</system:String>
+    <system:String x:Key="Smart_InheritanceShort">Restore a group of properties from the selected template.</system:String>
+    <system:String x:Key="Smart_InheritanceDetails">Inheritance details</system:String>
+    <system:String x:Key="Smart_NextSuggestionIdentity">Next: check the name, EditorID and template →</system:String>
+    <system:String x:Key="Smart_NextSuggestionModel">Next: choose a NIF model →</system:String>
+    <system:String x:Key="Smart_NextSuggestionStats">Next: correct the stats →</system:String>
+    <system:String x:Key="Smart_NextSuggestionRecipe">Next: check the recipe →</system:String>
+    <system:String x:Key="Smart_NextSuggestionIssue">Next: open the validation issue →</system:String>
+    <system:String x:Key="Smart_NextSuggestionSave">Next: review and save the item →</system:String>
+    <system:String x:Key="Smart_NextSuggestionChecks">Next: check the mod before packing →</system:String>
 </ResourceDictionary>

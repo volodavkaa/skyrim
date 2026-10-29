@@ -31,6 +31,7 @@ public sealed partial class SmartModWindowTests
                 }, [new(WeaponKind.OneHandSword, Label("WeaponType_OneHandSword")), new(WeaponKind.Greatsword, Label("WeaponType_Greatsword"))], Label, true, WeaponKind.OneHandSword, "Taken.esp", "DarkSister_HD.zip")
                 { ShowActivated = false, ShowInTaskbar = false, Left = -10000, Top = -10000, WindowStartupLocation = WindowStartupLocation.Manual };
                 window.Show(); await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                for (var attempt = 0; attempt < 100 && window.ItemRows.Count < 2; attempt++) await Task.Delay(50);
                 var content = (FrameworkElement)window.Content;
                 T Find<T>(string name) where T : FrameworkElement => Descendants<T>(content).Single(e => e.Name == name);
                 var name = Find<TextBox>("ImportProjectName"); Assert.NotEqual("Taken", name.Text); Assert.Contains("DarkSister_HD", name.Text);

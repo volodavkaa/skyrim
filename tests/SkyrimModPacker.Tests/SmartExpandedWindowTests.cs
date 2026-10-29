@@ -57,10 +57,19 @@ public sealed partial class SmartModWindowTests
             foreach (var width in new[] { 600d, 1360d }) Render("start", width);
             vm.Types[0].Count = "1"; await vm.CreateProjectCommand.ExecuteAsync(null); Assert.Equal("", vm.Error);
             vm.SelectedItem!.Step = SmartModItemStep.Properties;
+            ((Expander)window.FindName("MaterialSettings")).IsExpanded = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            ((Expander)window.FindName("BalanceOptions")).IsExpanded = true;
+            ((Expander)window.FindName("HandlingOptions")).IsExpanded = true;
+            ((Expander)window.FindName("BalanceDetails")).IsExpanded = true;
+            ((Expander)window.FindName("InheritancePanel")).IsExpanded = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             foreach (var expander in Descendants<Expander>((FrameworkElement)window.Content)) if (expander.Header as string == (string)strings["Smart_ReferenceOther"]) expander.IsExpanded = true;
             foreach (var width in new[] { 600d, 1360d })
             { Render("statistics", width); var card = Descendants<Border>((FrameworkElement)window.Content).First(b => b.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any(t => t.Text == (string)strings["Smart_MaterialTitle"])); RenderPanel(card, "statistics", width); }
             vm.AddRecipeCommand.Execute("crafting"); vm.AddOrIncrementIngredient(vm.Options.Ingredients[0]); vm.SelectedRecipeMaterial = vm.MaterialChoices.First(); vm.SelectedRecipeSource = vm.RecipeSourceChoices.First();
+            ((Expander)window.FindName("RecipeTemplatesPanel")).IsExpanded = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             foreach (var expander in Descendants<Expander>((FrameworkElement)window.Content)) if (expander.Header as string is { } header && (header == (string)strings["Smart_RecipeStandard"] || header == (string)strings["Smart_RecipeDonor"] || header == (string)strings["Smart_RecipePersonal"])) expander.IsExpanded = true;
             foreach (var width in new[] { 600d, 1360d }) { Render("recipes", width); RenderPanel((FrameworkElement)window.FindName("RecipeEditor"), "recipes", width); }
             var replacement = new SmartTuningWindow((keep, _, _) => vm.PreviewStandardRecipe(keep), vm.Label, false, false, false, false, vm.Label("Smart_RecipeKeepManual"))

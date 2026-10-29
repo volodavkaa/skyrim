@@ -116,7 +116,8 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
         OnPropertyChanged(nameof(LeveledListPurpose)); OnPropertyChanged(nameof(LeveledListSummary));
         foreach (var name in new[] { nameof(HasSelectedRecipe), nameof(HasCraftingRecipe), nameof(HasTemperingRecipe), nameof(HasRecipeConflict), nameof(CraftingAction), nameof(TemperingAction), nameof(RecipeWorkbenchText), nameof(RecipeConflictDetails) }) OnPropertyChanged(name);
         foreach (var name in new[] { nameof(StepLinks), nameof(StepHelp), nameof(ProgressText), nameof(NextActionText), nameof(SelectedSummary) }) OnPropertyChanged(name);
-        foreach (var name in new[] { nameof(IsOverview), nameof(IsEditing), nameof(IsResources), nameof(IsChecks), nameof(IsFinished), nameof(IsNameStep), nameof(IsAppearanceStep), nameof(IsPropertiesStep), nameof(IsAcquisitionStep), nameof(IsSummaryStep), nameof(InheritanceText), nameof(Summary), nameof(ItemTemplates), nameof(RecipeLinks), nameof(RecipeValidationText) }) OnPropertyChanged(name);
+        OnPropertyChanged(nameof(NextSuggestionText)); OnPropertyChanged(nameof(HasNextSuggestion));
+        foreach (var name in new[] { nameof(IsOverview), nameof(IsEditing), nameof(IsResources), nameof(IsChecks), nameof(IsFinished), nameof(IsNameStep), nameof(IsAppearanceStep), nameof(IsPropertiesStep), nameof(IsAcquisitionStep), nameof(IsSummaryStep), nameof(InheritanceText), nameof(InheritanceSource), nameof(Summary), nameof(ItemTemplates), nameof(RecipeLinks), nameof(RecipeValidationText) }) OnPropertyChanged(name);
     }
     private void RefreshTexts()
     {
@@ -161,7 +162,7 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     }
     private void Attach(SmartModItemRow row)
     {
-        row.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(SmartModItemRow.StateText)) OnPropertyChanged(nameof(ProgressText)); };
+        row.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(SmartModItemRow.StateText)) { OnPropertyChanged(nameof(ProgressText)); OnPropertyChanged(nameof(NextSuggestionText)); OnPropertyChanged(nameof(HasNextSuggestion)); } };
         row.Changed += () => { if (!_applying) _tuningUndo.Remove(row.Id); Changed(); PreviewChanged?.Invoke(); };
         row.NavigationChanged += () => { Changed(false); NotifyStep(); };
         row.Recipes.CollectionChanged += (_, args) =>

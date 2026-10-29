@@ -18,6 +18,14 @@ public sealed partial class SmartModViewModel
     public string StepHelp => SelectedItem == null ? "" : Label("Smart_Help_" + SelectedItem.Step);
     public string ProgressText => string.Format(Label("Smart_ProgressFormat"), Items.Count,
         Items.Count(i => i.StateText == Label("Smart_State_Ready")));
+    public string InheritanceSource
+    {
+        get
+        {
+            var template = Templates.FirstOrDefault(t => t.FormId == SelectedItem?.Template?.FormId && t.PluginName == SelectedItem.Template.PluginName);
+            return template == null ? Label("Smart_UnknownTemplate") : template.Name + " [" + template.PluginName + ":" + template.FormId.ToString("X6") + "]";
+        }
+    }
     public string NextActionText => !IsEditing ? Label("Smart_Continue") : SelectedItem?.Step == SmartModItemStep.Summary && SelectedItem == Items.LastOrDefault()
         ? Label("Smart_GoChecks") : IsEditing && SelectedItem?.Step == SmartModItemStep.Summary ? Label("Smart_NextItem") : Label("Smart_Next");
     public string SelectedSummary => SelectedItem is not { } item ? "" :

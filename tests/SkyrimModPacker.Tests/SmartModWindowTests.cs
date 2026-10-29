@@ -139,6 +139,15 @@ public sealed partial class SmartModWindowTests
                 var list = Descendants<ListBox>(root).First(); Assert.True(list.IsVisible); Assert.Equal(2, list.Items.Count);
                 var inputs = Descendants<TextBox>(root).Where(t => t.IsVisible && !t.IsReadOnly).ToArray();
                 if (step is SmartModItemStep.NameAndTemplate or SmartModItemStep.Properties) Assert.NotEmpty(inputs);
+                if (step == SmartModItemStep.Properties && width >= 900)
+                {
+                    var damage = (TextBox)window.FindName("PrimaryDamage");
+                    var material = (Expander)window.FindName("MaterialSettings");
+                    var scroll = (ScrollViewer)window.FindName("EditorScroll");
+                    Assert.False(material.IsExpanded);
+                    Assert.True(damage.IsVisible);
+                    Assert.InRange(damage.TranslatePoint(new Point(0, 0), scroll).Y, 0, scroll.ActualHeight - damage.ActualHeight);
+                }
                 foreach (var input in inputs) Assert.True(Contrast(((SolidColorBrush)input.Foreground).Color, ((SolidColorBrush)input.Background).Color) >= 4.5);
                 Assert.True(Contrast(((SolidColorBrush)window.Foreground).Color, ((SolidColorBrush)window.Background).Color) >= 4.5);
                 Assert.Equal(5, vm.StepLinks.Count()); Assert.Single(vm.StepLinks, s => s.IsCurrent);

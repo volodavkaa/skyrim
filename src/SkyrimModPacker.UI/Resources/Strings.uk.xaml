@@ -893,4 +893,15 @@
     <system:String x:Key="Smart_ItemOverviewUnsaved">Предмет ще не збережено в плагін; списки не перевірено.</system:String>
     <system:String x:Key="Smart_ItemOverviewNoLists">Прямих записів цього предмета у списках плагіна не знайдено.</system:String>
     <system:String x:Key="Smart_ItemOverviewListScope">Лише прямі записи в цьому плагіні; інші моди, вкладені списки й порядок завантаження не перевірено.</system:String>
+    <system:String x:Key="Smart_MaterialShort">Обери матеріал і переглянь запропоновані характеристики.</system:String>
+    <system:String x:Key="Smart_HandlingShort">Зміна ваги або швидкості відносно зразка.</system:String>
+    <system:String x:Key="Smart_InheritanceShort">Віднови окрему групу властивостей з обраного шаблону.</system:String>
+    <system:String x:Key="Smart_InheritanceDetails">Деталі успадкування</system:String>
+    <system:String x:Key="Smart_NextSuggestionIdentity">Далі: перевір назву, EditorID і основу →</system:String>
+    <system:String x:Key="Smart_NextSuggestionModel">Далі: вкажи модель NIF →</system:String>
+    <system:String x:Key="Smart_NextSuggestionStats">Далі: виправ характеристики →</system:String>
+    <system:String x:Key="Smart_NextSuggestionRecipe">Далі: перевір рецепт →</system:String>
+    <system:String x:Key="Smart_NextSuggestionIssue">Далі: відкрий повідомлення перевірки →</system:String>
+    <system:String x:Key="Smart_NextSuggestionSave">Далі: переглянь і збережи предмет →</system:String>
+    <system:String x:Key="Smart_NextSuggestionChecks">Далі: перевір мод перед пакуванням →</system:String>
 </ResourceDictionary>

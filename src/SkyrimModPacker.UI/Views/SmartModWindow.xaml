@@ -101,13 +101,12 @@
       </StackPanel>
       <StackPanel Visibility="{Binding IsEditing, Converter={StaticResource Visible}}">
        <TextBlock Text="{Binding SelectedItem.Name}" Style="{StaticResource Heading}"/>
-       <Button Content="{DynamicResource Smart_CompareTitle}" Click="OnCompare" HorizontalAlignment="Left"/>
-       <Button Content="{DynamicResource Smart_ItemOverview}" Click="OnItemOverview" HorizontalAlignment="Left"/>
-       <TextBlock Text="{Binding SelectedItem.StepText}" FontSize="16" Margin="0,0,0,12"/>
-       <ItemsControl ItemsSource="{Binding StepLinks}" Margin="0,0,0,14"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.GoToStepCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Step}" Content="{Binding Name}" FontSize="12" Padding="9,7"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SmartNav}"><Style.Triggers><DataTrigger Binding="{Binding IsCurrent}" Value="True"><Setter Property="Background" Value="#24424D"/><Setter Property="BorderBrush" Value="#80D8CF"/><Setter Property="Foreground" Value="#B9FFF3"/></DataTrigger></Style.Triggers></Style></Button.Style></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-       <TextBlock Text="{Binding StepHelp}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,14"/>
-       <Expander Header="{DynamicResource Smart_ItemActions}"><WrapPanel><Button Content="{DynamicResource Smart_SaveItem}" Command="{Binding SaveItemCommand}"/><Button Content="{DynamicResource Items_Duplicate}" Click="OnDuplicate"/><Button Content="{DynamicResource Weapons_Delete}" Style="{StaticResource SmartDanger}" Click="OnDelete"/></WrapPanel></Expander>
-       <layout:ResponsiveColumnsPanel x:Name="EditorColumns" MinColumnWidth="330" MaxColumns="2" Gap="18" Margin="0,12,0,0">
+       <WrapPanel><Button Content="{DynamicResource Smart_ItemOverview}" Click="OnItemOverview"/><Button Content="{DynamicResource Smart_CompareTitle}" Click="OnCompare"/><Button Content="{DynamicResource Smart_SaveItem}" Command="{Binding SaveItemCommand}"/></WrapPanel>
+       <ItemsControl ItemsSource="{Binding StepLinks}" Margin="0,4,0,4"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.GoToStepCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Step}" Content="{Binding Name}" FontSize="12" Padding="9,7"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SmartNav}"><Style.Triggers><DataTrigger Binding="{Binding IsCurrent}" Value="True"><Setter Property="Background" Value="#24424D"/><Setter Property="BorderBrush" Value="#80D8CF"/><Setter Property="Foreground" Value="#B9FFF3"/></DataTrigger></Style.Triggers></Style></Button.Style></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+       <TextBlock Text="{Binding StepHelp}" Foreground="#B4C3D5" TextWrapping="Wrap" Margin="0,0,0,4"/>
+       <Button x:Name="NextSuggestionButton" Command="{Binding OpenNextSuggestionCommand}" HorizontalAlignment="Left" HorizontalContentAlignment="Left" Visibility="{Binding HasNextSuggestion, Converter={StaticResource Visible}}"><TextBlock Text="{Binding NextSuggestionText}" TextWrapping="Wrap"/></Button>
+       <Expander Header="{DynamicResource Smart_ItemActions}" Margin="0,2,0,4"><WrapPanel><Button Content="{DynamicResource Items_Duplicate}" Click="OnDuplicate"/><Button Content="{DynamicResource Weapons_Delete}" Style="{StaticResource SmartDanger}" Click="OnDelete"/></WrapPanel></Expander>
+       <layout:ResponsiveColumnsPanel x:Name="EditorColumns" MinColumnWidth="330" MaxColumns="2" Gap="18" Margin="0,6,0,0">
         <StackPanel>
          <StackPanel Visibility="{Binding IsNameStep, Converter={StaticResource Visible}}">
           <TextBlock Text="{DynamicResource Weapons_Name}"/><TextBox Text="{Binding SelectedItem.Name, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Name]}" Style="{StaticResource ErrorText}"/>
@@ -121,24 +120,29 @@
           <TextBlock Text="{Binding SelectedItem.Errors[Template]}" Style="{StaticResource ErrorText}"/>
          </StackPanel>
          <StackPanel Visibility="{Binding IsAppearanceStep, Converter={StaticResource Visible}}">
-          <Button Content="{DynamicResource Smart_PrepareModel}" Click="OnPrepareModel" Tag="existing" HorizontalAlignment="Left"/>
-          <Button Click="OnWeaponFolder" Tag="existing"><TextBlock Text="{DynamicResource Smart_FolderReplaceAppearance}" TextWrapping="Wrap"/></Button>
-          <TextBlock Text="{DynamicResource Models_Third}"/><TextBox Text="{Binding SelectedItem.ModelPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportThird}" Click="OnImportThird"/>
+          <WrapPanel><Button Content="{DynamicResource Smart_PrepareModel}" Click="OnPrepareModel" Tag="existing"/><Button Click="OnWeaponFolder" Tag="existing"><TextBlock Text="{DynamicResource Smart_FolderReplaceAppearance}" TextWrapping="Wrap"/></Button></WrapPanel>
+          <TextBlock Text="{DynamicResource Models_Third}"/><DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource Smart_ImportThird}" Click="OnImportThird"/><TextBox Text="{Binding SelectedItem.ModelPath, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
           <TextBlock Text="{Binding SelectedItem.Errors[ModelPath]}" Style="{StaticResource ErrorText}"/>
           <CheckBox IsChecked="{Binding SelectedItem.UseSharedModel}"><TextBlock Text="{DynamicResource Smart_SharedModel}" TextWrapping="Wrap"/></CheckBox>
-          <TextBlock Text="{DynamicResource Models_First}"/><TextBox Text="{Binding SelectedItem.FirstPersonPath, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding SelectedItem.UseSharedModel}"/><Button Content="{DynamicResource Smart_ImportFirst}" Click="OnImportFirst"/>
-          <Button Content="{DynamicResource Smart_TextureFolderTitle}" Click="OnTextureFolder"/><Button Content="{DynamicResource Smart_ImportTextures}" Click="OnTextures"/><Button Content="{DynamicResource Smart_RestoreModels}" Command="{Binding RestoreTemplateCommand}" CommandParameter="models"/>
+          <TextBlock Text="{DynamicResource Models_First}"/><DockPanel><Button DockPanel.Dock="Right" Content="{DynamicResource Smart_ImportFirst}" Click="OnImportFirst"/><TextBox Text="{Binding SelectedItem.FirstPersonPath, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding SelectedItem.UseSharedModel}"/></DockPanel>
+          <Expander Header="{DynamicResource Smart_Resources}"><WrapPanel><Button Content="{DynamicResource Smart_TextureFolderTitle}" Click="OnTextureFolder"/><Button Content="{DynamicResource Smart_ImportTextures}" Click="OnTextures"/><Button Content="{DynamicResource Smart_RestoreModels}" Command="{Binding RestoreTemplateCommand}" CommandParameter="models"/></WrapPanel></Expander>
           <TextBlock Text="{Binding SelectedItem.PreviewNotice}" TextWrapping="Wrap" Margin="0,12,0,0"/>
          </StackPanel>
          <StackPanel Visibility="{Binding IsPropertiesStep, Converter={StaticResource Visible}}">
+          <layout:ResponsiveColumnsPanel MinColumnWidth="125" MaxColumns="3" Gap="10">
+           <StackPanel><TextBlock Text="{DynamicResource Weapons_Damage}"/><TextBox x:Name="PrimaryDamage" Text="{Binding SelectedItem.Damage, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Damage]}" Style="{StaticResource ErrorText}"/></StackPanel>
+           <StackPanel><TextBlock Text="{DynamicResource Weapons_Weight}"/><TextBox Text="{Binding SelectedItem.Weight, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Weight]}" Style="{StaticResource ErrorText}"/></StackPanel>
+           <StackPanel><TextBlock Text="{DynamicResource Weapons_Value}"/><TextBox Text="{Binding SelectedItem.Value, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Value]}" Style="{StaticResource ErrorText}"/></StackPanel>
+          </layout:ResponsiveColumnsPanel>
+          <Expander x:Name="MaterialSettings" Header="{DynamicResource Smart_MaterialTitle}" Margin="0,2,0,6">
           <Border Style="{StaticResource SmartCardBorder}"><StackPanel>
-           <TextBlock Text="{DynamicResource Smart_MaterialTitle}" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="{DynamicResource Smart_MaterialHint}" TextWrapping="Wrap"/>
+           <TextBlock Text="{DynamicResource Smart_MaterialTitle}" FontSize="18" FontWeight="SemiBold"/>
+           <TextBlock Text="{DynamicResource Smart_MaterialShort}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,4"/>
            <ComboBox ItemsSource="{Binding MaterialChoices}" SelectedItem="{Binding SelectedMaterialPreset}" ItemTemplate="{StaticResource MaterialChoice}"/>
            <TextBlock Text="{Binding SelectedMaterialPreset.Error}" TextWrapping="Wrap" Foreground="#FFB4B4"/>
-           <TextBlock Text="{Binding MaterialAvailabilityText}" TextWrapping="Wrap" Foreground="#B4C3D5"/><Button Content="{DynamicResource Smart_MaterialReload}" Click="OnReloadMaterials"/>
-           <Button Content="{DynamicResource Smart_MaterialPreview}" Click="OnMaterialPreset" IsEnabled="{Binding SelectedMaterialPreset.Available}"/>
-            <Button Content="{DynamicResource Smart_Balance_Custom}" Click="OnManualTuning"/>
-           <TextBlock Text="{DynamicResource Smart_BalanceTitle}" FontWeight="SemiBold" Margin="0,12,0,4"/>
+           <TextBlock Text="{Binding MaterialAvailabilityText}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
+           <WrapPanel><Button Content="{DynamicResource Smart_MaterialPreview}" Click="OnMaterialPreset" IsEnabled="{Binding SelectedMaterialPreset.Available}" Style="{StaticResource SmartPrimary}"/><Button Content="{DynamicResource Smart_MaterialReload}" Click="OnReloadMaterials"/><Button Content="{DynamicResource Smart_Balance_Custom}" Click="OnManualTuning"/></WrapPanel>
+           <Expander x:Name="BalanceOptions" Header="{DynamicResource Smart_BalanceTitle}"><StackPanel>
             <WrapPanel IsEnabled="{Binding CanUseBalance}"><Button Content="{DynamicResource Smart_Balance_MuchWeaker}" Click="OnBalance" Tag="MuchWeaker"/><Button Content="{DynamicResource Smart_Balance_Weaker}" Click="OnBalance" Tag="Weaker"/><Button Content="{DynamicResource Smart_Balance_Equal}" Click="OnBalance" Tag="Equal"/><Button Content="{DynamicResource Smart_Balance_Stronger}" Click="OnBalance" Tag="Stronger"/><Button Content="{DynamicResource Smart_Balance_MuchStronger}" Click="OnBalance" Tag="MuchStronger"/></WrapPanel>
            <Expander Header="{DynamicResource Smart_ReferenceOther}"><StackPanel>
             <TextBlock Text="{DynamicResource Smart_ReferenceHint}" TextWrapping="Wrap"/>
@@ -147,18 +151,18 @@
             <ComboBox ItemsSource="{Binding ReferenceChoices}" SelectedItem="{Binding SelectedReference}"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Name}"/><TextBlock Text="{Binding DisplayName}" FontSize="11"/></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
             <Button Content="{DynamicResource Smart_ReferenceApply}" Click="OnReference" IsEnabled="{Binding CanApplyReference}"/>
            </StackPanel></Expander>
-           <TextBlock Text="{DynamicResource Smart_HandlingTitle}" FontWeight="SemiBold" Margin="0,10,0,4"/>
-           <TextBlock Text="{DynamicResource Smart_HandlingHint}" TextWrapping="Wrap"/>
+           </StackPanel></Expander>
+           <Expander x:Name="HandlingOptions" Header="{DynamicResource Smart_HandlingTitle}"><StackPanel>
+           <TextBlock Text="{DynamicResource Smart_HandlingShort}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
            <WrapPanel IsEnabled="{Binding CanUseBalance}"><Button Content="{DynamicResource Smart_Handling_Standard}" Click="OnHandling" Tag="Standard"/><Button Content="{DynamicResource Smart_Handling_Light}" Click="OnHandling" Tag="Light"/><Button Content="{DynamicResource Smart_Handling_Heavy}" Click="OnHandling" Tag="Heavy"/><Button Content="{DynamicResource Smart_Handling_Fast}" Click="OnHandling" Tag="Fast"/><Button Content="{DynamicResource Smart_Handling_Slow}" Click="OnHandling" Tag="Slow"/></WrapPanel>
-           <TextBlock Text="{Binding TuningSummary}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
-           <TextBlock Text="{DynamicResource Smart_BalanceColumns}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,8,0,3"/>
+           </StackPanel></Expander>
+           <Expander x:Name="BalanceDetails" Header="{DynamicResource Smart_BalanceColumns}"><StackPanel>
+           <TextBlock Text="{Binding TuningSummary}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,0,0,6"/>
            <ItemsControl ItemsSource="{Binding BalanceComparison}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock TextWrapping="Wrap"><Run Text="{Binding Parameter}"/><Run Text=": "/><Run Text="{Binding Reference}"/><Run Text=" → "/><Run Text="{Binding Current}"/><Run Text="; "/><Run Text="{Binding Difference}"/></TextBlock></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
            <TextBlock Text="{DynamicResource Smart_BalanceHint}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,8"/>
-           <Button Click="OnUndoTuning" IsEnabled="{Binding CanUndoTuning}"><TextBlock Text="{DynamicResource Smart_TuningUndo}" TextWrapping="Wrap"/></Button>
-          </StackPanel></Border>
-          <TextBlock Text="{DynamicResource Weapons_Damage}"/><TextBox Text="{Binding SelectedItem.Damage, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Damage]}" Style="{StaticResource ErrorText}"/>
-          <TextBlock Text="{DynamicResource Weapons_Weight}"/><TextBox Text="{Binding SelectedItem.Weight, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Weight]}" Style="{StaticResource ErrorText}"/>
-          <TextBlock Text="{DynamicResource Weapons_Value}"/><TextBox Text="{Binding SelectedItem.Value, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/><TextBlock Text="{Binding SelectedItem.Errors[Value]}" Style="{StaticResource ErrorText}"/>
+           </StackPanel></Expander>
+           <Button HorizontalAlignment="Left" Click="OnUndoTuning" IsEnabled="{Binding CanUndoTuning}"><TextBlock Text="{DynamicResource Smart_TuningUndo}" TextWrapping="Wrap"/></Button>
+          </StackPanel></Border></Expander>
           <Expander Header="{DynamicResource Smart_Advanced}" Margin="0,8,0,12"><StackPanel Margin="0,12,0,0">
            <TextBlock Text="{DynamicResource Weapons_Description}"/><TextBox Text="{Binding SelectedItem.Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
            <TextBlock Text="{DynamicResource Weapons_Speed}"/><TextBox Text="{Binding SelectedItem.Speed, UpdateSourceTrigger=PropertyChanged}"/>
@@ -170,7 +174,12 @@
            <ComboBox ItemsSource="{Binding Options.Keywords}" SelectedItem="{Binding KeywordToAdd}" DisplayMemberPath="DisplayName"/><WrapPanel><Button Content="+" Command="{Binding AddKeywordCommand}"/><Button Content="−" Command="{Binding RemoveKeywordCommand}"/></WrapPanel>
            <TextBlock Text="{Binding SelectedItem.Error}" Style="{StaticResource ErrorText}"/>
           </StackPanel></Expander>
-          <Expander Header="{DynamicResource Smart_Inheritance}"><StackPanel><TextBlock Text="{Binding InheritanceText}" TextWrapping="Wrap"/><Button Content="{DynamicResource Smart_RestoreStats}" Command="{Binding RestoreTemplateCommand}" CommandParameter="stats"/><Button Content="{DynamicResource Smart_RestoreSounds}" Command="{Binding RestoreTemplateCommand}" CommandParameter="sounds"/><Button Content="{DynamicResource Smart_RestoreKeywords}" Command="{Binding RestoreTemplateCommand}" CommandParameter="keywords"/></StackPanel></Expander>
+          <Expander x:Name="InheritancePanel" Header="{DynamicResource Smart_Inheritance}"><StackPanel>
+           <TextBlock Text="{Binding InheritanceSource}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+           <TextBlock Text="{DynamicResource Smart_InheritanceShort}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,4,0,8"/>
+           <WrapPanel><Button Content="{DynamicResource Smart_RestoreStats}" Command="{Binding RestoreTemplateCommand}" CommandParameter="stats"/><Button Content="{DynamicResource Smart_RestoreSounds}" Command="{Binding RestoreTemplateCommand}" CommandParameter="sounds"/><Button Content="{DynamicResource Smart_RestoreKeywords}" Command="{Binding RestoreTemplateCommand}" CommandParameter="keywords"/></WrapPanel>
+           <Expander Header="{DynamicResource Smart_InheritanceDetails}"><TextBox Text="{Binding InheritanceText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240" VerticalScrollBarVisibility="Auto"/></Expander>
+          </StackPanel></Expander>
          </StackPanel>
          <StackPanel Visibility="{Binding IsAcquisitionStep, Converter={StaticResource Visible}}">
           <TextBlock Text="{DynamicResource Smart_RecipeQuestions}" TextWrapping="Wrap"/>
@@ -179,7 +188,7 @@
           <StackPanel Visibility="{Binding HasRecipeConflict, Converter={StaticResource Visible}}"><TextBlock Text="{DynamicResource Smart_RecipeConflict}" Style="{StaticResource ErrorText}"/><TextBlock Text="{Binding RecipeConflictDetails}" TextWrapping="Wrap"/><ListBox ItemsSource="{Binding SelectedItem.Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="EditorId" MaxHeight="140"/><Button Content="{DynamicResource Smart_KeepRecipe}" Click="OnResolveRecipeConflict"/></StackPanel>
           <StackPanel x:Name="RecipeEditor" Visibility="{Binding HasSelectedRecipe, Converter={StaticResource Visible}}">
            <TextBlock Text="{Binding SelectedRecipe.DisplayName}" FontSize="18" FontWeight="SemiBold" Margin="0,8"/>
-           <Border Style="{StaticResource SmartCardBorder}"><StackPanel>
+           <Expander x:Name="RecipeTemplatesPanel" Header="{DynamicResource Smart_RecipeTemplates}" Margin="0,2,0,6"><Border Style="{StaticResource SmartCardBorder}"><StackPanel>
             <TextBlock Text="{DynamicResource Smart_RecipeTemplates}" FontWeight="SemiBold" FontSize="18" TextWrapping="Wrap"/>
             <TextBlock Text="{DynamicResource Smart_RecipeTemplatesHint}" TextWrapping="Wrap" Margin="0,6"/>
             <Expander Header="{DynamicResource Smart_RecipeStandard}"><StackPanel>
@@ -201,7 +210,7 @@
              <Button Click="OnSaveRecipePreset" IsEnabled="{Binding CanSaveRecipePreset}"><TextBlock Text="{DynamicResource Smart_RecipePresetSave}" TextWrapping="Wrap"/></Button>
             </StackPanel></Expander>
             <Button Click="OnRecipePreset" Tag="empty"><TextBlock Text="{DynamicResource Smart_RecipeEmpty}" TextWrapping="Wrap"/></Button>
-           </StackPanel></Border>
+           </StackPanel></Border></Expander>
            <TextBlock Text="{DynamicResource Smart_OutputCount}" TextWrapping="Wrap"/><TextBox Text="{Binding SelectedRecipe.OutputCount, UpdateSourceTrigger=PropertyChanged}"/>
            <TextBlock Text="{Binding RecipeWorkbenchText}" Foreground="#B4C3D5" Margin="0,0,0,12"/>
            <TextBlock Text="{DynamicResource Smart_RequiredPerk}"/><ComboBox ItemsSource="{Binding Options.Perks}" DisplayMemberPath="DisplayName" SelectedValuePath="Reference" SelectedValue="{Binding SelectedRecipe.RequiredPerk}"/>
