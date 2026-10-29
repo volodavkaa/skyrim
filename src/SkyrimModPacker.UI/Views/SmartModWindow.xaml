@@ -1,7 +1,7 @@
 <Window x:Class="SkyrimModPacker.UI.Views.SmartModWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:layout="clr-namespace:SkyrimModPacker.UI.Controls" Title="{DynamicResource Smart_Title}"
- Width="1360" Height="900" MinWidth="580" MinHeight="600" WindowStartupLocation="CenterOwner"
+ Width="1360" Height="900" MinWidth="580" MinHeight="600" WindowStartupLocation="CenterScreen"
  Background="#101722" Foreground="#F2F6FC"
  FontSize="14" UseLayoutRounding="True" Loaded="OnLoaded" Closing="OnClosing" SizeChanged="OnSizeChanged" AllowDrop="True" PreviewDragOver="OnFolderDragOver" Drop="OnFolderDrop">
  <Window.Resources><ResourceDictionary>
@@ -30,6 +30,8 @@
      <Button Content="{DynamicResource Weapons_OpenProject}" Click="OnOpen"/>
      <Button Content="{DynamicResource Smart_SaveDraft}" Command="{Binding SaveDraftNowCommand}" IsEnabled="{Binding HasProject}"/>
      <Button Content="{DynamicResource Smart_Recover}" Click="OnRecoverBackup"/>
+     <Button Content="{DynamicResource Nav_Settings}" Click="OnSettings"/>
+     <Button Content="{DynamicResource Nav_Log}" Click="OnLog"/>
      <TextBlock Text="{Binding ProjectPath}" TextWrapping="Wrap" FontSize="11" Foreground="#B4C3D5" Margin="0,10,0,0"/>
     </StackPanel></Expander>
     <StackPanel><TextBlock Text="{DynamicResource Smart_Title}" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{DynamicResource Smart_Intro}" TextWrapping="Wrap" Foreground="#B4C3D5" Margin="0,6,0,0"/></StackPanel>
@@ -85,6 +87,7 @@
         <TextBlock Text="{DynamicResource Smart_StartResources}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
         <TextBlock Text="{DynamicResource Smart_StartResourcesHint}" TextWrapping="Wrap" Margin="0,8"/>
         <WrapPanel><Button Click="OnWeaponArchive" IsEnabled="{Binding CanStartFromResources}" Style="{StaticResource SmartPrimary}"><TextBlock Text="{DynamicResource Smart_StartZip}" TextWrapping="Wrap"/></Button><Button Click="OnWeaponFolder" IsEnabled="{Binding CanStartFromResources}"><TextBlock Text="{DynamicResource Smart_FolderTitle}" TextWrapping="Wrap"/></Button></WrapPanel>
+       <Button Content="{DynamicResource Smart_PrepareModel}" Click="OnPrepareModel" Tag="new" HorizontalAlignment="Left"/>
        </StackPanel></Border>
        <Expander Header="{DynamicResource Smart_StartGame}" IsExpanded="{Binding GameTemplateSetupExpanded}"><StackPanel>
        <TextBlock Text="{DynamicResource Smart_ChooseWeapons}" Style="{StaticResource Heading}"/>
@@ -117,6 +120,7 @@
           <TextBlock Text="{Binding SelectedItem.Errors[Template]}" Style="{StaticResource ErrorText}"/>
          </StackPanel>
          <StackPanel Visibility="{Binding IsAppearanceStep, Converter={StaticResource Visible}}">
+          <Button Content="{DynamicResource Smart_PrepareModel}" Click="OnPrepareModel" Tag="existing" HorizontalAlignment="Left"/>
           <Button Click="OnWeaponFolder" Tag="existing"><TextBlock Text="{DynamicResource Smart_FolderReplaceAppearance}" TextWrapping="Wrap"/></Button>
           <TextBlock Text="{DynamicResource Models_Third}"/><TextBox Text="{Binding SelectedItem.ModelPath, UpdateSourceTrigger=PropertyChanged}"/><Button Content="{DynamicResource Smart_ImportThird}" Click="OnImportThird"/>
           <TextBlock Text="{Binding SelectedItem.Errors[ModelPath]}" Style="{StaticResource ErrorText}"/>
@@ -271,10 +275,21 @@
        <WrapPanel><Button Content="{DynamicResource Smart_Validate}" Command="{Binding CheckCommand}"/><Button Content="{DynamicResource Smart_ReviewExternal}" Click="OnReviewExternal"/></WrapPanel>
        <ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding DataContext.NavigateIssueCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" HorizontalContentAlignment="Left"><TextBlock Text="{Binding Message}" TextWrapping="Wrap"/></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
        <CheckBox Content="{DynamicResource Smart_EnableEsl}" IsChecked="{Binding EnableEsl}" Margin="0,12"/>
+       <CheckBox Content="{DynamicResource Smart_CreateTextureVariant}" IsChecked="{Binding CreateTextureVariant}" Margin="0,4,0,8"/>
+       <StackPanel IsEnabled="{Binding CreateTextureVariant}" Margin="18,0,0,8">
+        <TextBlock Text="{DynamicResource Smart_VariantLimit}"/>
+        <ComboBox ItemsSource="{Binding VariantTextureSizes}" SelectedItem="{Binding VariantMaxTextureSize}" Width="150" HorizontalAlignment="Left"/>
+        <TextBlock Text="{DynamicResource Smart_VariantTexconv}" Margin="0,6,0,0"/>
+        <DockPanel><Button DockPanel.Dock="Right" Content="…" Click="OnBrowseVariantTexconv"/><TextBox Text="{Binding VariantTexconvPath, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
+        <TextBlock Text="{DynamicResource Smart_VariantHint}" TextWrapping="Wrap" Foreground="#B4C3D5"/>
+       </StackPanel>
        <Button Content="{DynamicResource Smart_Pack}" Style="{StaticResource SmartPrimary}" Command="{Binding PackCommand}" HorizontalAlignment="Left"/>
       </StackPanel>
       <StackPanel Visibility="{Binding IsFinished, Converter={StaticResource Visible}}">
        <TextBlock Text="{DynamicResource Smart_Finished}" Style="{StaticResource Heading}"/><TextBlock Text="{Binding Summary}" TextWrapping="Wrap"/><TextBlock Text="{Binding LastArchivePath}" TextWrapping="Wrap" Margin="0,12"/>
+       <TextBlock Text="{DynamicResource Smart_VariantResult}" FontWeight="SemiBold" Visibility="{Binding CreateTextureVariant, Converter={StaticResource Visible}}"/>
+       <TextBlock Text="{Binding LastVariantArchivePath}" TextWrapping="Wrap" Margin="0,4,0,8" Visibility="{Binding CreateTextureVariant, Converter={StaticResource Visible}}"/>
+       <Button Content="{DynamicResource Smart_VariantRetry}" Command="{Binding CreateVariantCommand}" HorizontalAlignment="Left" Visibility="{Binding CreateTextureVariant, Converter={StaticResource Visible}}"/>
        <WrapPanel><Button Content="{DynamicResource Smart_OpenFolder}" Command="{Binding OpenArchiveFolderCommand}"/><Button Content="{DynamicResource Smart_ReadReport}" Command="{Binding ReadReportCommand}"/><Button Content="{DynamicResource Smart_Continue}" Command="{Binding NavigateCommand}" CommandParameter="Overview"/></WrapPanel>
       </StackPanel>
       <Expander Header="{DynamicResource Smart_Messages}" Margin="0,16,0,8"><Expander.Style><Style TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Style.Triggers><DataTrigger Binding="{Binding Status}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Expander.Style><TextBox Text="{Binding Status, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="200" VerticalScrollBarVisibility="Auto"/></Expander>

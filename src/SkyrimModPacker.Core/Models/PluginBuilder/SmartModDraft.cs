@@ -19,6 +19,10 @@ public sealed record SmartModDraft
     public bool EnableEsl { get; init; }
     public WorkspaceRevision? SourceRevision { get; init; }
     public string? LastArchivePath { get; init; }
+    public bool CreateTextureVariant { get; init; }
+    public int VariantMaxTextureSize { get; init; } = 2048;
+    public string VariantTexconvPath { get; init; } = "";
+    public string? LastVariantArchivePath { get; init; }
     public PluginRecordReference? PendingLeveledList { get; init; }
     public string PendingListLevel { get; init; } = "1";
     public string PendingListCount { get; init; } = "1";

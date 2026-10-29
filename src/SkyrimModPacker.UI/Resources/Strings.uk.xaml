@@ -438,7 +438,17 @@
     <system:String x:Key="Items_DraftResourceUsed">Ця модель призначена в редакторі. Змініть призначення перед видаленням ресурсу.</system:String>
     <system:String x:Key="Items_RestoreParameters">Відновити характеристики шаблону</system:String>
     <system:String x:Key="Items_ParametersUnchanged">Характеристики відповідають шаблону.</system:String>
-    <system:String x:Key="Smart_Title">Розумне створення моду</system:String>
+    <system:String x:Key="Smart_Title">Створення мода</system:String>
+    <system:String x:Key="Smart_PrepareModel">Підготувати NIF з 3D-моделі</system:String>
+    <system:String x:Key="Smart_PreparedReview">Перевірити підготовлену модель</system:String>
+    <system:String x:Key="Smart_PreparedReviewHint">Обидва NIF і потрібні DDS уже вибрано. Перевірте склад комплекту перед імпортом у мод.</system:String>
+    <system:String x:Key="Smart_PreparedImport">Імпортувати у мод</system:String>
+    <system:String x:Key="Smart_PreparedChecking">Перевіряю файли та їхні зв’язки…</system:String>
+    <system:String x:Key="Smart_PreparedReady">Готово до імпорту: {0} файлів.</system:String>
+    <system:String x:Key="Smart_PreparedBlocked">Імпорт заблоковано. Перегляньте причину вище.</system:String>
+    <system:String x:Key="Smart_PreparedRefresh">Перевірити знову</system:String>
+    <system:String x:Key="Smart_PreparedRecheck">Перевірте налаштування знову перед імпортом.</system:String>
+    <system:String x:Key="Smart_PreparedImporting">Імпортування…</system:String>
     <system:String x:Key="Smart_MyMod">Мій мод</system:String>
     <system:String x:Key="Smart_Overview">Огляд мода</system:String>
     <system:String x:Key="Smart_Weapons">Зброя</system:String>
@@ -846,4 +856,14 @@
  <system:String x:Key="Smart_TuningField_Material">Матеріал</system:String>
  <system:String x:Key="Smart_CompareApply">Застосувати вибрані параметри</system:String>
  <system:String x:Key="Smart_AutoManual">Тип і модель вибрано вручну</system:String>
+    <system:String x:Key="Smart_CreateTextureVariant">Створити другий архів зі зменшеними текстурами</system:String>
+    <system:String x:Key="Smart_VariantLimit">Максимальний бік текстури, пікселі</system:String>
+    <system:String x:Key="Smart_VariantTexconv">Шлях до texconv.exe</system:String>
+    <system:String x:Key="Smart_VariantHint">Другий ZIP зберігає ті самі файли мода. Cubemap і менші текстури не змінюються.</system:String>
+    <system:String x:Key="Smart_VariantResult">Архів зі зменшеними текстурами</system:String>
+    <system:String x:Key="Smart_VariantRetry">Створити другий архів</system:String>
+    <system:String x:Key="Smart_VariantTexconvMissing">Вкажіть наявний texconv.exe для другого архіву.</system:String>
+    <system:String x:Key="Smart_VariantFailed">Основний архів створено, але другий не вдалося створити:</system:String>
+    <system:String x:Key="Smart_VariantNoArchive">Спочатку створіть основний архів.</system:String>
+    <system:String x:Key="Smart_VariantReady">Другий архів створено.</system:String>
 </ResourceDictionary>

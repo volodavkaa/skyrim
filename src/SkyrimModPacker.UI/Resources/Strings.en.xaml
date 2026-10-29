@@ -438,7 +438,17 @@
     <system:String x:Key="Items_DraftResourceUsed">This model is assigned in the editor. Change the assignment before deleting the resource.</system:String>
     <system:String x:Key="Items_RestoreParameters">Restore template characteristics</system:String>
     <system:String x:Key="Items_ParametersUnchanged">Characteristics match the template.</system:String>
-    <system:String x:Key="Smart_Title">Smart mod creation</system:String>
+    <system:String x:Key="Smart_Title">Create a mod</system:String>
+    <system:String x:Key="Smart_PrepareModel">Prepare NIF from a 3D model</system:String>
+    <system:String x:Key="Smart_PreparedReview">Review prepared model</system:String>
+    <system:String x:Key="Smart_PreparedReviewHint">Both NIF files and required DDS textures are already selected. Review them before importing into the mod.</system:String>
+    <system:String x:Key="Smart_PreparedImport">Import into mod</system:String>
+    <system:String x:Key="Smart_PreparedChecking">Checking files and dependencies…</system:String>
+    <system:String x:Key="Smart_PreparedReady">Ready to import: {0} files.</system:String>
+    <system:String x:Key="Smart_PreparedBlocked">Import is blocked. Review the issue above.</system:String>
+    <system:String x:Key="Smart_PreparedRefresh">Check again</system:String>
+    <system:String x:Key="Smart_PreparedRecheck">Check the settings again before importing.</system:String>
+    <system:String x:Key="Smart_PreparedImporting">Importing…</system:String>
     <system:String x:Key="Smart_MyMod">My mod</system:String>
     <system:String x:Key="Smart_Overview">Mod overview</system:String>
     <system:String x:Key="Smart_Weapons">Weapons</system:String>
@@ -846,4 +856,14 @@
  <system:String x:Key="Smart_TuningField_Material">Material</system:String>
  <system:String x:Key="Smart_CompareApply">Apply selected parameters</system:String>
  <system:String x:Key="Smart_AutoManual">Type and model selected manually</system:String>
+    <system:String x:Key="Smart_CreateTextureVariant">Create a second archive with smaller textures</system:String>
+    <system:String x:Key="Smart_VariantLimit">Maximum texture dimension, pixels</system:String>
+    <system:String x:Key="Smart_VariantTexconv">Path to texconv.exe</system:String>
+    <system:String x:Key="Smart_VariantHint">The second ZIP contains the same mod files. Cubemaps and smaller textures remain unchanged.</system:String>
+    <system:String x:Key="Smart_VariantResult">Archive with smaller textures</system:String>
+    <system:String x:Key="Smart_VariantRetry">Create second archive</system:String>
+    <system:String x:Key="Smart_VariantTexconvMissing">Choose an existing texconv.exe for the second archive.</system:String>
+    <system:String x:Key="Smart_VariantFailed">The primary archive was created, but the second archive failed:</system:String>
+    <system:String x:Key="Smart_VariantNoArchive">Create the primary archive first.</system:String>
+    <system:String x:Key="Smart_VariantReady">The second archive was created.</system:String>
 </ResourceDictionary>

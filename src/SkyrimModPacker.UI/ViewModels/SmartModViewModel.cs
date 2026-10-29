@@ -62,6 +62,11 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     [ObservableProperty] private string _saveStatus = "";
     [ObservableProperty] private string _dependencies = "";
     [ObservableProperty] private string? _lastArchivePath;
+    [ObservableProperty] private string? _lastVariantArchivePath;
+    [ObservableProperty] private bool _createTextureVariant;
+    [ObservableProperty] private int _variantMaxTextureSize = 2048;
+    [ObservableProperty] private string _variantTexconvPath = "";
+    public IReadOnlyList<int> VariantTextureSizes { get; } = [4096, 2048, 1024, 512, 256];
     [ObservableProperty] private SmartModItemRow? _selectedItem;
     [ObservableProperty] private SmartModRecipeRow? _selectedRecipe;
     [ObservableProperty] private SwordTemplate? _selectedTemplate;
@@ -127,6 +132,9 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanStartFromResources)); Changed(); }
     partial void OnOutputDirectoryChanged(string value) => OnPropertyChanged(nameof(CanStartFromResources));
     partial void OnEnableEslChanged(bool value) => Changed();
+    partial void OnCreateTextureVariantChanged(bool value) { LastVariantArchivePath = null; Changed(false); }
+    partial void OnVariantMaxTextureSizeChanged(int value) { LastVariantArchivePath = null; Changed(false); }
+    partial void OnVariantTexconvPathChanged(string value) { LastVariantArchivePath = null; Changed(false); }
     partial void OnSectionChanged(SmartModSection value) { NotifyStep(); Changed(false); }
     partial void OnSelectedItemChanged(SmartModItemRow? value)
     {
@@ -147,7 +155,7 @@ public sealed partial class SmartModViewModel : ObservableObject, IDisposable, I
     private void Changed(bool invalidateArchive = true)
     {
         if (_applying || _disposed) return;
-        _editGeneration++; if (invalidateArchive) LastArchivePath = null; SaveStatus = Label("Smart_SavePending");
+        _editGeneration++; if (invalidateArchive) { LastArchivePath = null; LastVariantArchivePath = null; } SaveStatus = Label("Smart_SavePending");
         NotifyStep();
         if (HasProject) _autosave.Schedule(async () => await SaveDraftAsync());
     }

@@ -39,11 +39,12 @@ public static class ModelPreparationRunner
         string blenderPath, string addonParent, string outputDirectory, bool includeScabbard,
         CancellationToken cancellationToken = default, string? scriptPath = null,
         ModelPreparationAdjustments? adjustments = null, string weaponType = "sword1h",
-        ModelPreparationTextureOptions? textures = null, string? modelEntry = null)
+        ModelPreparationTextureOptions? textures = null, string? modelEntry = null, bool defaultShader = false, double? vertexColor = null,
+        ModelPreparationShaderSettings? shaderSettings = null)
     {
         using var draft = await PrepareDraftAsync(archivePath, gameDataDirectory, blenderPath,
             addonParent, outputDirectory, includeScabbard, cancellationToken, scriptPath, adjustments,
-            weaponType, textures, modelEntry);
+            weaponType, textures, modelEntry, defaultShader, vertexColor, shaderSettings);
         cancellationToken.ThrowIfCancellationRequested();
         return draft.Publish();
     }
@@ -52,9 +53,13 @@ public static class ModelPreparationRunner
         string blenderPath, string addonParent, string outputDirectory, bool includeScabbard,
         CancellationToken cancellationToken = default, string? scriptPath = null,
         ModelPreparationAdjustments? adjustments = null, string weaponType = "sword1h",
-        ModelPreparationTextureOptions? textures = null, string? modelEntry = null)
+        ModelPreparationTextureOptions? textures = null, string? modelEntry = null, bool defaultShader = false, double? vertexColor = null,
+        ModelPreparationShaderSettings? shaderSettings = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (vertexColor is double color && (!double.IsFinite(color) || color is < 0 or > 1))
+            throw new ArgumentOutOfRangeException(nameof(vertexColor));
+        shaderSettings?.Validate();
         var definition = WeaponTemplateCatalog.GetExportable(weaponType);
         if (includeScabbard && !definition.SupportsScabbard)
             throw new ArgumentException("Selected weapon template has no scabbard.");
@@ -118,6 +123,10 @@ public static class ModelPreparationRunner
             if (sourceMaterialCount <= 1 && textures?.Materials is { Count: > 0 })
                 throw new InvalidDataException("Per-slot texture mapping requires multiple source materials.");
             var texturePaths = new List<PreparedMaterialTextures>();
+            if (defaultShader && textures != null)
+                textures = textures with { MetallicEntry = null, CubemapEntry = null, GameCubemapPath = null,
+                    Materials = textures.Materials?.Select(item => item with
+                        { MetallicEntry = null, CubemapEntry = null }).ToArray() };
             if (textures != null)
             {
                 if (sourceMaterialCount > 1)
@@ -126,7 +135,7 @@ public static class ModelPreparationRunner
                         texturePaths.Add(await ModelPreparationTextures.PrepareAsync(archivePath, staging, slug,
                             new ModelPreparationTextureOptions(item.DiffuseEntry, item.NormalEntry,
                                 textures.TexconvPath, textures.InvertNormalY, null,
-                                item.MetallicEntry, item.CubemapEntry, textures.GameCubemapPath),
+                                item.MetallicEntry, item.CubemapEntry, textures.GameCubemapPath, textures.MaxTextureSize),
                             cancellationToken, gameDataDirectory, item.Slot));
                 }
                 else
@@ -161,6 +170,11 @@ public static class ModelPreparationRunner
                     blood_mode = definition.BloodMode,
                     grip_from_collision = definition.GripFromCollision,
                     scabbard_fit = definition.ScabbardFit,
+                    default_shader = defaultShader,
+                    vertex_color = vertexColor,
+                    environment_strength = defaultShader ? null : shaderSettings?.EnvironmentStrength,
+                    specular_strength = shaderSettings?.SpecularStrength,
+                    specular_color = shaderSettings?.SpecularStrength == null ? null : new[] { shaderSettings.Red, shaderSettings.Green, shaderSettings.Blue },
                     diffuse_texture = texturePaths.Count == 1 ? texturePaths[0].Diffuse : null,
                     normal_texture = texturePaths.Count == 1 ? texturePaths[0].Normal : null,
                     env_mask_texture = texturePaths.Count == 1 ? texturePaths[0].EnvMask : null,
@@ -178,7 +192,7 @@ public static class ModelPreparationRunner
                 await RunBlenderAsync(blenderPath, inspectScript, cancellationToken, addonParent, output, inspection);
                 ValidateReimport(inspection, report, includeScabbard, view,
                     definition.ConvexCollision ? 1 : definition.CollisionBoxCount,
-                    definition.BloodMode, definition.ScabbardFit, texturePaths);
+                    definition.BloodMode, definition.ScabbardFit, texturePaths, defaultShader, vertexColor, shaderSettings);
                 hashes[relativeOutput] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(output)));
                 var normalized = JsonNode.Parse(await File.ReadAllTextAsync(report, cancellationToken))!.AsObject();
                 normalized["template"] = relativePath;
@@ -193,6 +207,9 @@ public static class ModelPreparationRunner
             {
                 status = "experimental; Skyrim game test pending",
                 weapon_type = definition.Id,
+                weapon_shader = defaultShader ? "Default" : "template",
+                vertex_color = vertexColor,
+                shader_settings = shaderSettings,
                 source = archivePath,
                 model = slug,
                 adjustments,
@@ -210,7 +227,8 @@ public static class ModelPreparationRunner
                     material_slots = texturePaths.Select(pair => new
                     { diffuse = pair.Diffuse, normal = pair.Normal,
                       env_mask = pair.EnvMask, env_map = pair.EnvMap }).ToArray(),
-                    invert_normal_y = textures!.InvertNormalY
+                    invert_normal_y = textures!.InvertNormalY,
+                    max_texture_size = textures.MaxTextureSize
                 },
                 limitations = texturePaths.Count == 0
                     ? new[] { "Game appearance and collision behavior not verified", "Textures not converted or copied" }
@@ -261,7 +279,7 @@ public static class ModelPreparationRunner
         throw new FileNotFoundException("Vanilla Skyrim SE template was not found in the game archives", relativePath);
     }
 
-    private static async Task RunBlenderAsync(string blender, string script,
+    internal static async Task RunBlenderAsync(string blender, string script,
         CancellationToken cancellationToken, params string[] scriptArguments)
     {
         var start = new ProcessStartInfo(blender) { UseShellExecute = false, RedirectStandardOutput = true,
@@ -300,7 +318,8 @@ public static class ModelPreparationRunner
 
     private static void ValidateReimport(string inspectionPath, string exportReportPath, bool includeScabbard,
         WeaponTemplateView view, int collisionShapeCount, string bloodMode, string scabbardFit,
-        IReadOnlyList<PreparedMaterialTextures> textures)
+        IReadOnlyList<PreparedMaterialTextures> textures, bool defaultShader, double? vertexColor,
+        ModelPreparationShaderSettings? shaderSettings)
     {
         using var imported = JsonDocument.Parse(File.ReadAllText(inspectionPath));
         using var exported = JsonDocument.Parse(File.ReadAllText(exportReportPath));
@@ -316,6 +335,54 @@ public static class ModelPreparationRunner
             if (!objects.TryGetValue(name, out var part) || part.GetProperty("type").GetString() != "MESH" ||
                 part.GetProperty("vertices").GetInt32() < 1 || part.GetProperty("uv_layers").GetInt32() < 1)
                 throw new InvalidDataException("Reimported NIF lacks usable weapon material shape: " + name);
+        if (defaultShader)
+            foreach (var name in partNames)
+            {
+                var materials = objects[name].GetProperty("material_nodes").EnumerateArray().ToArray();
+                if (materials.Length != 1 || materials[0].GetProperty("shader_type").GetString() != "Default" ||
+                    materials[0].GetProperty("shader_flags1").GetString()!.Split('|')
+                        .Any(flag => flag.Trim() == "ENVIRONMENT_MAPPING"))
+                    throw new InvalidDataException("Reimported weapon does not have the Default shader: " + name +
+                        "; materials: " + string.Join(", ", materials.Select(material =>
+                            material.GetProperty("shader_type").GetString() + " / " + material.GetProperty("shader_flags1").GetString())));
+            }
+        if (shaderSettings != null)
+            foreach (var name in partNames)
+            {
+                var materials = objects[name].GetProperty("material_nodes").EnumerateArray().ToArray();
+                if (materials.Length != 1) throw new InvalidDataException("Missing weapon material: " + name);
+                var material = materials[0];
+                if (!defaultShader && shaderSettings.EnvironmentStrength is double env &&
+                    material.GetProperty("shader_type").GetString() == "Environment_Map" &&
+                    Math.Abs(material.GetProperty("environment_strength").GetDouble() - env) > 0.001)
+                    throw new InvalidDataException("Reimported environment strength differs: " + name);
+                if (shaderSettings.SpecularStrength is double spec)
+                {
+                    if (Math.Abs(material.GetProperty("specular_strength").GetDouble() - spec) > 0.001 ||
+                        !material.GetProperty("shader_flags1").GetString()!.Split('|').Any(flag => flag.Trim() == "SPECULAR"))
+                        throw new InvalidDataException("Reimported specular strength differs: " + name);
+                    var actual = material.GetProperty("specular_color");
+                    var expectedRgb = new[] { shaderSettings.Red, shaderSettings.Green, shaderSettings.Blue };
+                    for (var channel = 0; channel < 3; channel++)
+                        if (Math.Abs(actual[channel].GetDouble() - expectedRgb[channel]) > 0.001)
+                            throw new InvalidDataException("Reimported specular color differs: " + name);
+                }
+            }
+        if (vertexColor is double expectedColor)
+            foreach (var name in partNames.Concat(includeScabbard ? new[] { "Scb" } : Array.Empty<string>()))
+            {
+                var part = objects[name];
+                var color = part.GetProperty("vertex_color");
+                if (color.ValueKind != JsonValueKind.Object ||
+                    color.GetProperty("count").GetInt32() == 0 ||
+                    Math.Abs(color.GetProperty("min").GetDouble() - expectedColor) > 0.03 ||
+                    Math.Abs(color.GetProperty("max").GetDouble() - expectedColor) > 0.03)
+                    throw new InvalidDataException("Reimported NIF has wrong vertex color: " + name);
+                var materials = part.GetProperty("material_nodes").EnumerateArray().ToArray();
+                if (materials.Length != 1 || !materials[0].GetProperty("shader_flags2").GetString()!
+                        .Split('|').Any(flag => flag.Trim() == "VERTEX_COLORS"))
+                    throw new InvalidDataException("Reimported NIF does not enable vertex colors: " + name);
+            }
         if (textures.Count != 0 && textures.Count != partNames.Length)
             throw new InvalidDataException("Weapon material shape and texture mapping counts differ");
         for (var slot = 0; slot < textures.Count; slot++)

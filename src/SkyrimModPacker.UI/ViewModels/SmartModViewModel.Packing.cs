@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using SkyrimModPacker.Core.Common;
 using SkyrimModPacker.Core.Models;
 using SkyrimModPacker.Core.Models.PluginBuilder;
+using SkyrimModPacker.Infrastructure.Archivers;
 
 namespace SkyrimModPacker.UI.ViewModels;
 
@@ -221,6 +222,7 @@ public sealed partial class SmartModViewModel
     private Task PackAsync() => RunAsync(async token =>
     {
         if (_pipeline == null) throw new InvalidOperationException(Label("Smart_PackerUnavailable"));
+        if (CreateTextureVariant && !File.Exists(VariantTexconvPath)) throw new FileNotFoundException(Label("Smart_VariantTexconvMissing"), VariantTexconvPath);
         if (!await CheckCoreAsync(token)) { Section = SmartModSection.Checks; return; }
         foreach (var item in Items.ToArray()) await SaveItemCoreAsync(item, token);
         if (!await CheckCoreAsync(token)) { Section = SmartModSection.Checks; return; }
@@ -231,10 +233,31 @@ public sealed partial class SmartModViewModel
             PluginSourcePath = PluginPath, WeaponProjectPath = ProjectPath, EnableEsl = EnableEsl, IncludeExportReport = true
         }, await _settings.LoadAsync(token), cancellationToken: token);
         if (!result.IsSuccess) throw new IOException(string.Join(Environment.NewLine, result.Errors));
-        LastArchivePath = result.OutputArchivePath; Section = SmartModSection.Finished;
+        LastArchivePath = result.OutputArchivePath; LastVariantArchivePath = null; Section = SmartModSection.Finished;
         foreach (var warning in result.Warnings) Issues.Add(new(warning, IsError: false));
-        await PersistAsync(token); Status = Label("Smart_Packed");
+        await PersistAsync(token);
+        if (CreateTextureVariant)
+        {
+            try { await CreateVariantCoreAsync(token); }
+            catch (Exception error) when (error is not OperationCanceledException)
+            { throw new IOException(Label("Smart_VariantFailed") + " " + error.Message, error); }
+        }
+        Status = Label("Smart_Packed");
     });
+    [RelayCommand]
+    private Task CreateVariantAsync() => RunAsync(async token =>
+    {
+        if (string.IsNullOrWhiteSpace(LastArchivePath)) throw new InvalidOperationException(Label("Smart_VariantNoArchive"));
+        await CreateVariantCoreAsync(token);
+        Status = Label("Smart_VariantReady");
+    });
+    private async Task CreateVariantCoreAsync(CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(LastArchivePath)) throw new InvalidOperationException(Label("Smart_VariantNoArchive"));
+        LastVariantArchivePath = await TextureVariantArchiveService.CreateAsync(LastArchivePath, VariantMaxTextureSize,
+            VariantTexconvPath, _gameData, token);
+        await PersistAsync(token);
+    }
     [RelayCommand] private void OpenArchiveFolder() { if (LastArchivePath != null) _opener?.Open(Path.GetDirectoryName(LastArchivePath)!); }
     [RelayCommand]
     private async Task ReadReportAsync()

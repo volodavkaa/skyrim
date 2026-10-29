@@ -142,6 +142,9 @@ public sealed partial class SmartModViewModel
             _document = document; Items.Clear();
             foreach (var draft in document.Items) Attach(new(draft, Label));
             Name = document.Name; EnableEsl = document.EnableEsl; LastArchivePath = document.LastArchivePath;
+            CreateTextureVariant = document.CreateTextureVariant;
+            VariantMaxTextureSize = VariantTextureSizes.Contains(document.VariantMaxTextureSize) ? document.VariantMaxTextureSize : 2048;
+            VariantTexconvPath = document.VariantTexconvPath ?? ""; LastVariantArchivePath = document.LastVariantArchivePath;
             SelectedLeveledList = Options.LeveledLists.FirstOrDefault(l => l.Reference == document.PendingLeveledList);
             ListLevel = document.PendingListLevel; ListCount = document.PendingListCount;
             SelectedItem = Items.FirstOrDefault(i => i.Id == document.SelectedItemId) ?? Items.FirstOrDefault();
@@ -155,6 +158,8 @@ public sealed partial class SmartModViewModel
     private SmartModDraft Capture() => _document with
     {
         Name = Name, EnableEsl = EnableEsl, LastArchivePath = LastArchivePath, Section = Section, SelectedItemId = SelectedItem?.Id,
+        CreateTextureVariant = CreateTextureVariant, VariantMaxTextureSize = VariantMaxTextureSize,
+        VariantTexconvPath = VariantTexconvPath, LastVariantArchivePath = LastVariantArchivePath,
         PendingLeveledList = SelectedLeveledList?.Reference, PendingListLevel = ListLevel, PendingListCount = ListCount,
         SelectedRecipeId = SelectedRecipe?.Id, SelectedResourcePath = SelectedResource?.RelativePath,
         Items = Items.Select(i => i.Capture()).ToArray()

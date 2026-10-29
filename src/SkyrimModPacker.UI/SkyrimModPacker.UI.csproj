@@ -37,6 +37,7 @@
     <Content Include="..\..\scripts\model_preparation_probe.py" Link="ModelPreparation\model_preparation_probe.py" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\scripts\model_preparation_template_inspect.py" Link="ModelPreparation\model_preparation_template_inspect.py" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\scripts\model_preparation_material_probe.py" Link="ModelPreparation\model_preparation_material_probe.py" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\scripts\character_hand_preview.py" Link="ModelPreparation\character_hand_preview.py" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Roslyn editors can request CoreCompile without the Visual Studio WPF build hooks. -->

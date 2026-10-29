@@ -9,6 +9,8 @@ namespace SkyrimModPacker.Infrastructure.Preview;
 
 public sealed class ModelPreviewService : IModelPreviewService
 {
+    public static byte[] ReadGameTexture(string gameDataPath, string texturePath, CancellationToken token = default) =>
+        ReadResource("", Resource(texturePath, "textures", ".dds"), gameDataPath, 32 * 1024 * 1024, token);
     public static ModelPreview Inspect(string projectDirectory, string modelPath, string gameDataPath, CancellationToken token = default)
     {
         var scene = SseNifReader.Read(ReadResource(projectDirectory, Resource(modelPath, "meshes", ".nif"), gameDataPath, SseNifReader.MaxFileBytes, token), token);

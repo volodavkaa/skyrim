@@ -13,6 +13,8 @@ namespace SkyrimModPacker.UI.Views;
 
 public partial class SmartModWindow : Window
 {
+    public Action<Window>? ShowSettings { get; set; }
+    public Action<Window>? ShowLog { get; set; }
     public SmartModViewModel ViewModel { get; }
     private readonly ModelPreviewControl _preview;
     private readonly IModelPreviewService _previewService;
@@ -35,8 +37,61 @@ public partial class SmartModWindow : Window
             _preview.Dispose(); ViewModel.Dispose();
         };
     }
-    private async void OnLoaded(object sender, RoutedEventArgs e) { await ViewModel.InitializeAsync(_initialProject); QueuePreview(); }
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.InitializeAsync(_initialProject);
+        if (string.IsNullOrWhiteSpace(ViewModel.VariantTexconvPath))
+        {
+            var saved = ModelPreparationPreferencesStore.Load().Texconv;
+            var fallback = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "skyrim-texconv-may2026.exe");
+            if (System.IO.File.Exists(saved)) ViewModel.VariantTexconvPath = saved;
+            else if (System.IO.File.Exists(fallback)) ViewModel.VariantTexconvPath = fallback;
+        }
+        QueuePreview();
+    }
     private void OnCancelOperation(object sender, RoutedEventArgs e) => ViewModel.CancelOperation();
+    private void OnSettings(object sender, RoutedEventArgs e) => ShowSettings?.Invoke(this);
+    private void OnBrowseVariantTexconv(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "texconv.exe|*.exe" };
+        if (dialog.ShowDialog(this) == true) ViewModel.VariantTexconvPath = dialog.FileName;
+    }
+    private void OnLog(object sender, RoutedEventArgs e) => ShowLog?.Invoke(this);
+    private void OnPrepareModel(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBusy) return;
+        if (!ViewModel.HasProject && !ViewModel.CanStartFromResources)
+        {
+            ViewModel.Error = ViewModel.Label("Smart_StartNeedsName");
+            ViewModel.Section = SmartModSection.Overview;
+            return;
+        }
+        var editor = new ModelPreparationWindow { Owner = this };
+        editor.ShowDialog();
+        if (string.IsNullOrWhiteSpace(editor.PublishedFolder)) return;
+        try
+        {
+            var package = PreparedModelHandoff.Read(editor.PublishedFolder);
+            var starting = !ViewModel.HasProject;
+            var addItem = starting || (sender as System.Windows.Controls.Button)?.Tag as string != "existing";
+            var request = package.Request(starting ? ViewModel.ProposedProjectPath : ViewModel.ProjectPath,
+                starting ? ViewModel.Name.Trim() + ".esp" : null, addItem);
+            var review = new PreparedModelImportWindow(package, request,
+                ViewModel.PreviewWeaponFolderAsync, async plan =>
+                {
+                    if (starting)
+                    {
+                        ViewModel.Name = System.IO.Path.GetFileNameWithoutExtension(plan.Request.NewProjectPluginName!);
+                        ViewModel.OutputDirectory = System.IO.Directory.GetParent(System.IO.Path.GetDirectoryName(plan.Request.ProjectPath)!)!.FullName;
+                    }
+                    var success = starting ? await ViewModel.CreateFromWeaponFolderAsync(plan, package.Kind)
+                        : await ViewModel.ImportWeaponFolderAsync(plan, addItem, package.Kind);
+                    return (success, ViewModel.Error);
+                }, ViewModel.Label) { Owner = this };
+            review.ShowDialog();
+        }
+        catch (Exception error) { ViewModel.Error = error.Message; }
+    }
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SmartModViewModel.IsBusy)) { WorkArea.IsEnabled = !ViewModel.IsBusy; ItemList.IsEnabled = !ViewModel.IsBusy; }

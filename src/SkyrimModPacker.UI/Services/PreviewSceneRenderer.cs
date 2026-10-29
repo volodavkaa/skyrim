@@ -17,9 +17,13 @@ public static class PreviewSceneRenderer
         => Create(scene, textured, out warnings, out originalExtent, null);
 
     public static Model3DGroup Create(ModelPreview scene, bool textured, out IReadOnlyList<string> warnings,
-        out double originalExtent, ReflectionPreview? reflection)
+        out double originalExtent, ReflectionPreview? reflection, double vertexColor = 1,
+        double environmentStrength = 1, Color? specularColor = null, double specularStrength = 0,
+        Rect3D? framingBounds = null)
     {
         var messages = scene.Warnings.ToList(); var textures = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
+        var tintedTextures = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
+        vertexColor = Math.Clamp(vertexColor, 0, 1);
         long pixels = 0;
         if (textured) foreach (var texture in scene.Textures)
         {
@@ -32,6 +36,17 @@ public static class PreviewSceneRenderer
                 image.Freeze();
                 var brush = new ImageBrush(image) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 1, 1), ViewportUnits = BrushMappingMode.Absolute };
                 brush.Freeze(); textures[texture.Path] = brush;
+                if (vertexColor < 1)
+                {
+                    var tinted = (byte[])texture.BgraPixels.Clone();
+                    for (var i = 0; i < tinted.Length; i += 4)
+                        for (var channel = 0; channel < 3; channel++)
+                            tinted[i + channel] = (byte)Math.Round(tinted[i + channel] * vertexColor);
+                    var tintedImage = BitmapSource.Create(texture.Width, texture.Height, 96, 96, PixelFormats.Bgra32, null, tinted, texture.Width * 4);
+                    tintedImage.Freeze();
+                    var tintedBrush = new ImageBrush(tintedImage) { TileMode = TileMode.Tile, Viewport = new Rect(0, 0, 1, 1), ViewportUnits = BrushMappingMode.Absolute };
+                    tintedBrush.Freeze(); tintedTextures[texture.Path] = tintedBrush;
+                }
             }
             catch (Exception ex) { messages.Add($"Texture '{texture.Path}': {ex.Message} Showing neutral material."); }
         }
@@ -50,13 +65,26 @@ public static class PreviewSceneRenderer
                 TriangleIndices = new Int32Collection(mesh.Indices)
             };
             geometry.Freeze();
-            Brush brush = mesh.DiffuseTexture != null && textures.TryGetValue(mesh.DiffuseTexture, out var image) ? image : new SolidColorBrush(Color.FromRgb(165, 181, 198));
-            var material = new DiffuseMaterial(brush); material.Freeze();
+            var character = mesh.Name.StartsWith("Character: ", StringComparison.Ordinal);
+            var tint = !character && mesh.Name is not ("BloodEffects" or "BloodLighting");
+            var palette = tint && vertexColor < 1 ? tintedTextures : textures;
+            var shade = tint ? vertexColor : 1;
+            Brush brush = mesh.DiffuseTexture != null && palette.TryGetValue(mesh.DiffuseTexture, out var image) ? image : new SolidColorBrush(Color.FromRgb((byte)(165 * shade), (byte)(181 * shade), (byte)(198 * shade)));
+            Material material = new DiffuseMaterial(brush);
+            if (tint && specularColor is Color spec && specularStrength > 0)
+            {
+                var specBrush = new SolidColorBrush(spec) { Opacity = Math.Clamp(specularStrength / 4, 0, 1) };
+                var groupMaterial = new MaterialGroup();
+                groupMaterial.Children.Add(material);
+                groupMaterial.Children.Add(new SpecularMaterial(specBrush, 40));
+                material = groupMaterial;
+            }
+            material.Freeze();
             var model = new GeometryModel3D(geometry, material) { BackMaterial = material }; model.Freeze(); group.Children.Add(model);
-            if (reflection != null && mesh.Name is not ("BloodEffects" or "BloodLighting" or "Scb"))
-                AddReflection(group, mesh, reflection);
+            if (!character && reflection != null && mesh.Name is not ("BloodEffects" or "BloodLighting" or "Scb"))
+                AddReflection(group, mesh, reflection, environmentStrength);
         }
-        var bounds = group.Bounds; var extent = Math.Max(bounds.SizeX, Math.Max(bounds.SizeY, bounds.SizeZ));
+        var bounds = framingBounds ?? group.Bounds; var extent = Math.Max(bounds.SizeX, Math.Max(bounds.SizeY, bounds.SizeZ));
         originalExtent = extent;
         if (bounds.IsEmpty || !double.IsFinite(extent) || extent < 1e-8) throw new InvalidDataException("The model has no measurable geometry.");
         var transform = new Transform3DGroup();
@@ -65,7 +93,7 @@ public static class PreviewSceneRenderer
         group.Freeze(); warnings = messages; return group;
     }
 
-    private static void AddReflection(Model3DGroup group, PreviewMesh mesh, ReflectionPreview reflection)
+    private static void AddReflection(Model3DGroup group, PreviewMesh mesh, ReflectionPreview reflection, double environmentStrength)
     {
         if (reflection.Faces.Count != 6 || mesh.Indices.Length > 30000) return;
         for (var i = 0; i < mesh.Indices.Length; i += 3)
@@ -77,7 +105,7 @@ public static class PreviewSceneRenderer
             normal.Normalize();
             var uv = (mesh.TextureCoordinates[a] + mesh.TextureCoordinates[b] + mesh.TextureCoordinates[c]) / 3;
             var mask = Sample(reflection.Mask, uv.X, uv.Y);
-            var strength = (mask.R + mask.G + mask.B) / (3.0 * 255.0);
+            var strength = (mask.R + mask.G + mask.B) / (3.0 * 255.0) * Math.Clamp(environmentStrength, 0, 4);
             if (strength < 0.025) continue;
             var incident = new Vector3D(0, 0, -1);
             var direction = incident - 2 * Vector3D.DotProduct(incident, normal) * normal;

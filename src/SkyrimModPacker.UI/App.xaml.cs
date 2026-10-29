@@ -12,8 +12,6 @@ using SkyrimModPacker.UI.Services;
 using SkyrimModPacker.UI.ViewModels;
 using SkyrimModPacker.UI.Views;
 using SkyrimModPacker.UI.Views.Pages;
-using Wpf.Ui;
-using Wpf.Ui.DependencyInjection;
 
 namespace SkyrimModPacker.UI;
 
@@ -42,10 +40,6 @@ public partial class App : System.Windows.Application
         })
         .ConfigureServices((context, services) =>
         {
-            // WPF-UI Navigation
-            services.AddSingleton<INavigationService, NavigationService>();
-            services.AddNavigationViewPageProvider();
-
             // Localization
             services.AddSingleton<ILocalizationService, LocalizationService>();
             services.AddSingleton<IUnsavedChangesPrompt, UnsavedChangesPrompt>();
@@ -54,24 +48,13 @@ public partial class App : System.Windows.Application
             services.AddSingleton<IWorkspaceFolderOpener, WorkspaceFolderOpener>();
             services.AddSingleton<IModelPreviewPresenter, ModelPreviewPresenter>();
             services.AddSingleton<IModelThumbnailService, ModelThumbnailService>();
-            services.AddSingleton<ISmartModWindowLauncher, SmartModWindowLauncher>();
             services.AddTransient<SmartModViewModel>();
 
-            // Main window
-            services.AddSingleton<MainWindow>();
-            services.AddSingleton<MainWindowViewModel>();
-
-            // Pages & ViewModels
-            services.AddTransient<BuildPage>();
-            services.AddTransient<BuildViewModel>();
-            services.AddTransient<ProfilesPage>();
-            services.AddTransient<ProfilesViewModel>();
+            // The mod editor is the single creation workflow.
             services.AddTransient<SettingsPage>();
             services.AddTransient<SettingsViewModel>();
             services.AddTransient<LogPage>();
             services.AddTransient<LogViewModel>();
-            services.AddTransient<WeaponsPage>();
-            services.AddSingleton<WeaponsViewModel>();
 
             // Application layer
             services.AddApplicationServices();
@@ -109,10 +92,34 @@ public partial class App : System.Windows.Application
             Log.Error(ex, "Failed to apply initial language setting");
         }
 
-        var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+        var editor = new SmartModWindow(
+            _host.Services.GetRequiredService<SmartModViewModel>(),
+            _host.Services.GetRequiredService<IModelPreviewService>())
+        {
+            ShowSettings = owner => ShowToolPage<SettingsPage>(owner, "Nav_Settings"),
+            ShowLog = owner => ShowToolPage<LogPage>(owner, "Nav_Log")
+        };
+        MainWindow = editor;
+        editor.Show();
 
         base.OnStartup(e);
+    }
+
+    private void ShowToolPage<TPage>(Window owner, string titleKey) where TPage : System.Windows.Controls.Page
+    {
+        var localization = _host.Services.GetRequiredService<ILocalizationService>();
+        var window = new Window
+        {
+            Owner = owner,
+            Title = localization.GetString(titleKey),
+            Content = _host.Services.GetRequiredService<TPage>(),
+            Width = 960,
+            Height = 720,
+            MinWidth = 700,
+            MinHeight = 500,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        window.ShowDialog();
     }
 
     protected override async void OnExit(ExitEventArgs e)

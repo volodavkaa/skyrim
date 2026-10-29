@@ -26,11 +26,18 @@ public sealed partial class SmartModViewModel
         }
         return Require(await _projects.PreviewWeaponFolderAsync(request, _gameData, linked.Token));
     }
-    public Task ImportWeaponFolderAsync(WeaponFolderPlan plan, bool createNew, WeaponKind kind) => RunAsync(async token =>
-        await ImportWeaponFolderCoreAsync(plan, createNew, kind, token));
-    public string ProposedProjectPath => Path.Combine(OutputDirectory.Trim(), Name.Trim(), "mod-project.json");
-    public Task CreateFromWeaponFolderAsync(WeaponFolderPlan plan, WeaponKind kind) => RunAsync(async token =>
+    public async Task<bool> ImportWeaponFolderAsync(WeaponFolderPlan plan, bool createNew, WeaponKind kind)
     {
+        var success = false;
+        await RunAsync(async token => { await ImportWeaponFolderCoreAsync(plan, createNew, kind, token); success = true; });
+        return success;
+    }
+    public string ProposedProjectPath => Path.Combine(OutputDirectory.Trim(), Name.Trim(), "mod-project.json");
+    public async Task<bool> CreateFromWeaponFolderAsync(WeaponFolderPlan plan, WeaponKind kind)
+    {
+        var success = false;
+        await RunAsync(async token =>
+        {
         if (HasProject || plan.Request.NewProjectPluginName != Name.Trim() + ".esp" || !Path.GetFullPath(plan.Request.ProjectPath).Equals(Path.GetFullPath(ProposedProjectPath), StringComparison.OrdinalIgnoreCase))
             throw new IOException(Label("Smart_TuningStale"));
         if (plan.Items.Any(i => Templates.All(t => t.Kind != i.Kind))) throw new IOException(Label("Smart_SelectTemplate"));
@@ -46,6 +53,7 @@ public sealed partial class SmartModViewModel
             var actual = Require(await _projects.PreviewWeaponFolderAsync(plan.Request with { NewProjectPluginName = null }, _gameData, token));
             if (JsonSerializer.Serialize(plan with { Request = actual.Request, ProjectSha256 = actual.ProjectSha256 }) != JsonSerializer.Serialize(actual)) throw new IOException(Label("Smart_TuningStale"));
             await ImportWeaponFolderCoreAsync(actual, true, kind, token);
+            success = true;
         }
         catch (Exception failure)
         {
@@ -55,7 +63,9 @@ public sealed partial class SmartModViewModel
             catch (Exception cleanup) { throw new IOException(failure.Message + Environment.NewLine + cleanup.Message, failure); }
             throw;
         }
-    });
+        });
+        return success;
+    }
     private async Task ImportWeaponFolderCoreAsync(WeaponFolderPlan plan, bool createNew, WeaponKind kind, CancellationToken token)
     {
         if (!HasProject || !Path.GetFullPath(plan.Request.ProjectPath).Equals(Path.GetFullPath(ProjectPath), StringComparison.OrdinalIgnoreCase)) throw new IOException(Label("Smart_TuningStale"));

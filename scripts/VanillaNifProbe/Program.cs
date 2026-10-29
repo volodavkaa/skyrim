@@ -5,6 +5,36 @@ using SkyrimModPacker.Infrastructure.ModelPreparation;
 using System.Globalization;
 using System.Text.Json;
 
+if (args.Length == 3 && args[0] == "--find-animation")
+{
+    foreach (var bsa in Directory.EnumerateFiles(args[1], "Skyrim - Animations.bsa"))
+    {
+        var archive = Archive.CreateReader(GameRelease.SkyrimSE, bsa);
+        try { foreach (var file in archive.Files.Where(file => file.Path.Contains(args[2], StringComparison.OrdinalIgnoreCase)).Take(60)) Console.WriteLine(file.Path); }
+        finally { (archive as IDisposable)?.Dispose(); }
+    }
+    return 0;
+}
+
+if (args.Length == 4 && args[0] == "--extract-raw")
+{
+    var relative = args[2].Replace('/', '\\');
+    foreach (var bsa in Directory.EnumerateFiles(args[1], "Skyrim - *.bsa"))
+    {
+        var archive = Archive.CreateReader(GameRelease.SkyrimSE, bsa);
+        try
+        {
+            if (!archive.TryGetFolder(Path.GetDirectoryName(relative)!, out var folder)) continue;
+            var entry = folder.Files.FirstOrDefault(item => item.Path.Replace('/', '\\').Equals(relative, StringComparison.OrdinalIgnoreCase));
+            if (entry == null) continue;
+            using var input = entry.AsStream(); using var output = File.Create(args[3]);
+            input.CopyTo(output); Console.WriteLine(entry.Path); return 0;
+        }
+        finally { (archive as IDisposable)?.Dispose(); }
+    }
+    return 1;
+}
+
 if (args.Length == 2 && args[0] == "--list-cubemaps")
 {
     foreach (var bsa in Directory.EnumerateFiles(args[1], "Skyrim - Textures*.bsa"))
@@ -46,6 +76,27 @@ if (args.Length == 2 && args[0] == "--decode-cubemap")
     var faces = DdsCubemapPreviewDecoder.Decode(args[1], File.ReadAllBytes(args[1]));
     Console.WriteLine(Path.GetFileName(args[1]) + "|" + faces.Count + "|" + faces[0].Width + "x" + faces[0].Height);
     return 0;
+}
+
+if (args.Length == 4 && args[0] == "--extract-texture")
+{
+    var relative = args[2].Replace('/', Path.DirectorySeparatorChar);
+    foreach (var bsa in Directory.EnumerateFiles(args[1], "Skyrim - Textures*.bsa"))
+    {
+        var archive = Archive.CreateReader(GameRelease.SkyrimSE, bsa);
+        try
+        {
+            if (!archive.TryGetFolder(Path.GetDirectoryName(relative)!, out var folder)) continue;
+            var entry = folder.Files.FirstOrDefault(file => file.Path.Replace('/', Path.DirectorySeparatorChar)
+                .Equals(relative, StringComparison.OrdinalIgnoreCase));
+            if (entry == null) continue;
+            using var stream = entry.AsStream(); using var output = File.Create(args[3]);
+            stream.CopyTo(output); Console.WriteLine(bsa + "|" + entry.Path);
+            return 0;
+        }
+        finally { (archive as IDisposable)?.Dispose(); }
+    }
+    return 1;
 }
 
 if (args.Length is 4 or 5 or 6 && args[0] == "--inspect-materials")

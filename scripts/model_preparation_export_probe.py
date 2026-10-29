@@ -327,6 +327,59 @@ def detect_head_band(weapon):
             max(item[2] for item in run) / shaft_width)
 
 
+def apply_default_weapon_shader(weapon):
+    material = weapon.active_material
+    if material is None or not material.use_nodes:
+        raise ValueError("Weapon template has no usable shader material")
+    from io_scene_nifly.pyn.nifconstants import ShaderFlags1, ShaderFlags2
+    shader = material.pyn_shader
+    shader.Shader_Type = "Default"
+    shader.Shader_Flags_1 = ShaderFlags1(
+        ShaderFlags1.parse(shader.Shader_Flags_1) & ~ShaderFlags1.ENVIRONMENT_MAPPING).fullname
+    shader.Shader_Flags_2 = ShaderFlags2(
+        ShaderFlags2.parse(shader.Shader_Flags_2) & ~ShaderFlags2.ENVMAP_LIGHT_FADE).fullname
+    for slot in ("EnvMap", "EnvMask"):
+        key = "BSShaderTextureSet_" + slot
+        if key in material:
+            del material[key]
+        for node in material.node_tree.nodes:
+            socket = node.inputs.get(slot)
+            if socket:
+                for link in list(socket.links):
+                    material.node_tree.links.remove(link)
+
+
+def apply_vertex_color(obj, value):
+    colors = obj.data.color_attributes
+    layer = colors.get("VERTEX_COLOR")
+    created = layer is None
+    if layer is None:
+        layer = colors.new(name="VERTEX_COLOR", type="FLOAT_COLOR", domain="POINT")
+    for item in layer.data:
+        # The separately stored VERTEX_ALPHA map remains untouched.
+        item.color = (value, value, value, 1.0 if created else item.color[3])
+    colors.active_color = layer
+
+
+def apply_shader_settings(weapon, config):
+    material = weapon.active_material
+    if material is None:
+        raise ValueError("Weapon template has no shader material")
+    shader = material.pyn_shader
+    env = config.get("environment_strength")
+    if env is not None:
+        if shader.Shader_Type != "Environment_Map":
+            raise ValueError("The selected weapon template does not use Environment Map; disable its strength override or choose another template")
+        shader.Env_Map_Scale = float(env)
+    spec = config.get("specular_strength")
+    if spec is not None:
+        from io_scene_nifly.pyn.nifconstants import ShaderFlags1
+        shader.Shader_Flags_1 = ShaderFlags1(
+            ShaderFlags1.parse(shader.Shader_Flags_1) | ShaderFlags1.SPECULAR).fullname
+        shader.Spec_Str = float(spec)
+        shader.Spec_Color = tuple(config["specular_color"])
+
+
 def apply_weapon_textures(weapon, config):
     diffuse = config.get("diffuse_texture")
     normal = config.get("normal_texture")
@@ -509,10 +562,20 @@ def prepare(addon_parent, archive_path, template_path, output_path, scabbard_mod
     if sum(len(part.data.polygons) for part in parts) != weapon_counts[1]:
         raise ValueError("Material partition lost or duplicated weapon faces")
     texture_paths = []
+    vertex_color = template_config.get("vertex_color")
+    if vertex_color is not None:
+        vertex_color = float(vertex_color)
+        if not math.isfinite(vertex_color) or not 0 <= vertex_color <= 1:
+            raise ValueError("Vertex color must be between 0 and 1")
+        for obj in parts + ([scabbard] if scabbard_mode == "keep" and scabbard is not None else []):
+            apply_vertex_color(obj, vertex_color)
     for slot, part in enumerate(parts):
         config = dict(template_config)
         if mappings:
             config.update(mappings[slot])
+        if config.get("default_shader"):
+            apply_default_weapon_shader(part)
+        apply_shader_settings(part, config)
         texture_paths.append(apply_weapon_textures(part, config))
     for obj in source_objects:
         bpy.data.objects.remove(obj, do_unlink=True)

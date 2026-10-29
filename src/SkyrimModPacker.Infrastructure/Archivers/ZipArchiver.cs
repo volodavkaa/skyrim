@@ -11,8 +11,16 @@ public sealed class ZipArchiver(ILogger<ZipArchiver>? logger = null) : IArchiver
 {
     public string Extension => ".zip";
 
-    public async Task CreateArchiveAsync(string outputPath, IReadOnlyList<(string SourcePath, string EntryPath)> files,
-        IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+    public Task CreateArchiveAsync(string outputPath, IReadOnlyList<(string SourcePath, string EntryPath)> files,
+        IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+        CreateCoreAsync(outputPath, files, progress, cancellationToken, overwrite: true);
+
+    public Task CreateNewArchiveAsync(string outputPath, IReadOnlyList<(string SourcePath, string EntryPath)> files,
+        IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+        CreateCoreAsync(outputPath, files, progress, cancellationToken, overwrite: false);
+
+    private async Task CreateCoreAsync(string outputPath, IReadOnlyList<(string SourcePath, string EntryPath)> files,
+        IProgress<double>? progress, CancellationToken cancellationToken, bool overwrite)
     {
         if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("Output path cannot be empty.", nameof(outputPath));
         if (files == null || files.Count == 0) throw new ArgumentException("No files specified for archive creation.", nameof(files));
@@ -32,6 +40,7 @@ public sealed class ZipArchiver(ILogger<ZipArchiver>? logger = null) : IArchiver
         }
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         using var lease = await WorkspaceFileGate.AcquireAsync(outputPath, cancellationToken).ConfigureAwait(false);
+        if (!overwrite && File.Exists(outputPath)) throw new IOException("Archive already exists: " + outputPath);
         var previous = new WorkspaceFileSnapshot(outputPath);
         var temporary = Path.Combine(Path.GetDirectoryName(outputPath)!, ".zip-" + Guid.NewGuid().ToString("N") + ".tmp");
         Exception? failure = null;
@@ -83,7 +92,7 @@ public sealed class ZipArchiver(ILogger<ZipArchiver>? logger = null) : IArchiver
             if (finalZip.Length != verifiedZip.Length || !finalZip.Hash.AsSpan().SequenceEqual(verifiedZip.Hash))
                 throw new IOException("The verified temporary ZIP changed before publication.");
             cancellationToken.ThrowIfCancellationRequested();
-            if (File.Exists(outputPath)) File.Replace(temporary, outputPath, null);
+            if (overwrite && File.Exists(outputPath)) File.Replace(temporary, outputPath, null);
             else File.Move(temporary, outputPath);
         }
         catch (Exception ex) { failure = ex; throw; }

@@ -22,8 +22,16 @@ def main():
                "custom_properties": sorted(key for key in obj.keys() if not key.startswith("_"))}
         if obj.type == "MESH" and not obj.name.startswith("bhk"):
             row["material_nodes"] = [{"material": slot.material.name,
-                                      "shader_type": slot.material.pyn_shader.Shader_Type,
+                                      # PyNifly omits fields equal to their default on import;
+                                      # the empty lighting shader type therefore means enum value 0 (Default).
+                                      "shader_type": (slot.material.pyn_shader.Shader_Type or "Default")
+                                          if slot.material.get("BS_Shader_Block_Name") == "BSLightingShaderProperty"
+                                          else slot.material.pyn_shader.Shader_Type,
                                       "shader_flags1": slot.material.pyn_shader.Shader_Flags_1,
+                                      "shader_flags2": slot.material.pyn_shader.Shader_Flags_2,
+                                      "environment_strength": slot.material.pyn_shader.Env_Map_Scale,
+                                      "specular_strength": slot.material.pyn_shader.Spec_Str,
+                                      "specular_color": list(slot.material.pyn_shader.Spec_Color),
                                       "texture_paths": {
                                           key[len("BSShaderTextureSet_"):]: value
                                           for key, value in slot.material.items()
@@ -35,7 +43,10 @@ def main():
                                      if slot.material and slot.material.use_nodes]
         if obj.type == "MESH":
             points = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
+            layer = obj.data.color_attributes.get("VERTEX_COLOR")
+            values = [channel for item in layer.data for channel in item.color[:3]] if layer else []
             row.update(vertices=len(obj.data.vertices), polygons=len(obj.data.polygons),
+                       vertex_color={"count": len(values), "min": min(values), "max": max(values)} if values else None,
                        uv_layers=len(obj.data.uv_layers),
                        polygon_material_indices=sorted(set(p.material_index for p in obj.data.polygons)),
                        bounds_min=[min(p[i] for p in points) for i in range(3)],
